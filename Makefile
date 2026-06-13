@@ -1,11 +1,12 @@
 BUILD_DIR := build
 GAME_BUILD_DIR := $(BUILD_DIR)/game
 TARGET := $(GAME_BUILD_DIR)/harbor_karts
+LEGACY_TARGET := $(BUILD_DIR)/harbor_karts
 SDL_LIB := $(BUILD_DIR)/deps/install/lib/libSDL3.a
 
 .PHONY: all deps clean clean-all run self-test
 
-all: $(TARGET)
+all: $(TARGET) $(LEGACY_TARGET)
 
 deps: $(SDL_LIB)
 
@@ -16,6 +17,9 @@ $(TARGET): CMakeLists.txt src/main.cpp $(SDL_LIB)
 	cmake -S . -B $(GAME_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(GAME_BUILD_DIR) --parallel
 
+$(LEGACY_TARGET): $(TARGET)
+	ln -sf game/harbor_karts $@
+
 run: $(TARGET)
 	$(TARGET)
 
@@ -23,7 +27,7 @@ self-test: $(TARGET)
 	$(TARGET) --self-test
 
 clean:
-	rm -rf $(GAME_BUILD_DIR)
+	rm -rf $(GAME_BUILD_DIR) $(LEGACY_TARGET)
 
 clean-all:
 	rm -rf $(BUILD_DIR)
