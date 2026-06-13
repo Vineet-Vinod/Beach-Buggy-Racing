@@ -50,7 +50,8 @@ Gamepad is the intended input.
 
 - Left stick / D-pad: steer, garage selection
 - RT: accelerate
-- LT: brake, reverse at low speed, drift setup while steering
+- LT: brake, reverse at low speed
+- RB / R1: drift setup while steering
 - A / Cross: confirm, race, resume
 - B / Circle: back to garage from pause
 - Start: pause or resume

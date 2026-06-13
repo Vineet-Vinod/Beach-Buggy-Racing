@@ -169,50 +169,50 @@ private:
 
     static TrackPoint decorate(TrackPoint point, float phase) {
         phase -= std::floor(phase);
-        point.width = 50.0f;
-        point.roadColor = rgb(199, 137, 78);
-        point.shoulderColor = rgb(235, 203, 126);
+        point.width = 118.0f;
+        point.roadColor = rgb(214, 142, 76);
+        point.shoulderColor = rgb(244, 211, 128);
         point.zone = 0;
 
         if (phase < 0.14f) {
             point.zone = 0;
-            point.width = 58.0f;
-            point.roadColor = rgb(209, 151, 82);
-            point.shoulderColor = rgb(238, 204, 124);
+            point.width = 142.0f;
+            point.roadColor = rgb(220, 158, 84);
+            point.shoulderColor = rgb(248, 214, 128);
         } else if (phase < 0.29f) {
             point.zone = 1;
-            point.width = 37.0f;
-            point.roadColor = rgb(138, 91, 59);
-            point.shoulderColor = rgb(108, 73, 52);
+            point.width = 112.0f;
+            point.roadColor = rgb(151, 96, 58);
+            point.shoulderColor = rgb(115, 75, 48);
             point.elevation += 8.0f;
         } else if (phase < 0.42f) {
             point.zone = 2;
-            point.width = 42.0f;
-            point.roadColor = rgb(153, 96, 82);
-            point.shoulderColor = rgb(225, 173, 95);
+            point.width = 124.0f;
+            point.roadColor = rgb(174, 103, 80);
+            point.shoulderColor = rgb(239, 180, 90);
         } else if (phase < 0.58f) {
             point.zone = 3;
-            point.width = 40.0f;
-            point.roadColor = rgb(76, 75, 82);
-            point.shoulderColor = rgb(47, 51, 59);
+            point.width = 116.0f;
+            point.roadColor = rgb(82, 80, 88);
+            point.shoulderColor = rgb(49, 53, 62);
             point.elevation += 22.0f * smoothstep((phase - 0.42f) / 0.16f);
         } else if (phase < 0.72f) {
             point.zone = 4;
-            point.width = 46.0f;
-            point.roadColor = rgb(115, 121, 103);
-            point.shoulderColor = rgb(63, 116, 93);
+            point.width = 128.0f;
+            point.roadColor = rgb(130, 132, 102);
+            point.shoulderColor = rgb(69, 128, 92);
             point.elevation += 20.0f * (1.0f - smoothstep((phase - 0.58f) / 0.14f));
         } else if (phase < 0.85f) {
             point.zone = 5;
-            point.width = 35.0f;
-            point.roadColor = rgb(132, 82, 48);
-            point.shoulderColor = rgb(54, 157, 160);
+            point.width = 108.0f;
+            point.roadColor = rgb(151, 88, 48);
+            point.shoulderColor = rgb(45, 171, 177);
             point.elevation += 7.0f;
         } else {
             point.zone = 6;
-            point.width = 55.0f;
-            point.roadColor = rgb(188, 124, 74);
-            point.shoulderColor = rgb(230, 192, 111);
+            point.width = 138.0f;
+            point.roadColor = rgb(206, 128, 70);
+            point.shoulderColor = rgb(240, 196, 105);
         }
 
         point.elevation += 3.0f * std::sin(phase * kTwoPi * 5.0f);
@@ -293,7 +293,7 @@ private:
             const TrackPoint tp = sample(p);
             Prop prop;
             prop.progress = wrapDistance(p, totalLength_);
-            prop.side = (i % 2 == 0 ? -1.0f : 1.0f) * (tp.width * 0.5f + 34.0f + static_cast<float>((i * 13) % 58));
+            prop.side = (i % 2 == 0 ? -1.0f : 1.0f) * (tp.width * 0.5f + 70.0f + static_cast<float>((i * 13) % 84));
             prop.scale = 0.8f + static_cast<float>((i * 7) % 9) * 0.08f;
             if (tp.zone == 1 || tp.zone == 5) {
                 prop.type = (i % 5 == 0) ? Prop::Type::DockCrane : ((i % 3 == 0) ? Prop::Type::Boat : Prop::Type::Banner);
@@ -488,7 +488,7 @@ uint32_t racerColor(std::string_view racer) {
 
 float axisUnit(Sint16 value) {
     const float f = static_cast<float>(value) / 32767.0f;
-    return std::abs(f) < 0.11f ? 0.0f : std::clamp(f, -1.0f, 1.0f);
+    return std::abs(f) < 0.08f ? 0.0f : std::clamp(f, -1.0f, 1.0f);
 }
 
 float triggerUnit(Sint16 value) {
@@ -518,6 +518,7 @@ InputState readGamepad(SDL_Gamepad* pad, bool devKeyboard) {
         input.steer = axisUnit(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX));
         input.throttle = triggerUnit(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
         input.brake = triggerUnit(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER));
+        input.drift = SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
         input.a = SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_SOUTH);
         input.b = SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST);
         input.start = SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_START);
@@ -533,6 +534,7 @@ InputState readGamepad(SDL_Gamepad* pad, bool devKeyboard) {
         input.steer = strongerAxis(input.steer, joystickAxis(joystick, 0));
         input.throttle = std::max(input.throttle, std::max(0.0f, joystickAxis(joystick, 5)));
         input.brake = std::max(input.brake, std::max(0.0f, joystickAxis(joystick, 2)));
+        input.drift = input.drift || joystickButton(joystick, 5);
         input.a = input.a || joystickButton(joystick, 0);
         input.b = input.b || joystickButton(joystick, 1);
         input.back = input.back || joystickButton(joystick, 6);
@@ -551,6 +553,7 @@ InputState readGamepad(SDL_Gamepad* pad, bool devKeyboard) {
         input.steer = std::clamp(input.steer + right - left, -1.0f, 1.0f);
         input.throttle = std::max(input.throttle, key(SDL_SCANCODE_W) || key(SDL_SCANCODE_UP) ? 1.0f : 0.0f);
         input.brake = std::max(input.brake, key(SDL_SCANCODE_S) || key(SDL_SCANCODE_DOWN) ? 1.0f : 0.0f);
+        input.drift = input.drift || key(SDL_SCANCODE_LSHIFT) || key(SDL_SCANCODE_RSHIFT);
         input.a = input.a || key(SDL_SCANCODE_RETURN) || key(SDL_SCANCODE_SPACE);
         input.b = input.b || key(SDL_SCANCODE_ESCAPE);
         input.start = input.start || key(SDL_SCANCODE_P);
@@ -560,8 +563,7 @@ InputState readGamepad(SDL_Gamepad* pad, bool devKeyboard) {
         input.up = input.up || key(SDL_SCANCODE_UP);
         input.down = input.down || key(SDL_SCANCODE_DOWN);
     }
-    input.steer = std::copysign(std::pow(std::abs(input.steer), 1.35f), input.steer);
-    input.drift = input.brake > 0.18f && std::abs(input.steer) > 0.23f;
+    input.steer = std::copysign(std::pow(std::abs(input.steer), 1.12f), input.steer);
     return input;
 }
 
@@ -889,8 +891,8 @@ public:
         const DriverAuditResult noBrake = runDriverAudit(DriverStyle::NoBrake);
         const DriverAuditResult brakeLine = runDriverAudit(DriverStyle::BrakeLine);
         const DriverAuditResult driftLine = runDriverAudit(DriverStyle::DriftLine);
-        const bool skillOrder = brakeLine.score > noBrake.score * 1.20f && driftLine.score > brakeLine.score * 1.03f &&
-                                driftLine.boostFrames > 300;
+        const bool skillOrder = driftLine.score > noBrake.score * 1.08f && driftLine.score > brakeLine.score * 1.15f &&
+                                driftLine.boostFrames > 500;
         const bool ok = stable && progressJumps == 0 && fullThrottleJumps == 0 && caveToggles <= 8 && barrierHits < 8 &&
                         leftTurns > 40 && rightTurns > 40 && turnRatio < 2.35f && highCurveSamples > 120 &&
                         highCurveTooFast < highCurveSamples * 55 / 100 && skillOrder;
@@ -956,11 +958,10 @@ private:
                 const bool holdDrift =
                     player.drifting && player.driftCharge < 0.28f && curve > 0.034f && std::abs(laneError) < 1.20f;
                 input.throttle = speed < targetSpeed + 13.0f || player.boostTimer > 0.0f ? 1.0f : 0.72f;
-                input.brake = (setupDrift || holdDrift) ? 0.22f
-                                                        : ((player.boostTimer <= 0.0f && (speed > targetSpeed + 11.0f ||
-                                                                                          std::abs(angleError) > 0.78f))
-                                                               ? 0.22f
-                                                               : 0.0f);
+                input.brake = (player.boostTimer <= 0.0f && !setupDrift && !holdDrift &&
+                               (speed > targetSpeed + 13.0f || std::abs(angleError) > 0.82f))
+                                  ? 0.20f
+                                  : 0.0f;
                 input.drift = setupDrift || holdDrift;
             }
 
@@ -1005,9 +1006,9 @@ private:
             kart.heading = angleOf(tp.tangent);
             kart.vel = tp.tangent * (i == 0 ? 0.0f : 8.0f);
             kart.nearest = track_.nearestIndex(kart.pos);
-            kart.aiTempo = 0.94f + 0.035f * static_cast<float>((i * 7) % 5);
-            kart.aiAggression = 0.64f + 0.08f * static_cast<float>((i * 5 + 2) % 5);
-            kart.aiRisk = 0.35f + 0.11f * static_cast<float>((i * 3 + 1) % 5);
+            kart.aiTempo = 1.02f + 0.035f * static_cast<float>((i * 7) % 5);
+            kart.aiAggression = 0.72f + 0.08f * static_cast<float>((i * 5 + 2) % 5);
+            kart.aiRisk = 0.38f + 0.11f * static_cast<float>((i * 3 + 1) % 5);
             kart.aiPassBias = (i % 2 == 0 ? -1.0f : 1.0f) * (0.75f + 0.12f * static_cast<float>(i % 3));
             karts_.push_back(kart);
         }
@@ -1118,12 +1119,12 @@ private:
         const float absSpeed = std::abs(speed);
         kart.contactTimer = std::max(0.0f, kart.contactTimer - dt);
 
-        const bool wantsDrift = input.drift && input.brake > 0.18f && std::abs(input.steer) > 0.23f && absSpeed > 32.0f;
+        const bool wantsDrift = input.drift && std::abs(input.steer) > 0.18f && absSpeed > 28.0f;
         if (wantsDrift) {
             kart.drifting = true;
             kart.boostTimer = 0.0f;
-        } else if (kart.drifting && (input.brake < 0.08f || absSpeed < 24.0f || std::abs(input.steer) < 0.08f)) {
-            if (input.brake < 0.08f && kart.driftCharge > 0.10f && absSpeed > 38.0f) {
+        } else if (kart.drifting && (!input.drift || absSpeed < 24.0f || std::abs(input.steer) < 0.08f)) {
+            if (!input.drift && kart.driftCharge > 0.10f && absSpeed > 38.0f) {
                 kart.boostPower = kart.driftCharge;
                 kart.boostTimer = 0.74f + 2.45f * kart.driftCharge;
             }
@@ -1131,11 +1132,11 @@ private:
             kart.driftCharge = 0.0f;
         }
 
-        const float curveDemand = std::clamp(center.curvature * 6.4f + std::abs(input.steer) * 0.42f + offroad / 95.0f, 0.0f, 1.0f);
+        const float curveDemand = std::clamp(center.curvature * 5.7f + std::abs(input.steer) * 0.34f + offroad / 110.0f, 0.0f, 1.0f);
         const float driftCornerRelief = kart.drifting ? 0.28f : 1.0f;
         if (input.throttle > 0.01f) {
             const float accelFalloff = std::clamp(1.08f - std::abs(speed) / kart.spec.maxSpeed, 0.13f, 1.0f);
-            const float cornerAccel = std::clamp(1.0f - curveDemand * 0.58f * driftCornerRelief, 0.34f, 1.0f);
+            const float cornerAccel = std::clamp(1.0f - curveDemand * 0.48f * driftCornerRelief, 0.46f, 1.0f);
             speed += input.throttle * kart.spec.accel * accelFalloff * cornerAccel * dt;
         }
         if (input.brake > 0.01f) {
@@ -1146,7 +1147,7 @@ private:
             }
         }
 
-        const float cornerRetention = kart.drifting ? 1.04f : (kart.boostTimer > 0.0f ? 0.86f : 0.54f);
+        const float cornerRetention = kart.drifting ? 1.08f : (kart.boostTimer > 0.0f ? 0.90f : 0.56f);
         const float cornerLimit = kart.spec.maxSpeed * lerp(1.0f, cornerRetention, curveDemand);
         const float gripOverflow = std::clamp((speed - cornerLimit) / std::max(1.0f, kart.spec.maxSpeed), 0.0f, 1.0f);
         if (speed > cornerLimit) {
@@ -1169,7 +1170,7 @@ private:
 
         const float newAbsSpeed = std::abs(speed);
         const float speedFactor = std::clamp(newAbsSpeed / 100.0f, 0.0f, 1.35f);
-        float yawRate = input.steer * (1.35f + 1.42f * speedFactor) * surfaceGrip * kart.spec.grip;
+        float yawRate = input.steer * (1.58f + 1.18f * speedFactor) * surfaceGrip * kart.spec.grip;
         const float highSpeedUndersteer = std::clamp((newAbsSpeed - 58.0f) / 72.0f, 0.0f, 1.0f);
         const float trailBrake = std::clamp(input.brake * std::abs(input.steer) * 1.45f, 0.0f, 1.0f);
         const float liftRotate = std::clamp((0.72f - input.throttle) / 0.72f, 0.0f, 1.0f) * std::abs(input.steer);
@@ -1187,8 +1188,8 @@ private:
         } else {
             yawRate *= 1.0f + trailBrake * highSpeedUndersteer * 0.34f + liftRotate * highSpeedUndersteer * 0.22f;
             yawRate *=
-                1.0f - std::clamp(highSpeedUndersteer * std::abs(input.steer) * (0.42f + input.throttle * 0.28f) + gripOverflow * 1.15f,
-                                   0.0f, 0.82f);
+                1.0f - std::clamp(highSpeedUndersteer * std::abs(input.steer) * (0.28f + input.throttle * 0.18f) + gripOverflow * 0.92f,
+                                   0.0f, 0.68f);
             sideSpeed += input.steer * newAbsSpeed * highSpeedUndersteer * curveDemand * 0.28f * dt;
             sideSpeed *= std::exp(-dt * (3.7f + 1.9f * kart.spec.grip + trailBrake * 2.0f + liftRotate * 0.9f) *
                                   std::max(0.18f, surfaceGrip - gripOverflow * 0.45f));
@@ -1240,7 +1241,7 @@ private:
     void updateAi(Kart& kart, float dt, int index) {
         const TrackPoint center = track_.sample(kart.progress);
         const float speed = length(kart.vel);
-        const float lookahead = 44.0f + speed * (0.54f + kart.aiAggression * 0.08f);
+        const float lookahead = 56.0f + speed * (0.50f + kart.aiAggression * 0.08f);
         const TrackPoint target = track_.sample(kart.progress + lookahead);
         float laneTarget = ((index % 3) - 1) * 7.5f + std::sin(kart.progress * 0.006f + index) * (3.0f + kart.aiRisk * 3.5f);
         for (size_t otherIndex = 0; otherIndex < karts_.size(); ++otherIndex) {
@@ -1256,25 +1257,30 @@ private:
                 laneTarget -= kart.aiPassBias * lerp(8.0f, 3.0f, behind / 90.0f) * (0.55f + kart.aiAggression * 0.25f);
             }
         }
-        const float half = target.width * 0.5f - 7.0f;
+        const float half = target.width * 0.5f - 13.0f;
         laneTarget = std::clamp(laneTarget, -half, half);
         const Vec2 desired = target.pos + target.normal * laneTarget;
         const Vec2 toTarget = normalize(desired - kart.pos);
         const Vec2 forward = fromAngle(kart.heading);
         const float angleError = std::atan2(cross(forward, toTarget), dot(forward, toTarget));
-        const float curveSlow = std::clamp(center.curvature * (4.55f - kart.aiRisk * 0.55f), 0.0f, 0.45f);
+        const float curveSlow = std::clamp(center.curvature * (2.90f - kart.aiRisk * 0.40f), 0.0f, 0.27f);
         const float pressure =
             index == 0 ? 1.0f
                        : (progressAhead(kart.progress, karts_[0].progress, track_.totalLength()) < 260.0f ? 1.0f + kart.aiAggression * 0.045f
                                                                                                           : 1.0f);
         const float mistake = std::sin(kart.progress * 0.018f + static_cast<float>(index) * 1.7f) > 0.985f ? kart.aiRisk : 0.0f;
-        const float targetSpeed = kart.spec.maxSpeed * (0.80f + kart.aiAggression * 0.06f - curveSlow + mistake * 0.035f) *
+        const float targetSpeed = kart.spec.maxSpeed * (0.98f + kart.aiAggression * 0.085f - curveSlow + mistake * 0.035f) *
                                   kart.aiTempo * pressure;
 
         InputState ai;
         ai.steer = std::clamp(angleError * (1.78f + kart.aiAggression * 0.26f) - mistake * 0.10f * kart.aiPassBias, -1.0f, 1.0f);
-        ai.throttle = speed < targetSpeed ? 1.0f : 0.25f;
-        ai.brake = (speed > targetSpeed + 10.0f || std::abs(angleError) > 0.62f) ? 0.34f : 0.0f;
+        ai.throttle = speed < targetSpeed ? 1.0f : 0.62f;
+        ai.brake = (speed > targetSpeed + 18.0f || std::abs(angleError) > 0.86f) ? 0.22f : 0.0f;
+        ai.drift = center.curvature > 0.060f && speed > 48.0f && std::abs(angleError) > 0.045f;
+        if (ai.drift) {
+            ai.brake = 0.0f;
+            ai.throttle = 1.0f;
+        }
         integrateKart(kart, ai, dt);
     }
 
@@ -1307,10 +1313,10 @@ private:
 
         const TrackPoint here = track_.pointAtIndex(player.nearest);
         const TrackPoint look = track_.sample(player.progress + 95.0f + speed * 1.05f);
-        const float apexBlend = std::clamp(0.20f + pullback * 0.34f + std::max(here.curvature, look.curvature) * 2.0f, 0.20f, 0.66f);
+        const float apexBlend = std::clamp(0.12f + pullback * 0.22f + std::max(here.curvature, look.curvature) * 1.35f, 0.12f, 0.46f);
         const float lookYaw = angleOf(normalize(look.pos - player.pos));
         const float targetYaw = lerpAngle(player.heading, lookYaw, apexBlend) + std::clamp(player.slip * 0.012f, -0.34f, 0.34f);
-        camera_.yaw = lerpAngle(camera_.yaw, targetYaw, 1.0f - std::exp(-dt * 7.5f));
+        camera_.yaw = lerpAngle(camera_.yaw, targetYaw, 1.0f - std::exp(-dt * 6.0f));
         const Vec2 forward = fromAngle(camera_.yaw);
         const Vec2 right{-forward.y, forward.x};
         camera_.pos = player.pos - forward * back + right * std::clamp(player.slip * 0.16f, -9.0f, 9.0f);
@@ -1366,9 +1372,9 @@ private:
 
         std::vector<Band> bands;
         float dist = 5.0f;
-        for (int i = 0; i < 172; ++i) {
-            const float t = static_cast<float>(i) / 171.0f;
-            dist += lerp(4.2f, 15.5f, t * t);
+        for (int i = 0; i < 188; ++i) {
+            const float t = static_cast<float>(i) / 187.0f;
+            dist += lerp(4.0f, 14.8f, t * t);
             const TrackPoint tp = track_.sample(karts_[0].progress + dist);
             const float half = tp.width * 0.5f;
             const float outer = half + lerp(120.0f, 240.0f, t);
@@ -1377,12 +1383,12 @@ private:
             band.distance = dist;
             band.left = projectPoint(tp.pos - tp.normal * half, tp.elevation, camera_);
             band.right = projectPoint(tp.pos + tp.normal * half, tp.elevation, camera_);
-            band.leftCurb = projectPoint(tp.pos - tp.normal * std::max(0.0f, half - 4.5f), tp.elevation + 0.25f, camera_);
-            band.rightCurb = projectPoint(tp.pos + tp.normal * std::max(0.0f, half - 4.5f), tp.elevation + 0.25f, camera_);
+            band.leftCurb = projectPoint(tp.pos - tp.normal * std::max(0.0f, half - 7.5f), tp.elevation + 0.25f, camera_);
+            band.rightCurb = projectPoint(tp.pos + tp.normal * std::max(0.0f, half - 7.5f), tp.elevation + 0.25f, camera_);
             band.leftOuter = projectPoint(tp.pos - tp.normal * outer, tp.elevation - 4.0f, camera_);
             band.rightOuter = projectPoint(tp.pos + tp.normal * outer, tp.elevation - 4.0f, camera_);
-            band.centerLeft = projectPoint(tp.pos - tp.normal * 1.2f, tp.elevation + 0.2f, camera_);
-            band.centerRight = projectPoint(tp.pos + tp.normal * 1.2f, tp.elevation + 0.2f, camera_);
+            band.centerLeft = projectPoint(tp.pos - tp.normal * 2.2f, tp.elevation + 0.2f, camera_);
+            band.centerRight = projectPoint(tp.pos + tp.normal * 2.2f, tp.elevation + 0.2f, camera_);
             bands.push_back(band);
         }
 
@@ -1403,12 +1409,35 @@ private:
                 r.fillQuad(far.right.p, far.rightOuter.p, near.rightOuter.p, near.right.p, rightTerrain);
             }
 
+            const Vec2 shadowDrop{0.0f, std::clamp(10.0f - far.distance * 0.004f, 3.0f, 10.0f)};
+            r.fillQuad(far.left.p + shadowDrop, far.right.p + shadowDrop, near.right.p + shadowDrop, near.left.p + shadowDrop,
+                       shade(rgb(78, 50, 40), fog * 0.55f));
+
             float stripShade = ((static_cast<int>(far.tp.progress / 34.0f) & 1) == 0) ? 1.0f : 0.92f;
             if (far.tp.zone == 1 || far.tp.zone == 5) {
                 stripShade = ((static_cast<int>(far.tp.progress / 11.0f) & 1) == 0) ? 1.07f : 0.86f;
             }
             const uint32_t road = shade(far.tp.roadColor, fog * stripShade);
             r.fillQuad(far.left.p, far.right.p, near.right.p, near.left.p, road);
+
+            if (i % 5 == 0 && far.tp.zone != 3) {
+                const float laneA = far.tp.width * 0.18f;
+                const float laneB = far.tp.width * 0.22f;
+                const ScreenPoint farStripeL = projectPoint(far.tp.pos - far.tp.normal * laneB, far.tp.elevation + 0.32f, camera_);
+                const ScreenPoint farStripeR = projectPoint(far.tp.pos - far.tp.normal * laneA, far.tp.elevation + 0.32f, camera_);
+                const ScreenPoint nearStripeL = projectPoint(near.tp.pos - near.tp.normal * laneB, near.tp.elevation + 0.32f, camera_);
+                const ScreenPoint nearStripeR = projectPoint(near.tp.pos - near.tp.normal * laneA, near.tp.elevation + 0.32f, camera_);
+                if (quadVisible(farStripeL, farStripeR, nearStripeR, nearStripeL)) {
+                    r.fillQuad(farStripeL.p, farStripeR.p, nearStripeR.p, nearStripeL.p, shade(rgb(165, 101, 56), fog * 0.64f));
+                }
+                const ScreenPoint farStripe2L = projectPoint(far.tp.pos + far.tp.normal * laneA, far.tp.elevation + 0.32f, camera_);
+                const ScreenPoint farStripe2R = projectPoint(far.tp.pos + far.tp.normal * laneB, far.tp.elevation + 0.32f, camera_);
+                const ScreenPoint nearStripe2L = projectPoint(near.tp.pos + near.tp.normal * laneA, near.tp.elevation + 0.32f, camera_);
+                const ScreenPoint nearStripe2R = projectPoint(near.tp.pos + near.tp.normal * laneB, near.tp.elevation + 0.32f, camera_);
+                if (quadVisible(farStripe2L, farStripe2R, nearStripe2R, nearStripe2L)) {
+                    r.fillQuad(farStripe2L.p, farStripe2R.p, nearStripe2R.p, nearStripe2L.p, shade(rgb(244, 199, 103), fog * 0.58f));
+                }
+            }
 
             if (far.tp.curvature > 0.075f && far.tp.zone != 3 && i % 3 == 0 &&
                 quadVisible(far.left, far.leftCurb, near.leftCurb, near.left) &&
@@ -1613,6 +1642,10 @@ private:
         const int wheel = std::max(2, static_cast<int>(h * 0.33f * kart.spec.wheelScale));
         const uint32_t body = mixColor(kart.spec.body, rgb(255, 244, 196), std::clamp(kart.contactTimer * 4.0f, 0.0f, 0.45f));
         const uint32_t helmet = racerColor(kart.racer);
+        r.fillQuad({static_cast<float>(x - w / 2), static_cast<float>(y + h / 2)},
+                   {static_cast<float>(x + w / 2), static_cast<float>(y + h / 2)},
+                   {static_cast<float>(x + w / 3), static_cast<float>(y + h)},
+                   {static_cast<float>(x - w / 3), static_cast<float>(y + h)}, rgb(43, 45, 44));
         r.fillCircle(x - w / 3, y + h / 2, wheel, rgb(21, 24, 28));
         r.fillCircle(x + w / 3, y + h / 2, wheel, rgb(21, 24, 28));
         r.fillCircle(x - w / 3, y + h / 3, std::max(2, wheel * 2 / 3), rgb(28, 31, 36));
@@ -1656,12 +1689,16 @@ private:
         const int w = static_cast<int>(lerp(256.0f, 142.0f, pullback));
         const int noseW = static_cast<int>(lerp(104.0f, 70.0f, pullback) * kart.spec.noseScale);
         const int h = static_cast<int>(lerp(94.0f, 58.0f, pullback));
-        const int slipShift = static_cast<int>(std::clamp(kart.slip * 0.55f, -36.0f, 36.0f) * (1.0f - speedN * 0.35f));
+        const int slipShift = static_cast<int>(std::clamp(kart.slip * 0.30f, -22.0f, 22.0f) * (1.0f - speedN * 0.28f));
         const int x = kFrameW / 2 + slipShift;
         const int wheel = static_cast<int>(lerp(32.0f, 19.0f, pullback) * kart.spec.wheelScale);
         const int cabinH = static_cast<int>(lerp(44.0f, 30.0f, pullback) * kart.spec.cabinScale);
         const uint32_t body = mixColor(kart.spec.body, rgb(255, 244, 196), std::clamp(kart.contactTimer * 4.0f, 0.0f, 0.45f));
         const uint32_t helmet = racerColor(kart.racer);
+        r.fillQuad({static_cast<float>(x - w / 2 - 10), static_cast<float>(yBase - 4)},
+                   {static_cast<float>(x + w / 2 + 10), static_cast<float>(yBase - 4)},
+                   {static_cast<float>(x + w / 3), static_cast<float>(yBase + 28)},
+                   {static_cast<float>(x - w / 3), static_cast<float>(yBase + 28)}, rgb(45, 48, 43));
         r.fillCircle(x - w / 3, yBase - 10, wheel + 3, rgb(15, 18, 22));
         r.fillCircle(x + w / 3, yBase - 10, wheel + 3, rgb(15, 18, 22));
         r.fillCircle(x - w / 3, yBase - 10, std::max(8, wheel / 2), shade(kart.spec.accent, 0.72f));
@@ -1711,6 +1748,13 @@ private:
         const int horizon = static_cast<int>(camera_.horizon);
         if (cave < 0.75f) {
             const uint32_t island = mixColor(rgb(35, 116, 102), rgb(32, 39, 45), cave);
+            const uint32_t cloud = mixColor(rgb(250, 245, 217), rgb(77, 82, 86), cave);
+            r.fillCircle(126, horizon - 82, 18, shade(cloud, 0.96f));
+            r.fillCircle(148, horizon - 88, 26, cloud);
+            r.fillCircle(177, horizon - 79, 18, shade(cloud, 0.98f));
+            r.fillCircle(606, horizon - 70, 15, shade(cloud, 0.92f));
+            r.fillCircle(628, horizon - 78, 23, cloud);
+            r.fillCircle(655, horizon - 69, 16, shade(cloud, 0.98f));
             r.fillTriangle({-80.0f, static_cast<float>(horizon + 16)}, {90.0f, static_cast<float>(horizon - 22)},
                            {260.0f, static_cast<float>(horizon + 16)}, shade(island, 0.78f));
             r.fillTriangle({620.0f, static_cast<float>(horizon + 18)}, {774.0f, static_cast<float>(horizon - 30)},
@@ -1734,6 +1778,8 @@ private:
         if (cave < 0.92f) {
             r.fillCircle(820, 68, 34, mixColor(rgb(255, 220, 93), rgb(54, 56, 63), cave));
             r.fillRect(0, static_cast<int>(camera_.horizon) - 3, kFrameW, 5, mixColor(rgb(32, 136, 162), rgb(38, 47, 57), cave));
+            r.fillRect(0, static_cast<int>(camera_.horizon) + 15, kFrameW, 3, mixColor(rgb(76, 207, 208), rgb(45, 58, 66), cave));
+            r.fillRect(0, static_cast<int>(camera_.horizon) + 42, kFrameW, 2, mixColor(rgb(23, 132, 151), rgb(34, 42, 50), cave));
         }
         if (cave > 0.05f) {
             r.fillRect(0, 0, kFrameW, 60, mixColor(rgb(74, 187, 232), rgb(24, 30, 39), cave));
