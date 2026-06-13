@@ -405,6 +405,7 @@ struct InputState {
     float steer = 0.0f;
     float throttle = 0.0f;
     float brake = 0.0f;
+    bool drift = false;
     bool a = false;
     bool b = false;
     bool start = false;
@@ -553,6 +554,7 @@ InputState readGamepad(SDL_Gamepad* pad, bool devKeyboard) {
         input.down = input.down || key(SDL_SCANCODE_DOWN);
     }
     input.steer = std::copysign(std::pow(std::abs(input.steer), 1.35f), input.steer);
+    input.drift = input.brake > 0.18f && std::abs(input.steer) > 0.23f;
     return input;
 }
 
@@ -870,8 +872,8 @@ public:
         const DriverAuditResult noBrake = runDriverAudit(DriverStyle::NoBrake);
         const DriverAuditResult brakeLine = runDriverAudit(DriverStyle::BrakeLine);
         const DriverAuditResult driftLine = runDriverAudit(DriverStyle::DriftLine);
-        const bool skillOrder = brakeLine.score > noBrake.score * 1.20f && driftLine.score > noBrake.score * 1.70f &&
-                                driftLine.boostFrames > 240;
+        const bool skillOrder = brakeLine.score > noBrake.score * 1.20f && driftLine.score > brakeLine.score * 1.03f &&
+                                driftLine.boostFrames > 300;
         const bool ok = stable && progressJumps == 0 && fullThrottleJumps == 0 && caveToggles <= 8 && barrierHits < 120 &&
                         leftTurns > 40 && rightTurns > 40 && turnRatio < 2.35f && highCurveSamples > 120 &&
                         highCurveTooFast < highCurveSamples * 55 / 100 && skillOrder;
@@ -904,30 +906,45 @@ private:
             const TrackPoint here = track_.pointAtIndex(player.nearest);
             const TrackPoint look = track_.sample(player.progress + 92.0f + speed * 0.62f);
             const float curve = std::max(here.curvature, look.curvature);
-            const Vec2 targetPos = look.pos;
+            float laneTarget = 0.0f;
+            if (style == DriverStyle::DriftLine && curve > 0.045f) {
+                const float turnSign = std::abs(look.signedCurvature) > 0.001f ? std::copysign(1.0f, look.signedCurvature)
+                                                                               : std::copysign(1.0f, angleOf(look.tangent - here.tangent));
+                laneTarget = -turnSign * here.width * 0.16f;
+            }
+            const Vec2 targetPos = look.pos + look.normal * laneTarget;
             const Vec2 forward = fromAngle(player.heading);
             const Vec2 toTarget = normalize(targetPos - player.pos);
             const float angleError = std::atan2(cross(forward, toTarget), dot(forward, toTarget));
-            const float targetSpeed = player.spec.maxSpeed * (0.98f - std::clamp(curve * 3.35f, 0.0f, 0.31f));
-            const float laneError = std::clamp(dot(player.pos - here.pos, here.normal) / std::max(1.0f, here.width * 0.5f), -1.8f, 1.8f);
-            const float steerGain = style == DriverStyle::NoBrake ? 1.85f : (style == DriverStyle::BrakeLine ? 2.45f : 2.65f);
-            const float laneCorrection = style == DriverStyle::NoBrake ? 0.0f : -laneError * 0.58f;
+            float targetSpeed = player.spec.maxSpeed * (0.98f - std::clamp(curve * 3.35f, 0.0f, 0.31f));
+            if (style == DriverStyle::BrakeLine) {
+                targetSpeed = player.spec.maxSpeed * (0.92f - std::clamp(curve * 3.55f, 0.0f, 0.35f));
+            }
+            if (style == DriverStyle::DriftLine) {
+                targetSpeed = player.spec.maxSpeed * (1.12f - std::clamp(curve * 1.20f, 0.0f, 0.16f));
+            }
+            const float laneError =
+                std::clamp((dot(player.pos - here.pos, here.normal) - laneTarget) / std::max(1.0f, here.width * 0.5f), -1.8f, 1.8f);
+            const float steerGain = style == DriverStyle::NoBrake ? 1.85f : (style == DriverStyle::BrakeLine ? 2.45f : 2.35f);
+            const float laneCorrection = style == DriverStyle::NoBrake ? 0.0f : -laneError * (style == DriverStyle::DriftLine ? 0.86f : 0.58f);
 
             InputState input;
             input.steer = std::clamp(angleError * steerGain + laneCorrection, -1.0f, 1.0f);
             input.throttle = 1.0f;
             if (style == DriverStyle::BrakeLine) {
-                input.throttle = speed < targetSpeed + 2.0f ? 1.0f : 0.45f;
-                input.brake = (speed > targetSpeed + 7.0f || std::abs(angleError) > 0.72f) ? 0.36f : 0.0f;
+                input.throttle = speed < targetSpeed + 2.0f ? 1.0f : 0.34f;
+                input.brake = (speed > targetSpeed + 5.0f || std::abs(angleError) > 0.68f) ? 0.40f : 0.0f;
             } else if (style == DriverStyle::DriftLine) {
-                const bool setupDrift = !player.drifting && curve > 0.082f && speed > 48.0f && std::abs(angleError) > 0.07f;
-                const bool holdDrift = player.drifting && player.driftCharge < 0.36f && curve > 0.048f && std::abs(angleError) > 0.025f;
-                input.throttle = speed < targetSpeed + 7.0f || player.boostTimer > 0.0f ? 1.0f : 0.55f;
-                input.brake = (setupDrift || holdDrift) ? 0.27f
+                const bool setupDrift = !player.drifting && curve > 0.052f && speed > 42.0f && std::abs(angleError) > 0.035f;
+                const bool holdDrift =
+                    player.drifting && player.driftCharge < 0.28f && curve > 0.034f && std::abs(laneError) < 1.20f;
+                input.throttle = speed < targetSpeed + 13.0f || player.boostTimer > 0.0f ? 1.0f : 0.72f;
+                input.brake = (setupDrift || holdDrift) ? 0.22f
                                                         : ((player.boostTimer <= 0.0f && (speed > targetSpeed + 11.0f ||
                                                                                           std::abs(angleError) > 0.78f))
                                                                ? 0.22f
                                                                : 0.0f);
+                input.drift = setupDrift || holdDrift;
             }
 
             updatePlayer(player, input, kFixedDt);
@@ -1079,14 +1096,14 @@ private:
         const float absSpeed = std::abs(speed);
         kart.contactTimer = std::max(0.0f, kart.contactTimer - dt);
 
-        const bool wantsDrift = input.brake > 0.18f && std::abs(input.steer) > 0.23f && absSpeed > 32.0f;
+        const bool wantsDrift = input.drift && input.brake > 0.18f && std::abs(input.steer) > 0.23f && absSpeed > 32.0f;
         if (wantsDrift) {
             kart.drifting = true;
             kart.boostTimer = 0.0f;
         } else if (kart.drifting && (input.brake < 0.08f || absSpeed < 24.0f || std::abs(input.steer) < 0.08f)) {
-            if (input.brake < 0.08f && kart.driftCharge > 0.18f && absSpeed > 38.0f) {
+            if (input.brake < 0.08f && kart.driftCharge > 0.10f && absSpeed > 38.0f) {
                 kart.boostPower = kart.driftCharge;
-                kart.boostTimer = 0.38f + 1.00f * kart.driftCharge;
+                kart.boostTimer = 0.74f + 2.45f * kart.driftCharge;
             }
             kart.drifting = false;
             kart.driftCharge = 0.0f;
@@ -1107,7 +1124,8 @@ private:
             }
         }
 
-        const float cornerLimit = kart.spec.maxSpeed * lerp(1.0f, kart.drifting ? 0.96f : 0.54f, curveDemand);
+        const float cornerRetention = kart.drifting ? 1.04f : (kart.boostTimer > 0.0f ? 0.86f : 0.54f);
+        const float cornerLimit = kart.spec.maxSpeed * lerp(1.0f, cornerRetention, curveDemand);
         const float gripOverflow = std::clamp((speed - cornerLimit) / std::max(1.0f, kart.spec.maxSpeed), 0.0f, 1.0f);
         if (speed > cornerLimit) {
             const float turnSign = std::abs(center.signedCurvature) > 0.002f ? std::copysign(1.0f, center.signedCurvature)
@@ -1116,32 +1134,42 @@ private:
             speed -= (speed - cornerLimit) * (kart.drifting ? 0.12f : 0.82f) * dt;
         }
         if (kart.boostTimer > 0.0f && input.throttle > 0.15f && speed > 8.0f) {
-            const float boostedMax = kart.spec.maxSpeed * (1.08f + 0.12f * kart.boostPower);
-            speed += (58.0f + 56.0f * kart.boostPower) * std::clamp(1.0f - speed / boostedMax, 0.22f, 1.0f) * dt;
+            const float boostedMax = kart.spec.maxSpeed * (1.17f + 0.34f * kart.boostPower);
+            speed += (118.0f + 154.0f * kart.boostPower) * std::clamp(1.0f - speed / boostedMax, 0.30f, 1.0f) * dt;
             kart.boostTimer = std::max(0.0f, kart.boostTimer - dt);
         } else {
             kart.boostTimer = std::max(0.0f, kart.boostTimer - dt);
         }
         speed -= speed * std::abs(speed) * (0.0018f + gripOverflow * 0.0032f) * dt;
         speed -= speed * offroad * 0.066f * dt;
-        speed = std::clamp(speed, -42.0f, kart.spec.maxSpeed * (1.0f + (kart.boostTimer > 0.0f ? 0.16f * kart.boostPower : 0.0f)) *
+        speed = std::clamp(speed, -42.0f, kart.spec.maxSpeed * (1.0f + (kart.boostTimer > 0.0f ? 0.10f + 0.36f * kart.boostPower : 0.0f)) *
                                                  (offroad > 1.0f ? 0.56f : 1.0f));
 
         const float newAbsSpeed = std::abs(speed);
         const float speedFactor = std::clamp(newAbsSpeed / 100.0f, 0.0f, 1.35f);
         float yawRate = input.steer * (1.35f + 1.42f * speedFactor) * surfaceGrip * kart.spec.grip;
         const float highSpeedUndersteer = std::clamp((newAbsSpeed - 58.0f) / 72.0f, 0.0f, 1.0f);
+        const float trailBrake = std::clamp(input.brake * std::abs(input.steer) * 1.45f, 0.0f, 1.0f);
+        const float liftRotate = std::clamp((0.72f - input.throttle) / 0.72f, 0.0f, 1.0f) * std::abs(input.steer);
         if (kart.drifting) {
             yawRate *= 1.22f * kart.spec.drift;
-            sideSpeed += input.steer * (24.0f + newAbsSpeed * 0.38f) * dt;
-            sideSpeed *= std::exp(-dt * 1.08f * surfaceGrip);
+            sideSpeed += input.steer * (17.0f + newAbsSpeed * 0.30f) * dt;
+            sideSpeed *= std::exp(-dt * 1.18f * surfaceGrip);
             const float slipQuality = std::clamp(1.0f - std::abs(std::abs(sideSpeed) - 22.0f) / 38.0f, 0.12f, 1.0f);
-            kart.driftCharge = std::clamp(kart.driftCharge + dt * (0.62f + std::abs(input.steer) * 1.25f) * slipQuality, 0.0f, 1.0f);
-            speed -= speed * 0.00055f * dt;
+            kart.driftCharge = std::clamp(kart.driftCharge + dt * (1.10f + std::abs(input.steer) * 1.92f) * slipQuality, 0.0f, 1.0f);
+            if (input.throttle > 0.15f) {
+                speed = std::min(speed + input.throttle * (40.0f + 78.0f * kart.driftCharge) * slipQuality * dt,
+                                 kart.spec.maxSpeed * 1.22f);
+            }
+            speed -= speed * 0.00034f * dt;
         } else {
-            yawRate *= 1.0f - std::clamp(highSpeedUndersteer * std::abs(input.steer) * 0.42f + gripOverflow * 1.15f, 0.0f, 0.78f);
+            yawRate *= 1.0f + trailBrake * highSpeedUndersteer * 0.34f + liftRotate * highSpeedUndersteer * 0.22f;
+            yawRate *=
+                1.0f - std::clamp(highSpeedUndersteer * std::abs(input.steer) * (0.42f + input.throttle * 0.28f) + gripOverflow * 1.15f,
+                                   0.0f, 0.82f);
             sideSpeed += input.steer * newAbsSpeed * highSpeedUndersteer * curveDemand * 0.28f * dt;
-            sideSpeed *= std::exp(-dt * (3.7f + 1.9f * kart.spec.grip) * std::max(0.18f, surfaceGrip - gripOverflow * 0.45f));
+            sideSpeed *= std::exp(-dt * (3.7f + 1.9f * kart.spec.grip + trailBrake * 2.0f + liftRotate * 0.9f) *
+                                  std::max(0.18f, surfaceGrip - gripOverflow * 0.45f));
             kart.driftCharge = std::max(0.0f, kart.driftCharge - dt * 2.0f);
         }
         yawRate *= speed >= -1.0f ? 1.0f : -0.55f;
@@ -1238,14 +1266,19 @@ private:
 
     void updateCamera(float dt) {
         const Kart& player = karts_[0];
-        const float speedN = std::clamp(length(player.vel) / player.spec.maxSpeed, 0.0f, 1.0f);
+        const float speed = length(player.vel);
+        const float speedN = std::clamp(speed / player.spec.maxSpeed, 0.0f, 1.0f);
         const float pullback = smoothstep(speedN);
         const float back = lerp(7.0f, 92.0f, pullback);
         camera_.height = lerp(29.0f, 64.0f, pullback);
         camera_.horizon = lerp(178.0f, 132.0f, pullback);
         camera_.focal = lerp(455.0f, 535.0f, pullback);
 
-        const float targetYaw = player.heading + std::clamp(player.slip * 0.012f, -0.34f, 0.34f);
+        const TrackPoint here = track_.pointAtIndex(player.nearest);
+        const TrackPoint look = track_.sample(player.progress + 95.0f + speed * 1.05f);
+        const float apexBlend = std::clamp(0.20f + pullback * 0.34f + std::max(here.curvature, look.curvature) * 2.0f, 0.20f, 0.66f);
+        const float lookYaw = angleOf(normalize(look.pos - player.pos));
+        const float targetYaw = lerpAngle(player.heading, lookYaw, apexBlend) + std::clamp(player.slip * 0.012f, -0.34f, 0.34f);
         camera_.yaw = lerpAngle(camera_.yaw, targetYaw, 1.0f - std::exp(-dt * 7.5f));
         const Vec2 forward = fromAngle(camera_.yaw);
         const Vec2 right{-forward.y, forward.x};
@@ -1296,6 +1329,10 @@ private:
             float distance = 0.0f;
         };
 
+        const auto quadVisible = [](const ScreenPoint& a, const ScreenPoint& b, const ScreenPoint& c, const ScreenPoint& d) {
+            return a.visible && b.visible && c.visible && d.visible;
+        };
+
         std::vector<Band> bands;
         float dist = 5.0f;
         for (int i = 0; i < 172; ++i) {
@@ -1321,15 +1358,19 @@ private:
         for (int i = static_cast<int>(bands.size()) - 1; i > 0; --i) {
             const Band& far = bands[static_cast<size_t>(i)];
             const Band& near = bands[static_cast<size_t>(i - 1)];
-            if (!far.left.visible && !near.left.visible) {
+            if (!quadVisible(far.left, far.right, near.right, near.left)) {
                 continue;
             }
 
             const float fog = std::clamp(1.05f - far.distance / 1350.0f, 0.58f, 1.05f);
             const uint32_t leftTerrain = shade(far.tp.shoulderColor, fog * (far.tp.zone == 3 ? 0.55f : 1.0f));
             const uint32_t rightTerrain = shade(far.tp.shoulderColor, fog * (far.tp.zone == 5 ? 0.82f : 1.0f));
-            r.fillQuad(far.leftOuter.p, far.left.p, near.left.p, near.leftOuter.p, leftTerrain);
-            r.fillQuad(far.right.p, far.rightOuter.p, near.rightOuter.p, near.right.p, rightTerrain);
+            if (quadVisible(far.leftOuter, far.left, near.left, near.leftOuter)) {
+                r.fillQuad(far.leftOuter.p, far.left.p, near.left.p, near.leftOuter.p, leftTerrain);
+            }
+            if (quadVisible(far.right, far.rightOuter, near.rightOuter, near.right)) {
+                r.fillQuad(far.right.p, far.rightOuter.p, near.rightOuter.p, near.right.p, rightTerrain);
+            }
 
             float stripShade = ((static_cast<int>(far.tp.progress / 34.0f) & 1) == 0) ? 1.0f : 0.92f;
             if (far.tp.zone == 1 || far.tp.zone == 5) {
@@ -1338,12 +1379,15 @@ private:
             const uint32_t road = shade(far.tp.roadColor, fog * stripShade);
             r.fillQuad(far.left.p, far.right.p, near.right.p, near.left.p, road);
 
-            if (far.tp.curvature > 0.075f && far.tp.zone != 3 && i % 3 == 0) {
+            if (far.tp.curvature > 0.075f && far.tp.zone != 3 && i % 3 == 0 &&
+                quadVisible(far.left, far.leftCurb, near.leftCurb, near.left) &&
+                quadVisible(far.rightCurb, far.right, near.right, near.rightCurb)) {
                 const uint32_t curb = ((static_cast<int>(far.tp.progress / 18.0f) & 1) == 0) ? rgb(236, 67, 57) : rgb(250, 238, 206);
                 r.fillQuad(far.left.p, far.leftCurb.p, near.leftCurb.p, near.left.p, shade(curb, fog));
                 r.fillQuad(far.rightCurb.p, far.right.p, near.right.p, near.rightCurb.p, shade(curb, fog));
             }
-            if ((static_cast<int>(far.tp.progress / 30.0f) & 1) == 0 && far.tp.zone != 3) {
+            if ((static_cast<int>(far.tp.progress / 30.0f) & 1) == 0 && far.tp.zone != 3 &&
+                quadVisible(far.centerLeft, far.centerRight, near.centerRight, near.centerLeft)) {
                 r.fillQuad(far.centerLeft.p, far.centerRight.p, near.centerRight.p, near.centerLeft.p,
                            shade(rgb(248, 229, 148), fog));
             }
