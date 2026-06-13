@@ -1,4 +1,5 @@
 #include <X11/Xlib.h>
+#include <X11/Xatom.h>
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
 #include <fcntl.h>
@@ -110,6 +111,12 @@ struct Camera {
     Vec2 pos;
     float yaw = 0.0f;
     float zoom = 0.36f;
+    int screenW = kScreenW;
+    int screenH = kScreenH;
+    bool perspective = false;
+    float height = 125.0f;
+    float fov = 520.0f;
+    float horizon = 210.0f;
 };
 
 std::array<uint8_t, 7> glyph(char ch) {
@@ -166,6 +173,9 @@ std::array<uint8_t, 7> glyph(char ch) {
 class Renderer {
 public:
     Renderer(uint32_t* pixels, int width, int height) : pixels_(pixels), width_(width), height_(height) {}
+
+    int width() const { return width_; }
+    int height() const { return height_; }
 
     void clear(uint32_t color) {
         std::fill(pixels_, pixels_ + width_ * height_, color);
@@ -297,25 +307,31 @@ public:
         screen_ = DefaultScreen(display_);
         visual_ = DefaultVisual(display_, screen_);
         depth_ = DefaultDepth(display_, screen_);
-        window_ = XCreateSimpleWindow(display_, RootWindow(display_, screen_), 80, 80, kScreenW, kScreenH, 1,
+        width_ = std::max(kScreenW, DisplayWidth(display_, screen_));
+        height_ = std::max(kScreenH, DisplayHeight(display_, screen_));
+        window_ = XCreateSimpleWindow(display_, RootWindow(display_, screen_), 0, 0, width_, height_, 0,
                                       BlackPixel(display_, screen_), BlackPixel(display_, screen_));
         XStoreName(display_, window_, "Harbor Karts");
 
         XSizeHints hints{};
-        hints.flags = PMinSize | PMaxSize;
-        hints.min_width = hints.max_width = kScreenW;
-        hints.min_height = hints.max_height = kScreenH;
+        hints.flags = PMinSize;
+        hints.min_width = kScreenW;
+        hints.min_height = kScreenH;
         XSetWMNormalHints(display_, window_, &hints);
 
         wmDelete_ = XInternAtom(display_, "WM_DELETE_WINDOW", False);
         XSetWMProtocols(display_, window_, &wmDelete_, 1);
         XSelectInput(display_, window_, ExposureMask | KeyPressMask | KeyReleaseMask | StructureNotifyMask);
+        Atom wmState = XInternAtom(display_, "_NET_WM_STATE", False);
+        Atom fullscreen = XInternAtom(display_, "_NET_WM_STATE_FULLSCREEN", False);
+        XChangeProperty(display_, window_, wmState, XA_ATOM, 32, PropModeReplace,
+                        reinterpret_cast<unsigned char*>(&fullscreen), 1);
         XMapWindow(display_, window_);
         gc_ = XCreateGC(display_, window_, 0, nullptr);
 
-        pixels_.assign(kScreenW * kScreenH, 0);
+        pixels_.assign(width_ * height_, 0);
         image_ = XCreateImage(display_, visual_, depth_, ZPixmap, 0, reinterpret_cast<char*>(pixels_.data()),
-                              kScreenW, kScreenH, 32, 0);
+                              width_, height_, 32, 0);
         if (!image_ || image_->bits_per_pixel != 32) {
             std::cerr << "Unsupported X11 image format; expected 32 bits per pixel.\n";
             return false;
@@ -376,11 +392,11 @@ public:
     bool running() const { return running_; }
     void close() { running_ = false; }
 
-    Renderer renderer() { return Renderer(pixels_.data(), kScreenW, kScreenH); }
+    Renderer renderer() { return Renderer(pixels_.data(), width_, height_); }
 
     void present() {
         image_->data = reinterpret_cast<char*>(pixels_.data());
-        XPutImage(display_, window_, gc_, image_, 0, 0, 0, 0, kScreenW, kScreenH);
+        XPutImage(display_, window_, gc_, image_, 0, 0, 0, 0, width_, height_);
         XFlush(display_);
     }
 
@@ -394,6 +410,8 @@ private:
     Atom wmDelete_ = 0;
     XImage* image_ = nullptr;
     std::vector<uint32_t> pixels_;
+    int width_ = kScreenW;
+    int height_ = kScreenH;
     bool running_ = false;
 };
 
@@ -965,8 +983,8 @@ Vec2 project(Vec2 world, const Camera& camera) {
     Vec2 d = world - camera.pos;
     Vec2 forward = fromAngle(camera.yaw);
     Vec2 right{-forward.y, forward.x};
-    return {kScreenW * 0.5f + dot(d, right) * camera.zoom,
-            kScreenH * 0.63f - dot(d, forward) * camera.zoom};
+    return {camera.screenW * 0.5f + dot(d, right) * camera.zoom,
+            camera.screenH * 0.63f - dot(d, forward) * camera.zoom};
 }
 
 void drawWorldLine(Renderer& r, Vec2 a, Vec2 b, const Camera& camera, int thickness, uint32_t color) {
@@ -1050,7 +1068,8 @@ void drawProp(Renderer& r, const Track& track, const Prop& prop, const Camera& c
     TrackQuery q = track.sample(prop.progress);
     Vec2 pos = q.point + q.normal * prop.offset;
     Vec2 screen = project(pos, camera);
-    if (screen.x < -80.0f || screen.x > kScreenW + 80.0f || screen.y < -80.0f || screen.y > kScreenH + 80.0f) {
+    if (screen.x < -80.0f || screen.x > camera.screenW + 80.0f || screen.y < -80.0f ||
+        screen.y > camera.screenH + 80.0f) {
         return;
     }
     int x = static_cast<int>(screen.x);
@@ -1150,7 +1169,7 @@ void drawKart(Renderer& r, const KartState& state, const KartDef& kart, const Ra
 }
 
 void drawMinimap(Renderer& r, const Track& track, const std::vector<KartState>& cars) {
-    int x = kScreenW - 184;
+    int x = r.width() - 184;
     int y = 18;
     int w = 154;
     int h = 112;
@@ -1243,6 +1262,9 @@ public:
 
     void render(Renderer& r, float fps, std::string_view controllerName) {
         Camera camera = currentCamera();
+        camera.screenW = r.width();
+        camera.screenH = r.height();
+        camera.zoom *= std::min(r.width() / static_cast<float>(kScreenW), r.height() / static_cast<float>(kScreenH));
         drawBackground(r, camera);
         drawTrack(r, track_, camera);
         for (const Prop& prop : props_) {
@@ -1327,47 +1349,50 @@ private:
 
     void drawBackground(Renderer& r, const Camera&) {
         r.clear(rgb(43, 125, 150));
-        for (int y = 0; y < kScreenH; y += 34) {
+        for (int y = 0; y < r.height(); y += 34) {
             int shift = static_cast<int>(std::sin(animTime_ * 0.8f + y * 0.07f) * 22.0f);
             r.drawLine({static_cast<float>(-40 + shift), static_cast<float>(y)},
-                       {static_cast<float>(kScreenW + 40 + shift), static_cast<float>(y + 14)}, 1,
+                       {static_cast<float>(r.width() + 40 + shift), static_cast<float>(y + 14)}, 1,
                        rgb(54, 143, 166));
         }
     }
 
     void drawMenu(Renderer& r, std::string_view controllerName) {
-        r.fillRect(0, 0, kScreenW, 92, rgb(24, 38, 46));
-        r.drawTextCentered(kScreenW / 2, 18, "HARBOR KARTS", rgb(246, 230, 152), 4);
-        r.drawTextCentered(kScreenW / 2, 66, "ORIGINAL BEACH HARBOR RACING BASELINE", rgb(210, 226, 224), 2);
+        int w = r.width();
+        int h = r.height();
+        int cx = w / 2;
+        r.fillRect(0, 0, w, 92, rgb(24, 38, 46));
+        r.drawTextCentered(cx, 18, "HARBOR KARTS", rgb(246, 230, 152), 4);
+        r.drawTextCentered(cx, 66, "ORIGINAL BEACH HARBOR RACING BASELINE", rgb(210, 226, 224), 2);
 
         if (mode_ == Mode::SelectRacer) {
             const Racer& racer = racers_[selectedRacer_];
-            r.drawTextCentered(kScreenW / 2, 130, "SELECT RACER", rgb(255, 255, 255), 3);
-            r.drawTextCentered(kScreenW / 2, 174, "<  " + racer.name + "  >", rgb(255, 236, 122), 4);
-            r.drawCircle(kScreenW / 2, 270, 58, racer.primary);
-            r.drawCircle(kScreenW / 2, 252, 36, racer.accent);
-            r.fillRect(kScreenW / 2 - 70, 310, 140, 22, shade(racer.primary, 0.7f));
-            r.drawTextCentered(kScreenW / 2, 360, "COSMETIC ONLY - NO SUPER POWERS", rgb(232, 242, 234), 2);
-            r.drawTextCentered(kScreenW / 2, 394,
+            r.drawTextCentered(cx, 130, "SELECT RACER", rgb(255, 255, 255), 3);
+            r.drawTextCentered(cx, 174, "<  " + racer.name + "  >", rgb(255, 236, 122), 4);
+            r.drawCircle(cx, 270, 58, racer.primary);
+            r.drawCircle(cx, 252, 36, racer.accent);
+            r.fillRect(cx - 70, 310, 140, 22, shade(racer.primary, 0.7f));
+            r.drawTextCentered(cx, 360, "COSMETIC ONLY - NO SUPER POWERS", rgb(232, 242, 234), 2);
+            r.drawTextCentered(cx, 394,
                                std::to_string(selectedRacer_ + 1) + "/" + std::to_string(racers_.size()),
                                rgb(246, 230, 152), 2);
         } else {
             const KartDef& kart = karts_[selectedKart_];
-            r.drawTextCentered(kScreenW / 2, 130, "SELECT MAXED CAR", rgb(255, 255, 255), 3);
-            r.drawTextCentered(kScreenW / 2, 174, "<  " + kart.name + "  >", rgb(255, 236, 122), 4);
-            drawGarageKart(r, kScreenW / 2, 282, kart);
-            r.drawText(kScreenW / 2 - 180, 360, "SPEED", rgb(232, 242, 234), 2);
-            r.drawText(kScreenW / 2 - 180, 388, "ACCEL", rgb(232, 242, 234), 2);
-            r.drawText(kScreenW / 2 - 180, 416, "GRIP", rgb(232, 242, 234), 2);
-            drawFullBar(r, kScreenW / 2 - 70, 360);
-            drawFullBar(r, kScreenW / 2 - 70, 388);
-            drawFullBar(r, kScreenW / 2 - 70, 416);
-            r.drawText(kScreenW / 2 + 158, 388, "MAX", rgb(255, 236, 122), 2);
+            r.drawTextCentered(cx, 130, "SELECT MAXED CAR", rgb(255, 255, 255), 3);
+            r.drawTextCentered(cx, 174, "<  " + kart.name + "  >", rgb(255, 236, 122), 4);
+            drawGarageKart(r, cx, 282, kart);
+            r.drawText(cx - 180, 360, "SPEED", rgb(232, 242, 234), 2);
+            r.drawText(cx - 180, 388, "ACCEL", rgb(232, 242, 234), 2);
+            r.drawText(cx - 180, 416, "GRIP", rgb(232, 242, 234), 2);
+            drawFullBar(r, cx - 70, 360);
+            drawFullBar(r, cx - 70, 388);
+            drawFullBar(r, cx - 70, 416);
+            r.drawText(cx + 158, 388, "MAX", rgb(255, 236, 122), 2);
         }
 
         std::string pad = controllerName.empty() ? "NO GAMEPAD" : std::string(controllerName);
-        r.drawTextCentered(kScreenW / 2, 492, "A CONFIRM  B BACK  LEFT/RIGHT CHOOSE", rgb(210, 226, 224), 2);
-        r.drawTextCentered(kScreenW / 2, 516, pad, rgb(166, 214, 220), 1);
+        r.drawTextCentered(cx, h - 48, "A CONFIRM  B BACK  LEFT/RIGHT CHOOSE", rgb(210, 226, 224), 2);
+        r.drawTextCentered(cx, h - 24, pad, rgb(166, 214, 220), 1);
     }
 
     void drawGarageKart(Renderer& r, int cx, int cy, const KartDef& kart) {
@@ -1403,21 +1428,23 @@ private:
         r.drawText(16, 66, racers_[selectedRacer_].name + " | " + karts_[selectedKart_].name, rgb(166, 214, 220), 1);
         drawMinimap(r, track_, cars_);
         if (player.wrongWay) {
-            r.drawTextCentered(kScreenW / 2, 96, "WRONG WAY", rgb(255, 88, 72), 4);
+            r.drawTextCentered(r.width() / 2, 96, "WRONG WAY", rgb(255, 88, 72), 4);
         }
         if (paused_) {
-            r.fillRect(0, 0, kScreenW, kScreenH, rgb(20, 30, 36));
-            r.drawTextCentered(kScreenW / 2, 208, "PAUSED", rgb(255, 244, 170), 5);
-            r.drawTextCentered(kScreenW / 2, 290, "START RESUME  B GARAGE", rgb(224, 240, 236), 2);
+            r.fillRect(0, 0, r.width(), r.height(), rgb(20, 30, 36));
+            r.drawTextCentered(r.width() / 2, r.height() / 2 - 62, "PAUSED", rgb(255, 244, 170), 5);
+            r.drawTextCentered(r.width() / 2, r.height() / 2 + 20, "START RESUME  B GARAGE", rgb(224, 240, 236), 2);
         }
     }
 
     void drawControllerOverlay(Renderer& r) {
-        r.fillRect(140, 196, 680, 146, rgb(24, 38, 46));
-        r.fillRect(148, 204, 664, 130, rgb(35, 58, 66));
-        r.drawTextCentered(kScreenW / 2, 224, "CONNECT A GAMEPAD", rgb(255, 244, 170), 4);
-        r.drawTextCentered(kScreenW / 2, 282, "NORMAL PLAY IS CONTROLLER ONLY", rgb(224, 240, 236), 2);
-        r.drawTextCentered(kScreenW / 2, 310, "LINUX /DEV/INPUT/JS0 STYLE DEVICES", rgb(166, 214, 220), 1);
+        int x = r.width() / 2 - 340;
+        int y = r.height() / 2 - 73;
+        r.fillRect(x, y, 680, 146, rgb(24, 38, 46));
+        r.fillRect(x + 8, y + 8, 664, 130, rgb(35, 58, 66));
+        r.drawTextCentered(r.width() / 2, y + 28, "CONNECT A GAMEPAD", rgb(255, 244, 170), 4);
+        r.drawTextCentered(r.width() / 2, y + 86, "NORMAL PLAY IS CONTROLLER ONLY", rgb(224, 240, 236), 2);
+        r.drawTextCentered(r.width() / 2, y + 114, "LINUX /DEV/INPUT/JS0 STYLE DEVICES", rgb(166, 214, 220), 1);
     }
 
     void updateRacePosition() {
