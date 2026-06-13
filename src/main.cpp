@@ -94,6 +94,17 @@ float wrapProgress(float value, float total) {
     return value;
 }
 
+float progressAhead(float from, float to, float total) {
+    float delta = to - from;
+    while (delta < 0.0f) {
+        delta += total;
+    }
+    while (delta >= total) {
+        delta -= total;
+    }
+    return delta;
+}
+
 float wrapAngle(float angle) {
     while (angle <= -kPi) {
         angle += kTwoPi;
@@ -117,6 +128,12 @@ struct Camera {
     float height = 125.0f;
     float fov = 520.0f;
     float horizon = 210.0f;
+};
+
+struct Projection {
+    Vec2 screen;
+    float depth = 0.0f;
+    float scale = 1.0f;
 };
 
 std::array<uint8_t, 7> glyph(char ch) {
@@ -1017,6 +1034,166 @@ uint32_t surfaceColor(Surface surface) {
     }
 }
 
+std::optional<Projection> projectGround(Vec2 world, const Camera& camera) {
+    Vec2 d = world - camera.pos;
+    Vec2 forward = fromAngle(camera.yaw);
+    Vec2 right{-forward.y, forward.x};
+    float depth = dot(d, forward);
+    if (depth < 35.0f) {
+        return std::nullopt;
+    }
+    float lateral = dot(d, right);
+    float scale = camera.fov / depth;
+    Projection p;
+    p.depth = depth;
+    p.scale = scale;
+    p.screen = {camera.screenW * 0.5f + lateral * scale, camera.horizon + camera.height * scale};
+    if (p.screen.x < -camera.screenW * 0.75f || p.screen.x > camera.screenW * 1.75f ||
+        p.screen.y < -camera.screenH * 0.5f || p.screen.y > camera.screenH * 1.4f) {
+        return std::nullopt;
+    }
+    return p;
+}
+
+bool perspectiveQuad(Renderer& r, const Camera& camera, Vec2 a, Vec2 b, Vec2 c, Vec2 d, uint32_t color) {
+    auto pa = projectGround(a, camera);
+    auto pb = projectGround(b, camera);
+    auto pc = projectGround(c, camera);
+    auto pd = projectGround(d, camera);
+    if (!pa || !pb || !pc || !pd) {
+        return false;
+    }
+    r.fillPolygon({pa->screen, pb->screen, pc->screen, pd->screen}, color);
+    return true;
+}
+
+void drawPerspectiveBackground(Renderer& r, const Camera& camera, float animTime) {
+    int horizon = static_cast<int>(camera.horizon);
+    for (int y = 0; y < horizon; y += 3) {
+        float t = static_cast<float>(y) / std::max(1, horizon);
+        uint32_t color = rgb(static_cast<uint8_t>(35 + t * 42), static_cast<uint8_t>(116 + t * 54),
+                             static_cast<uint8_t>(150 + t * 58));
+        r.fillRect(0, y, r.width(), 3, color);
+    }
+    for (int y = horizon; y < r.height(); y += 3) {
+        float t = static_cast<float>(y - horizon) / std::max(1, r.height() - horizon);
+        uint32_t color = rgb(static_cast<uint8_t>(54 + t * 86), static_cast<uint8_t>(144 + t * 50),
+                             static_cast<uint8_t>(166 - t * 62));
+        r.fillRect(0, y, r.width(), 3, color);
+    }
+    r.fillRect(0, horizon - 2, r.width(), 4, rgb(225, 215, 155));
+    for (int i = 0; i < 20; ++i) {
+        int y = horizon + 18 + i * 24;
+        int shift = static_cast<int>(std::sin(animTime * 1.2f + i * 0.7f) * 70.0f);
+        r.drawLine({static_cast<float>(-80 + shift), static_cast<float>(y)},
+                   {static_cast<float>(r.width() + 80 + shift), static_cast<float>(y + 12)}, 1,
+                   rgb(67, 158, 178));
+    }
+}
+
+void drawPerspectiveTrack(Renderer& r, const Track& track, const Camera& camera, float playerProgress) {
+    constexpr float nearDist = 45.0f;
+    constexpr float farDist = 4300.0f;
+    constexpr float step = 58.0f;
+    for (float d = farDist; d >= nearDist; d -= step) {
+        TrackQuery q0 = track.sample(playerProgress + d);
+        TrackQuery q1 = track.sample(playerProgress + d + step);
+        float shoulder0 = q0.halfWidth + 94.0f;
+        float shoulder1 = q1.halfWidth + 94.0f;
+        uint32_t shoulder = q0.surface == Surface::Boardwalk ? rgb(85, 59, 38) : rgb(186, 154, 94);
+        perspectiveQuad(r, camera, q0.point - q0.normal * shoulder0, q0.point + q0.normal * shoulder0,
+                        q1.point + q1.normal * shoulder1, q1.point - q1.normal * shoulder1, shoulder);
+        perspectiveQuad(r, camera, q0.point - q0.normal * (q0.halfWidth + 8.0f),
+                        q0.point + q0.normal * (q0.halfWidth + 8.0f),
+                        q1.point + q1.normal * (q1.halfWidth + 8.0f),
+                        q1.point - q1.normal * (q1.halfWidth + 8.0f), rgb(52, 50, 45));
+        perspectiveQuad(r, camera, q0.point - q0.normal * q0.halfWidth, q0.point + q0.normal * q0.halfWidth,
+                        q1.point + q1.normal * q1.halfWidth, q1.point - q1.normal * q1.halfWidth,
+                        surfaceColor(q0.surface));
+
+        if (static_cast<int>((playerProgress + d) / 210.0f) % 2 == 0) {
+            float stripe = std::min(q0.halfWidth * 0.04f, 10.0f);
+            perspectiveQuad(r, camera, q0.point - q0.normal * stripe, q0.point + q0.normal * stripe,
+                            q1.point + q1.normal * stripe, q1.point - q1.normal * stripe,
+                            q0.surface == Surface::Tunnel ? rgb(150, 156, 158) : rgb(232, 224, 178));
+        }
+    }
+}
+
+void drawPerspectiveProp(Renderer& r, const Track& track, const Prop& prop, const Camera& camera) {
+    TrackQuery q = track.sample(prop.progress);
+    Vec2 pos = q.point + q.normal * prop.offset;
+    auto projected = projectGround(pos, camera);
+    if (!projected) {
+        return;
+    }
+    int size = std::clamp(static_cast<int>(projected->scale * 46.0f * prop.scale), 3, 90);
+    int x = static_cast<int>(projected->screen.x);
+    int y = static_cast<int>(projected->screen.y);
+    if (prop.type == 0) {
+        r.fillRect(x - size / 6, y - size * 2, std::max(2, size / 3), size * 2, rgb(118, 75, 42));
+        r.drawCircle(x - size / 2, y - size * 2, size / 2, rgb(56, 145, 78));
+        r.drawCircle(x + size / 2, y - size * 2, size / 2, rgb(43, 128, 72));
+        r.drawCircle(x, y - size * 5 / 2, size / 2, rgb(74, 166, 86));
+    } else if (prop.type == 4) {
+        std::vector<Vec2> boat = {{static_cast<float>(x - size * 2), static_cast<float>(y)},
+                                  {static_cast<float>(x + size * 2), static_cast<float>(y)},
+                                  {static_cast<float>(x + size), static_cast<float>(y - size)},
+                                  {static_cast<float>(x - size), static_cast<float>(y - size)}};
+        r.fillPolygon(boat, rgb(236, 230, 205));
+        r.drawLine({static_cast<float>(x), static_cast<float>(y - size)},
+                   {static_cast<float>(x), static_cast<float>(y - size * 3)}, std::max(1, size / 12), rgb(60, 60, 60));
+    } else {
+        r.drawCircle(x, y - size / 2, size / 2, prop.type == 2 ? rgb(36, 58, 68) : rgb(220, 80, 56));
+    }
+}
+
+void drawPerspectiveKart(Renderer& r, const KartState& state, const KartDef& kart, const Racer& racer,
+                         const Camera& camera) {
+    auto projected = projectGround(state.pos, camera);
+    if (!projected) {
+        return;
+    }
+    int w = std::clamp(static_cast<int>(projected->scale * 86.0f), 18, 170);
+    int h = std::clamp(static_cast<int>(projected->scale * 62.0f), 12, 128);
+    int x = static_cast<int>(projected->screen.x);
+    int y = static_cast<int>(projected->screen.y);
+    r.drawCircle(x, y + h / 4, std::max(3, w / 2), rgb(24, 34, 38));
+    std::vector<Vec2> body = {{static_cast<float>(x - w / 2), static_cast<float>(y)},
+                              {static_cast<float>(x + w / 2), static_cast<float>(y)},
+                              {static_cast<float>(x + w * 2 / 5), static_cast<float>(y - h)},
+                              {static_cast<float>(x - w * 2 / 5), static_cast<float>(y - h)}};
+    r.fillPolygon(body, kart.body);
+    r.fillRect(x - w / 4, y - h * 3 / 4, w / 2, std::max(3, h / 3), shade(racer.primary, 0.76f));
+    r.fillRect(x - w / 2, y - h / 6, std::max(3, w / 5), std::max(3, h / 5), rgb(16, 16, 16));
+    r.fillRect(x + w * 3 / 10, y - h / 6, std::max(3, w / 5), std::max(3, h / 5), rgb(16, 16, 16));
+}
+
+void drawPlayerHood(Renderer& r, const KartDef& kart, const Racer& racer, float speed) {
+    float speedT = std::clamp(speed / 560.0f, 0.0f, 1.0f);
+    int w = r.width();
+    int h = r.height();
+    int cx = w / 2;
+    int hoodTop = static_cast<int>(h - lerp(112.0f, 176.0f, speedT));
+    int hoodHalf = static_cast<int>(lerp(w * 0.25f, w * 0.17f, speedT));
+    std::vector<Vec2> hood = {{static_cast<float>(cx - hoodHalf), static_cast<float>(h + 28)},
+                              {static_cast<float>(cx + hoodHalf), static_cast<float>(h + 28)},
+                              {static_cast<float>(cx + hoodHalf * 2 / 3), static_cast<float>(hoodTop)},
+                              {static_cast<float>(cx - hoodHalf * 2 / 3), static_cast<float>(hoodTop)}};
+    r.fillPolygon(hood, kart.body);
+    std::vector<Vec2> stripe = {{static_cast<float>(cx - hoodHalf / 5), static_cast<float>(h + 20)},
+                                {static_cast<float>(cx + hoodHalf / 5), static_cast<float>(h + 20)},
+                                {static_cast<float>(cx + hoodHalf / 8), static_cast<float>(hoodTop + 8)},
+                                {static_cast<float>(cx - hoodHalf / 8), static_cast<float>(hoodTop + 8)}};
+    r.fillPolygon(stripe, kart.trim);
+    r.fillRect(cx - hoodHalf / 4, hoodTop + 14, hoodHalf / 2, 22, shade(racer.primary, 0.75f));
+    if (speedT > 0.45f) {
+        int wheelY = h - 32;
+        r.drawCircle(cx - hoodHalf - 12, wheelY, 26, rgb(14, 14, 14));
+        r.drawCircle(cx + hoodHalf + 12, wheelY, 26, rgb(14, 14, 14));
+    }
+}
+
 void drawTrack(Renderer& r, const Track& track, const Camera& camera) {
     const uint32_t sand = rgb(202, 176, 115);
     const uint32_t wetSand = rgb(174, 144, 91);
@@ -1264,20 +1441,25 @@ public:
         Camera camera = currentCamera();
         camera.screenW = r.width();
         camera.screenH = r.height();
-        camera.zoom *= std::min(r.width() / static_cast<float>(kScreenW), r.height() / static_cast<float>(kScreenH));
-        drawBackground(r, camera);
-        drawTrack(r, track_, camera);
-        for (const Prop& prop : props_) {
-            drawProp(r, track_, prop, camera, animTime_);
-        }
-        for (size_t i = 1; i < cars_.size(); ++i) {
-            drawKart(r, cars_[i], karts_[cars_[i].kartIndex], racers_[cars_[i].racerIndex], camera);
-        }
-        drawKart(r, cars_[0], karts_[cars_[0].kartIndex], racers_[cars_[0].racerIndex], camera);
-
         if (mode_ == Mode::Race) {
+            camera.fov = r.height() * 0.92f;
+            camera.horizon = r.height() * 0.40f;
+            drawPerspectiveBackground(r, camera, animTime_);
+            drawPerspectiveTrack(r, track_, camera, cars_[0].progress);
+            drawPerspectiveSceneObjects(r, camera);
+            drawPlayerHood(r, karts_[cars_[0].kartIndex], racers_[cars_[0].racerIndex], length(cars_[0].vel));
             drawHud(r, fps);
         } else {
+            camera.zoom *= std::min(r.width() / static_cast<float>(kScreenW), r.height() / static_cast<float>(kScreenH));
+            drawBackground(r, camera);
+            drawTrack(r, track_, camera);
+            for (const Prop& prop : props_) {
+                drawProp(r, track_, prop, camera, animTime_);
+            }
+            for (size_t i = 1; i < cars_.size(); ++i) {
+                drawKart(r, cars_[i], karts_[cars_[i].kartIndex], racers_[cars_[i].racerIndex], camera);
+            }
+            drawKart(r, cars_[0], karts_[cars_[0].kartIndex], racers_[cars_[0].racerIndex], camera);
             drawMenu(r, controllerName);
         }
         if (!inputConnected_) {
@@ -1333,10 +1515,16 @@ private:
         if (mode_ == Mode::Race) {
             const KartState& player = cars_.front();
             float speed = length(player.vel);
+            float speedT = std::clamp(speed / 560.0f, 0.0f, 1.0f);
+            Vec2 forward = fromAngle(player.yaw);
+            Vec2 right{-forward.y, forward.x};
             Camera camera;
-            camera.pos = player.pos + fromAngle(player.yaw) * std::clamp(speed * 0.32f, 0.0f, 180.0f);
-            camera.yaw = player.yaw;
-            camera.zoom = 0.36f;
+            float chaseDistance = lerp(42.0f, 350.0f, speedT);
+            float lateralSway = std::clamp(dot(player.vel, right) * 0.045f, -30.0f, 30.0f);
+            camera.pos = player.pos - forward * chaseDistance + right * lateralSway;
+            camera.yaw = wrapAngle(player.yaw + player.yawVel * 0.08f);
+            camera.perspective = true;
+            camera.height = lerp(86.0f, 172.0f, speedT);
             return camera;
         }
         TrackQuery q = track_.sample(620.0f + std::sin(animTime_ * 0.25f) * 120.0f);
@@ -1345,6 +1533,43 @@ private:
         camera.yaw = angleOf(q.tangent) + 0.25f * std::sin(animTime_ * 0.2f);
         camera.zoom = 0.30f;
         return camera;
+    }
+
+    void drawPerspectiveSceneObjects(Renderer& r, const Camera& camera) {
+        struct Candidate {
+            size_t index = 0;
+            float depth = 0.0f;
+        };
+
+        std::vector<std::pair<float, const Prop*>> visibleProps;
+        for (const Prop& prop : props_) {
+            float ahead = progressAhead(cars_[0].progress, wrapProgress(prop.progress, track_.totalLength()),
+                                        track_.totalLength());
+            if (ahead > 35.0f && ahead < 4300.0f) {
+                visibleProps.push_back({ahead, &prop});
+            }
+        }
+        std::sort(visibleProps.begin(), visibleProps.end(), [](const auto& a, const auto& b) {
+            return a.first > b.first;
+        });
+        for (const auto& item : visibleProps) {
+            drawPerspectiveProp(r, track_, *item.second, camera);
+        }
+
+        std::vector<Candidate> visibleCars;
+        for (size_t i = 1; i < cars_.size(); ++i) {
+            auto projected = projectGround(cars_[i].pos, camera);
+            if (projected) {
+                visibleCars.push_back({i, projected->depth});
+            }
+        }
+        std::sort(visibleCars.begin(), visibleCars.end(), [](const Candidate& a, const Candidate& b) {
+            return a.depth > b.depth;
+        });
+        for (Candidate candidate : visibleCars) {
+            const KartState& car = cars_[candidate.index];
+            drawPerspectiveKart(r, car, karts_[car.kartIndex], racers_[car.racerIndex], camera);
+        }
     }
 
     void drawBackground(Renderer& r, const Camera&) {
