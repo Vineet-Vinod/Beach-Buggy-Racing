@@ -673,29 +673,86 @@ struct TrackQuery {
 
 class Track {
 public:
-    Track() {
-        points_ = {
-            {{-180.0f, 1680.0f}, 330.0f, Surface::Asphalt},
-            {{630.0f, 1580.0f}, 315.0f, Surface::Asphalt},
-            {{1320.0f, 1110.0f}, 285.0f, Surface::Boardwalk},
-            {{1640.0f, 420.0f}, 260.0f, Surface::Boardwalk},
-            {{2140.0f, -210.0f}, 290.0f, Surface::Asphalt},
-            {{1990.0f, -1040.0f}, 285.0f, Surface::Asphalt},
-            {{1340.0f, -1510.0f}, 265.0f, Surface::Tunnel},
-            {{520.0f, -1640.0f}, 255.0f, Surface::Tunnel},
-            {{-180.0f, -1390.0f}, 280.0f, Surface::Asphalt},
-            {{-820.0f, -890.0f}, 270.0f, Surface::Asphalt},
-            {{-1500.0f, -980.0f}, 245.0f, Surface::Boardwalk},
-            {{-2220.0f, -420.0f}, 270.0f, Surface::Boardwalk},
-            {{-2360.0f, 330.0f}, 300.0f, Surface::Boardwalk},
-            {{-1900.0f, 1010.0f}, 315.0f, Surface::Asphalt},
-            {{-1110.0f, 1350.0f}, 320.0f, Surface::Asphalt},
-        };
+    explicit Track(int layout = 0) {
+        setLayout(layout);
+    }
+
+    void setLayout(int layout) {
+        layout_ = ((layout % 3) + 3) % 3;
+        if (layout_ == 1) {
+            name_ = "PIER SLALOM";
+            points_ = {
+                {{-260.0f, 1540.0f}, 280.0f, Surface::Asphalt},
+                {{460.0f, 1460.0f}, 255.0f, Surface::Asphalt},
+                {{760.0f, 900.0f}, 215.0f, Surface::Boardwalk},
+                {{520.0f, 420.0f}, 205.0f, Surface::Boardwalk},
+                {{1120.0f, 120.0f}, 205.0f, Surface::Boardwalk},
+                {{1720.0f, -260.0f}, 230.0f, Surface::Asphalt},
+                {{1640.0f, -920.0f}, 220.0f, Surface::Asphalt},
+                {{920.0f, -1280.0f}, 205.0f, Surface::Tunnel},
+                {{140.0f, -1140.0f}, 205.0f, Surface::Tunnel},
+                {{-420.0f, -1500.0f}, 215.0f, Surface::Asphalt},
+                {{-1060.0f, -1120.0f}, 205.0f, Surface::Boardwalk},
+                {{-1740.0f, -1260.0f}, 200.0f, Surface::Boardwalk},
+                {{-2280.0f, -680.0f}, 215.0f, Surface::Boardwalk},
+                {{-2060.0f, -160.0f}, 205.0f, Surface::Boardwalk},
+                {{-2460.0f, 360.0f}, 230.0f, Surface::Asphalt},
+                {{-1960.0f, 1040.0f}, 250.0f, Surface::Asphalt},
+                {{-1120.0f, 1180.0f}, 240.0f, Surface::Asphalt},
+            };
+        } else if (layout_ == 2) {
+            name_ = "CAVEBACK RUN";
+            points_ = {
+                {{-220.0f, 1900.0f}, 335.0f, Surface::Asphalt},
+                {{760.0f, 1780.0f}, 330.0f, Surface::Asphalt},
+                {{1560.0f, 1180.0f}, 300.0f, Surface::Asphalt},
+                {{2140.0f, 320.0f}, 280.0f, Surface::Asphalt},
+                {{2700.0f, -360.0f}, 260.0f, Surface::Boardwalk},
+                {{2300.0f, -1040.0f}, 235.0f, Surface::Boardwalk},
+                {{1500.0f, -1260.0f}, 245.0f, Surface::Tunnel},
+                {{620.0f, -1720.0f}, 250.0f, Surface::Tunnel},
+                {{-220.0f, -1880.0f}, 260.0f, Surface::Tunnel},
+                {{-840.0f, -1300.0f}, 240.0f, Surface::Asphalt},
+                {{-1560.0f, -1480.0f}, 245.0f, Surface::Asphalt},
+                {{-2380.0f, -840.0f}, 260.0f, Surface::Boardwalk},
+                {{-2600.0f, 80.0f}, 270.0f, Surface::Boardwalk},
+                {{-2060.0f, 880.0f}, 295.0f, Surface::Asphalt},
+                {{-1160.0f, 1420.0f}, 315.0f, Surface::Asphalt},
+            };
+        } else {
+            name_ = "HARBOR GP";
+            points_ = {
+                {{-180.0f, 1680.0f}, 320.0f, Surface::Asphalt},
+                {{620.0f, 1580.0f}, 300.0f, Surface::Asphalt},
+                {{1080.0f, 1180.0f}, 260.0f, Surface::Boardwalk},
+                {{860.0f, 720.0f}, 220.0f, Surface::Boardwalk},
+                {{1480.0f, 520.0f}, 230.0f, Surface::Boardwalk},
+                {{2180.0f, 80.0f}, 260.0f, Surface::Asphalt},
+                {{2300.0f, -620.0f}, 250.0f, Surface::Asphalt},
+                {{1700.0f, -1160.0f}, 225.0f, Surface::Tunnel},
+                {{880.0f, -1460.0f}, 230.0f, Surface::Tunnel},
+                {{240.0f, -1260.0f}, 220.0f, Surface::Tunnel},
+                {{-380.0f, -1680.0f}, 235.0f, Surface::Asphalt},
+                {{-980.0f, -1160.0f}, 230.0f, Surface::Asphalt},
+                {{-1580.0f, -1280.0f}, 215.0f, Surface::Boardwalk},
+                {{-2280.0f, -680.0f}, 240.0f, Surface::Boardwalk},
+                {{-2440.0f, -60.0f}, 220.0f, Surface::Boardwalk},
+                {{-2080.0f, 420.0f}, 230.0f, Surface::Boardwalk},
+                {{-2440.0f, 920.0f}, 255.0f, Surface::Asphalt},
+                {{-1660.0f, 1460.0f}, 295.0f, Surface::Asphalt},
+                {{-880.0f, 1340.0f}, 305.0f, Surface::Asphalt},
+            };
+        }
         build();
     }
 
     const std::vector<TrackSegment>& segments() const { return segments_; }
     float totalLength() const { return totalLength_; }
+    const std::string& name() const { return name_; }
+    float minX() const { return minX_; }
+    float maxX() const { return maxX_; }
+    float minY() const { return minY_; }
+    float maxY() const { return maxY_; }
 
     TrackQuery query(Vec2 pos) const {
         TrackQuery best;
@@ -753,6 +810,8 @@ private:
     void build() {
         totalLength_ = 0.0f;
         segments_.clear();
+        minX_ = minY_ = std::numeric_limits<float>::max();
+        maxX_ = maxY_ = -std::numeric_limits<float>::max();
         for (size_t i = 0; i < points_.size(); ++i) {
             const TrackPoint& a = points_[i];
             const TrackPoint& b = points_[(i + 1) % points_.size()];
@@ -766,12 +825,23 @@ private:
             s.surface = a.surface;
             totalLength_ += s.length;
             segments_.push_back(s);
+            float pad = std::max(a.width, b.width) * 0.5f + 520.0f;
+            minX_ = std::min(minX_, std::min(a.pos.x, b.pos.x) - pad);
+            maxX_ = std::max(maxX_, std::max(a.pos.x, b.pos.x) + pad);
+            minY_ = std::min(minY_, std::min(a.pos.y, b.pos.y) - pad);
+            maxY_ = std::max(maxY_, std::max(a.pos.y, b.pos.y) + pad);
         }
     }
 
+    int layout_ = 0;
+    std::string name_ = "HARBOR GP";
     std::vector<TrackPoint> points_;
     std::vector<TrackSegment> segments_;
     float totalLength_ = 1.0f;
+    float minX_ = -2600.0f;
+    float maxX_ = 2600.0f;
+    float minY_ = -2000.0f;
+    float maxY_ = 2000.0f;
 };
 
 struct Racer {
@@ -863,9 +933,15 @@ void applyKartPhysics(const Track& track, const KartDef& kart, KartState& state,
     bool onRoad = roadRatio <= 1.0f;
     bool onShoulder = roadRatio <= 1.35f;
 
-    float gripFactor = onRoad ? 1.0f : (onShoulder ? 0.58f : 0.34f);
-    float speedFactor = onRoad ? 1.0f : (onShoulder ? 0.76f : 0.48f);
-    float dragFactor = onRoad ? 1.0f : (onShoulder ? 2.1f : 4.2f);
+    float gripFactor = onRoad ? 1.0f : (onShoulder ? 0.50f : 0.26f);
+    float speedFactor = onRoad ? 1.0f : (onShoulder ? 0.62f : 0.34f);
+    float dragFactor = onRoad ? 1.0f : (onShoulder ? 3.0f : 6.0f);
+    if (onRoad) {
+        float edgeLoad = std::clamp((roadRatio - 0.68f) / 0.32f, 0.0f, 1.0f);
+        gripFactor *= 1.0f - edgeLoad * 0.18f;
+        speedFactor *= 1.0f - edgeLoad * 0.10f;
+        dragFactor *= 1.0f + edgeLoad * 0.34f;
+    }
     if (before.surface == Surface::Boardwalk) {
         gripFactor *= 0.93f;
         dragFactor *= 1.04f;
@@ -877,8 +953,11 @@ void applyKartPhysics(const Track& track, const KartDef& kart, KartState& state,
     float speedSide = dot(state.vel, right);
     float absSpeed = std::abs(speedForward);
     float steeringAtSpeed = std::clamp(absSpeed / 260.0f, 0.20f, 1.0f);
-    float drift = (input.brake > 0.25f && std::abs(input.steer) > 0.35f && speedForward > 170.0f) ? 1.22f : 1.0f;
-    float targetYawVel = input.steer * kart.turnRate * steeringAtSpeed * drift;
+    float speedT = std::clamp(absSpeed / std::max(1.0f, kart.maxSpeed), 0.0f, 1.15f);
+    float highSpeedUndersteer = lerp(1.10f, 0.66f, std::clamp(speedT, 0.0f, 1.0f));
+    bool driftInput = input.brake > 0.22f && std::abs(input.steer) > 0.34f && speedForward > 155.0f;
+    float drift = driftInput ? 1.34f : 1.0f;
+    float targetYawVel = input.steer * kart.turnRate * steeringAtSpeed * highSpeedUndersteer * drift;
     if (speedForward < -20.0f) {
         targetYawVel *= -0.55f;
     }
@@ -905,9 +984,13 @@ void applyKartPhysics(const Track& track, const KartDef& kart, KartState& state,
 
     float sideGrip = kart.grip * gripFactor;
     if (drift > 1.0f) {
-        sideGrip *= 0.58f;
+        sideGrip *= 0.48f;
     }
     speedSide -= speedSide * std::clamp(sideGrip * dt, 0.0f, 0.92f);
+    float slipLoss = std::clamp(std::abs(speedSide) / 360.0f, 0.0f, 1.0f) * (driftInput ? 14.0f : 42.0f);
+    if (speedForward > 0.0f) {
+        speedForward = std::max(0.0f, speedForward - slipLoss * dt);
+    }
     if (!onRoad) {
         speedSide -= speedSide * std::clamp(3.2f * dt, 0.0f, 0.85f);
     }
@@ -921,8 +1004,8 @@ void applyKartPhysics(const Track& track, const KartDef& kart, KartState& state,
     state.pos += state.vel * dt;
 
     TrackQuery after = track.query(state.pos);
-    float softLimit = after.halfWidth + 46.0f;
-    float hardLimit = after.halfWidth + 112.0f;
+    float softLimit = after.halfWidth + 28.0f;
+    float hardLimit = after.halfWidth + 88.0f;
     if (std::abs(after.signedDistance) > softLimit) {
         float sign = after.signedDistance < 0.0f ? -1.0f : 1.0f;
         Vec2 limitPoint = after.point + after.normal * (sign * softLimit);
@@ -931,8 +1014,8 @@ void applyKartPhysics(const Track& track, const KartDef& kart, KartState& state,
         Vec2 n = after.normal * sign;
         float intoWall = dot(state.vel, n);
         if (intoWall > 0.0f) {
-            state.vel -= n * (intoWall * 1.35f);
-            state.vel *= 0.76f;
+            state.vel -= n * (intoWall * 1.55f);
+            state.vel *= 0.62f;
         }
     }
     if (std::abs(after.signedDistance) > hardLimit + 180.0f) {
@@ -962,18 +1045,20 @@ void applyKartPhysics(const Track& track, const KartDef& kart, KartState& state,
 
 DriveInput aiInputFor(const Track& track, const KartState& state) {
     float speed = length(state.vel);
-    float lookAhead = 220.0f + std::clamp(speed * 0.72f, 0.0f, 360.0f);
+    float lookAhead = 260.0f + std::clamp(speed * 0.92f, 0.0f, 520.0f);
     TrackQuery target = track.sample(state.progress + lookAhead);
+    TrackQuery nearTarget = track.sample(state.progress + lookAhead * 0.55f);
     Vec2 targetPoint = target.point + target.normal * state.lineOffset;
     Vec2 toTarget = targetPoint - state.pos;
     float angleError = wrapAngle(angleOf(toTarget) - state.yaw);
+    float bend = std::abs(wrapAngle(angleOf(target.tangent) - angleOf(nearTarget.tangent)));
     DriveInput input;
     input.steer = std::clamp(angleError * 1.55f, -1.0f, 1.0f);
     input.throttle = 1.0f;
-    float sharpness = std::abs(angleError);
-    if (sharpness > 0.82f && speed > 220.0f) {
-        input.brake = std::clamp((sharpness - 0.76f) * 0.62f, 0.0f, 0.42f);
-        input.throttle = 0.58f;
+    float sharpness = std::max(std::abs(angleError), bend * 1.35f);
+    if (sharpness > 0.46f && speed > 180.0f) {
+        input.brake = std::clamp((sharpness - 0.40f) * 0.86f, 0.0f, 0.62f);
+        input.throttle = std::clamp(0.86f - input.brake * 0.82f, 0.28f, 1.0f);
     }
     return input;
 }
@@ -985,8 +1070,8 @@ struct Prop {
     float scale = 1.0f;
 };
 
-std::vector<Prop> makeProps() {
-    return {
+std::vector<Prop> makeProps(float trackLength = 9800.0f) {
+    std::vector<Prop> props = {
         {260.0f, -360.0f, 0, 1.0f}, {620.0f, 380.0f, 0, 0.9f},  {1030.0f, -320.0f, 1, 1.0f},
         {1480.0f, 330.0f, 2, 1.1f}, {2020.0f, -380.0f, 3, 1.0f}, {2500.0f, 360.0f, 0, 1.2f},
         {3060.0f, -330.0f, 4, 1.0f}, {3560.0f, 330.0f, 1, 1.0f}, {4100.0f, -360.0f, 2, 1.0f},
@@ -994,6 +1079,12 @@ std::vector<Prop> makeProps() {
         {6460.0f, -330.0f, 1, 0.95f}, {7080.0f, 370.0f, 0, 1.1f}, {7750.0f, -360.0f, 2, 1.0f},
         {8380.0f, 360.0f, 0, 1.0f}, {9000.0f, -390.0f, 4, 1.0f}, {9630.0f, 360.0f, 1, 1.0f},
     };
+    for (float p = 10100.0f; p < trackLength; p += 520.0f) {
+        int type = static_cast<int>(p / 520.0f) % 5;
+        float side = (static_cast<int>(p / 260.0f) % 2 == 0) ? -1.0f : 1.0f;
+        props.push_back({p, side * (320.0f + std::fmod(p, 190.0f)), type, 0.85f + std::fmod(p, 180.0f) / 600.0f});
+    }
+    return props;
 }
 
 Vec2 project(Vec2 world, const Camera& camera) {
@@ -1352,10 +1443,10 @@ void drawMinimap(Renderer& r, const Track& track, const std::vector<KartState>& 
     int h = 112;
     r.fillRect(x - 8, y - 8, w + 16, h + 16, rgb(28, 44, 52));
     r.fillRect(x - 5, y - 5, w + 10, h + 10, rgb(40, 74, 82));
-    float minX = -2520.0f;
-    float maxX = 2260.0f;
-    float minY = -1780.0f;
-    float maxY = 1810.0f;
+    float minX = track.minX();
+    float maxX = track.maxX();
+    float minY = track.minY();
+    float maxY = track.maxY();
     auto mapPoint = [&](Vec2 p) -> Vec2 {
         float sx = (p.x - minX) / (maxX - minX);
         float sy = (p.y - minY) / (maxY - minY);
@@ -1377,12 +1468,13 @@ void drawMinimap(Renderer& r, const Track& track, const std::vector<KartState>& 
 enum class Mode {
     SelectRacer,
     SelectKart,
+    SelectTrack,
     Race,
 };
 
 class Game {
 public:
-    Game() : racers_(makeRacers()), karts_(makeKarts()), props_(makeProps()) {
+    Game() : racers_(makeRacers()), karts_(makeKarts()), props_(makeProps(track_.totalLength())) {
         resetRace();
     }
 
@@ -1407,6 +1499,23 @@ public:
             }
             if (input.back) {
                 mode_ = Mode::SelectRacer;
+            }
+            if (input.confirm) {
+                mode_ = Mode::SelectTrack;
+            }
+        } else if (mode_ == Mode::SelectTrack) {
+            if (input.left) {
+                selectedTrack_ = (selectedTrack_ + 2) % 3;
+                track_.setLayout(selectedTrack_);
+                props_ = makeProps(track_.totalLength());
+            }
+            if (input.right) {
+                selectedTrack_ = (selectedTrack_ + 1) % 3;
+                track_.setLayout(selectedTrack_);
+                props_ = makeProps(track_.totalLength());
+            }
+            if (input.back) {
+                mode_ = Mode::SelectKart;
             }
             if (input.confirm) {
                 resetRace();
@@ -1473,23 +1582,35 @@ public:
     }
 
     bool selfTest() {
-        resetRace();
-        DriveInput input;
-        input.throttle = 1.0f;
-        for (int i = 0; i < 900; ++i) {
-            input.steer = std::sin(i * 0.018f) * 0.25f;
-            applyKartPhysics(track_, karts_[cars_[0].kartIndex], cars_[0], input, 1.0f / 120.0f);
-            for (size_t j = 1; j < cars_.size(); ++j) {
-                DriveInput ai = aiInputFor(track_, cars_[j]);
-                applyKartPhysics(track_, karts_[cars_[j].kartIndex], cars_[j], ai, 1.0f / 120.0f);
+        for (int layout = 0; layout < 3; ++layout) {
+            selectedTrack_ = layout;
+            track_.setLayout(selectedTrack_);
+            props_ = makeProps(track_.totalLength());
+            resetRace();
+            DriveInput input;
+            input.throttle = 1.0f;
+            for (int i = 0; i < 720; ++i) {
+                input.steer = std::sin(i * 0.018f) * 0.25f;
+                applyKartPhysics(track_, karts_[cars_[0].kartIndex], cars_[0], input, 1.0f / 120.0f);
+                for (size_t j = 1; j < cars_.size(); ++j) {
+                    DriveInput ai = aiInputFor(track_, cars_[j]);
+                    applyKartPhysics(track_, karts_[cars_[j].kartIndex], cars_[j], ai, 1.0f / 120.0f);
+                }
             }
-        }
-        for (const KartState& car : cars_) {
-            if (!std::isfinite(car.pos.x) || !std::isfinite(car.pos.y) || !std::isfinite(car.yaw)) {
+            for (const KartState& car : cars_) {
+                if (!std::isfinite(car.pos.x) || !std::isfinite(car.pos.y) || !std::isfinite(car.yaw)) {
+                    return false;
+                }
+            }
+            if (track_.totalLength() < 6500.0f) {
                 return false;
             }
         }
-        return track_.totalLength() > 9000.0f && !cars_.empty() && racers_.size() == 10 && karts_.size() == 8;
+        selectedTrack_ = 0;
+        track_.setLayout(selectedTrack_);
+        props_ = makeProps(track_.totalLength());
+        resetRace();
+        return !cars_.empty() && racers_.size() == 10 && karts_.size() == 8;
     }
 
 private:
@@ -1602,17 +1723,26 @@ private:
                                std::to_string(selectedRacer_ + 1) + "/" + std::to_string(racers_.size()),
                                rgb(246, 230, 152), 2);
         } else {
-            const KartDef& kart = karts_[selectedKart_];
-            r.drawTextCentered(cx, 130, "SELECT MAXED CAR", rgb(255, 255, 255), 3);
-            r.drawTextCentered(cx, 174, "<  " + kart.name + "  >", rgb(255, 236, 122), 4);
-            drawGarageKart(r, cx, 282, kart);
-            r.drawText(cx - 180, 360, "SPEED", rgb(232, 242, 234), 2);
-            r.drawText(cx - 180, 388, "ACCEL", rgb(232, 242, 234), 2);
-            r.drawText(cx - 180, 416, "GRIP", rgb(232, 242, 234), 2);
-            drawFullBar(r, cx - 70, 360);
-            drawFullBar(r, cx - 70, 388);
-            drawFullBar(r, cx - 70, 416);
-            r.drawText(cx + 158, 388, "MAX", rgb(255, 236, 122), 2);
+            if (mode_ == Mode::SelectKart) {
+                const KartDef& kart = karts_[selectedKart_];
+                r.drawTextCentered(cx, 130, "SELECT MAXED CAR", rgb(255, 255, 255), 3);
+                r.drawTextCentered(cx, 174, "<  " + kart.name + "  >", rgb(255, 236, 122), 4);
+                drawGarageKart(r, cx, 282, kart);
+                r.drawText(cx - 180, 360, "SPEED", rgb(232, 242, 234), 2);
+                r.drawText(cx - 180, 388, "ACCEL", rgb(232, 242, 234), 2);
+                r.drawText(cx - 180, 416, "GRIP", rgb(232, 242, 234), 2);
+                drawFullBar(r, cx - 70, 360);
+                drawFullBar(r, cx - 70, 388);
+                drawFullBar(r, cx - 70, 416);
+                r.drawText(cx + 158, 388, "MAX", rgb(255, 236, 122), 2);
+            } else {
+                r.drawTextCentered(cx, 130, "SELECT TRACK", rgb(255, 255, 255), 3);
+                r.drawTextCentered(cx, 174, "<  " + track_.name() + "  >", rgb(255, 236, 122), 4);
+                r.drawTextCentered(cx, 246, "TECHNICAL HARBOR LAYOUT", rgb(232, 242, 234), 2);
+                r.drawTextCentered(cx, 284, "BRAKE BEFORE HAIRPINS  HIT CLEAN APEXES", rgb(255, 236, 122), 2);
+                r.drawTextCentered(cx, 330, "LENGTH " + std::to_string(static_cast<int>(track_.totalLength())) + "M",
+                                   rgb(166, 214, 220), 2);
+            }
         }
 
         std::string pad = controllerName.empty() ? "NO GAMEPAD" : std::string(controllerName);
@@ -1692,6 +1822,7 @@ private:
     Mode mode_ = Mode::SelectRacer;
     int selectedRacer_ = 0;
     int selectedKart_ = 0;
+    int selectedTrack_ = 0;
     int racePosition_ = 1;
     bool paused_ = false;
     bool inputConnected_ = false;

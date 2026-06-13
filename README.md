@@ -44,7 +44,9 @@ Gamepad required for normal play.
 
 - 10 adapted cosmetic racers
 - 8 maxed-out cars unlocked from the start
-- Single original beach-harbor course
+- Fullscreen X11 renderer
+- Forward chase camera that starts close and pulls back at speed
+- 3 original beach-harbor course layouts with tighter technical sections
 - Infinite laps with live position, speed, and FPS display
 - No powerups and no character supers
 - Lightweight X11 software renderer targeting 60 FPS
