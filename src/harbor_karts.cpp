@@ -629,6 +629,16 @@ struct Kart {
     float boostPower = 0.0f;
     float slip = 0.0f;
     float contactTimer = 0.0f;
+    float fxTimer = 0.0f;
+};
+
+struct Particle {
+    Vec2 pos;
+    Vec2 vel;
+    float life = 0.0f;
+    float maxLife = 1.0f;
+    float size = 1.0f;
+    uint32_t color = rgb(255, 255, 255);
 };
 
 struct InputState {
@@ -885,6 +895,7 @@ public:
                 updateAi(karts_[i], dt, static_cast<int>(i));
             }
             resolveKartContacts();
+            updateParticles(dt);
             updateCamera(dt);
             updateAmbient(dt);
             computeRacePosition();
@@ -926,6 +937,7 @@ public:
             updateAi(karts_[ai], dt, static_cast<int>(ai));
         }
         resolveKartContacts();
+        updateParticles(dt);
         updateCamera(dt);
         updateAmbient(dt);
         computeRacePosition();
@@ -952,6 +964,7 @@ public:
             kart.boostPower = 0.0f;
             kart.slip = 0.0f;
             kart.contactTimer = 0.0f;
+            kart.fxTimer = 0.0f;
         }
         camera_.yaw = karts_[0].heading;
         caveBlend_ = track_.pointAtIndex(karts_[0].nearest).zone == 3 ? 1.0f : 0.0f;
@@ -1149,6 +1162,7 @@ private:
 
     void resetRace() {
         karts_.clear();
+        particles_.clear();
         const std::array<float, 8> lanes = {-13.0f, 13.0f, -5.5f, 5.5f, -16.0f, 16.0f, -8.0f, 8.0f};
         for (int i = 0; i < 8; ++i) {
             Kart kart;
@@ -1240,6 +1254,23 @@ private:
         }
     }
 
+    void emitParticle(Vec2 pos, Vec2 vel, float life, float size, uint32_t color) {
+        if (particles_.size() >= 360) {
+            particles_.erase(particles_.begin());
+        }
+        particles_.push_back({pos, vel, life, life, size, color});
+    }
+
+    void updateParticles(float dt) {
+        for (Particle& particle : particles_) {
+            particle.life -= dt;
+            particle.pos += particle.vel * dt;
+            particle.vel *= std::exp(-dt * 1.5f);
+        }
+        particles_.erase(std::remove_if(particles_.begin(), particles_.end(), [](const Particle& particle) { return particle.life <= 0.0f; }),
+                         particles_.end());
+    }
+
     void integrateKart(Kart& kart, const InputState& input, float dt) {
         updateProgress(kart);
         const TrackPoint& center = track_.pointAtIndex(kart.nearest);
@@ -1328,6 +1359,23 @@ private:
         kart.vel = forward * speed + right * sideSpeed;
         kart.pos += kart.vel * dt;
         kart.slip = sideSpeed;
+        kart.fxTimer += dt;
+        if (kart.fxTimer >= 0.035f) {
+            kart.fxTimer = 0.0f;
+            const Vec2 rear = kart.pos - forward * 18.0f;
+            const Vec2 puffVel = kart.vel * -0.12f;
+            if (kart.boostTimer > 0.0f) {
+                emitParticle(rear - right * 6.0f, puffVel - forward * 24.0f, 0.28f, 10.0f, rgb(255, 190, 63));
+                emitParticle(rear + right * 6.0f, puffVel - forward * 24.0f, 0.24f, 8.0f, rgb(244, 83, 48));
+            } else if (kart.drifting) {
+                emitParticle(rear - right * std::copysign(9.0f, sideSpeed == 0.0f ? 1.0f : sideSpeed), puffVel, 0.58f, 13.0f,
+                             rgb(218, 226, 218));
+            } else if (offroad > 1.0f && absSpeed > 28.0f) {
+                emitParticle(rear, puffVel, 0.42f, 12.0f, rgb(220, 177, 95));
+            } else if (kart.contactTimer > 0.12f) {
+                emitParticle(kart.pos - forward * 8.0f, puffVel, 0.28f, 9.0f, rgb(238, 225, 185));
+            }
+        }
 
         updateProgress(kart);
         const TrackPoint& after = track_.pointAtIndex(kart.nearest);
@@ -1392,6 +1440,7 @@ private:
         kart.boostPower = 0.0f;
         kart.slip = 0.0f;
         kart.contactTimer = 0.0f;
+        kart.fxTimer = 0.0f;
     }
 
     void updateCamera(float dt) {
@@ -1571,6 +1620,20 @@ private:
         }
     }
 
+    void drawParticles(Renderer& r) {
+        for (const Particle& particle : particles_) {
+            const ScreenPoint p = projectPoint(particle.pos, 5.0f, camera_);
+            if (!p.visible || p.depth > 760.0f) {
+                continue;
+            }
+            const float age = 1.0f - std::clamp(particle.life / std::max(0.001f, particle.maxLife), 0.0f, 1.0f);
+            const int radius = std::max(1, static_cast<int>(particle.size * p.scale * (0.75f + age * 0.9f)));
+            if (radius > 0 && radius < 60) {
+                r.fillCircle(static_cast<int>(p.p.x), static_cast<int>(p.p.y), radius, shade(particle.color, 1.04f - age * 0.36f));
+            }
+        }
+    }
+
     void drawKartBillboard(Renderer& r, const Kart& kart, const ScreenPoint& p, bool playerHood) {
         const float s = std::clamp(p.scale * (playerHood ? 1.0f : 0.62f), 0.06f, playerHood ? 5.6f : 2.75f);
         const int x = static_cast<int>(p.p.x);
@@ -1697,6 +1760,7 @@ private:
             }
         }
 
+        drawParticles(r);
         drawPlayerBuggy(r);
         renderHud(r, fps, hasController);
     }
@@ -1774,6 +1838,7 @@ private:
     std::vector<KartSpec> cars_;
     std::vector<std::string> racers_;
     std::vector<Kart> karts_;
+    std::vector<Particle> particles_;
     Camera camera_;
     InputState prevInput_;
     Mode mode_ = Mode::Garage;
