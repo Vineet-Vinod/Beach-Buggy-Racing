@@ -443,11 +443,18 @@ public:
         js_event event{};
         for (Device& d : devices_) {
             while (read(d.fd, &event, sizeof(event)) == static_cast<ssize_t>(sizeof(event))) {
+                bool initEvent = (event.type & JS_EVENT_INIT) != 0;
                 uint8_t type = event.type & ~JS_EVENT_INIT;
                 if (type == JS_EVENT_AXIS && event.number < d.axes.size()) {
+                    if (initEvent) {
+                        continue;
+                    }
                     d.axes[event.number] = event.value;
                     d.touched = true;
                 } else if (type == JS_EVENT_BUTTON && event.number < d.buttons.size()) {
+                    if (initEvent) {
+                        continue;
+                    }
                     d.buttons[event.number] = event.value != 0;
                     if (event.value != 0) {
                         d.touched = true;
