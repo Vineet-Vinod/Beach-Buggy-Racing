@@ -370,6 +370,10 @@ struct KartSpec {
     float brake = 140.0f;
     float grip = 1.0f;
     float drift = 1.0f;
+    int bodyStyle = 0;
+    float wheelScale = 1.0f;
+    float cabinScale = 1.0f;
+    float noseScale = 1.0f;
 };
 
 struct Kart {
@@ -451,14 +455,14 @@ ScreenPoint projectPoint(Vec2 world, float elevation, const Camera& camera) {
 
 std::vector<KartSpec> makeCars() {
     return {
-        {"TIDE HOPPER", rgb(224, 57, 56), rgb(255, 202, 63), rgb(79, 195, 212), 124.0f, 93.0f, 142.0f, 1.02f, 1.00f},
-        {"REEF RUNNER", rgb(35, 151, 211), rgb(255, 235, 90), rgb(111, 222, 227), 128.0f, 86.0f, 138.0f, 0.97f, 1.08f},
-        {"DUNE FOX", rgb(240, 139, 45), rgb(47, 61, 76), rgb(95, 201, 217), 120.0f, 102.0f, 148.0f, 1.08f, 0.96f},
-        {"PIER SHARK", rgb(61, 81, 103), rgb(232, 67, 61), rgb(91, 205, 217), 132.0f, 78.0f, 134.0f, 0.93f, 1.16f},
-        {"MANGO MULE", rgb(246, 199, 62), rgb(30, 133, 76), rgb(110, 210, 222), 116.0f, 111.0f, 152.0f, 1.13f, 0.90f},
-        {"LAGOON GT", rgb(34, 184, 143), rgb(238, 73, 95), rgb(151, 232, 235), 129.0f, 90.0f, 139.0f, 1.00f, 1.05f},
-        {"TIKI RAIL", rgb(132, 78, 44), rgb(248, 125, 54), rgb(98, 196, 210), 121.0f, 98.0f, 146.0f, 1.05f, 1.02f},
-        {"STORM BUGGY", rgb(116, 105, 175), rgb(255, 213, 65), rgb(101, 215, 229), 126.0f, 95.0f, 144.0f, 1.00f, 1.10f},
+        {"TIDE HOPPER", rgb(224, 57, 56), rgb(255, 202, 63), rgb(79, 195, 212), 124.0f, 93.0f, 142.0f, 1.02f, 1.00f, 0, 1.00f, 1.00f, 1.00f},
+        {"REEF RUNNER", rgb(35, 151, 211), rgb(255, 235, 90), rgb(111, 222, 227), 128.0f, 86.0f, 138.0f, 0.97f, 1.08f, 1, 0.92f, 0.88f, 1.18f},
+        {"DUNE FOX", rgb(240, 139, 45), rgb(47, 61, 76), rgb(95, 201, 217), 120.0f, 102.0f, 148.0f, 1.08f, 0.96f, 2, 1.14f, 1.06f, 0.94f},
+        {"PIER SHARK", rgb(61, 81, 103), rgb(232, 67, 61), rgb(91, 205, 217), 132.0f, 78.0f, 134.0f, 0.93f, 1.16f, 3, 0.98f, 0.76f, 1.34f},
+        {"MANGO MULE", rgb(246, 199, 62), rgb(30, 133, 76), rgb(110, 210, 222), 116.0f, 111.0f, 152.0f, 1.13f, 0.90f, 4, 1.24f, 1.18f, 0.84f},
+        {"LAGOON GT", rgb(34, 184, 143), rgb(238, 73, 95), rgb(151, 232, 235), 129.0f, 90.0f, 139.0f, 1.00f, 1.05f, 5, 0.94f, 0.92f, 1.22f},
+        {"TIKI RAIL", rgb(132, 78, 44), rgb(248, 125, 54), rgb(98, 196, 210), 121.0f, 98.0f, 146.0f, 1.05f, 1.02f, 6, 1.08f, 1.28f, 0.90f},
+        {"STORM BUGGY", rgb(116, 105, 175), rgb(255, 213, 65), rgb(101, 215, 229), 126.0f, 95.0f, 144.0f, 1.00f, 1.10f, 7, 1.02f, 0.96f, 1.08f},
     };
 }
 
@@ -677,6 +681,14 @@ public:
         }
 
         if (mode_ == Mode::Race && hasController) {
+            if (countdown_ > 0.0f) {
+                countdown_ = std::max(0.0f, countdown_ - dt);
+                updateCamera(dt);
+                updateAmbient(dt);
+                computeRacePosition();
+                prevInput_ = input;
+                return;
+            }
             const int oldPlayerLap = karts_[0].lap;
             updatePlayer(karts_[0], input, dt);
             for (size_t i = 1; i < karts_.size(); ++i) {
@@ -714,6 +726,7 @@ public:
     void startRaceForDiagnostics() {
         resetRace();
         mode_ = Mode::Race;
+        countdown_ = 0.0f;
         prevInput_ = {};
     }
 
@@ -737,6 +750,7 @@ public:
     void placeForSectionCapture(float phase, float speed) {
         resetRace();
         mode_ = Mode::Race;
+        countdown_ = 0.0f;
         const float progress = wrapDistance(track_.totalLength() * phase, track_.totalLength());
         for (size_t i = 0; i < karts_.size(); ++i) {
             Kart& kart = karts_[i];
@@ -973,6 +987,7 @@ private:
         lapTime_ = 0.0f;
         lastLap_ = 0.0f;
         bestLap_ = 0.0f;
+        countdown_ = 3.2f;
         const std::array<float, 8> lanes = {-13.0f, 13.0f, -5.5f, 5.5f, -16.0f, 16.0f, -8.0f, 8.0f};
         for (int i = 0; i < 8; ++i) {
             Kart kart;
@@ -994,6 +1009,7 @@ private:
         caveBlend_ = track_.pointAtIndex(karts_[0].nearest).zone == 3 ? 1.0f : 0.0f;
         updateCamera(1.0f);
         updateAmbient(1.0f);
+        computeRacePosition();
     }
 
     int sampleDelta(int from, int to) const {
@@ -1577,29 +1593,41 @@ private:
         const int y = static_cast<int>(p.p.y);
         const int w = std::max(7, static_cast<int>((playerHood ? 78.0f : 28.0f) * s));
         const int h = std::max(5, static_cast<int>((playerHood ? 34.0f : 15.0f) * s));
+        const int topW = std::max(4, static_cast<int>(w * 0.34f * kart.spec.noseScale));
+        const int cabinH = std::max(4, static_cast<int>(h * kart.spec.cabinScale));
+        const int wheel = std::max(2, static_cast<int>(h * 0.33f * kart.spec.wheelScale));
         const uint32_t body = mixColor(kart.spec.body, rgb(255, 244, 196), std::clamp(kart.contactTimer * 4.0f, 0.0f, 0.45f));
         const uint32_t helmet = racerColor(kart.racer);
-        r.fillCircle(x - w / 3, y + h / 2, std::max(2, h / 3), rgb(21, 24, 28));
-        r.fillCircle(x + w / 3, y + h / 2, std::max(2, h / 3), rgb(21, 24, 28));
-        r.fillCircle(x - w / 3, y + h / 3, std::max(3, h / 3), rgb(28, 31, 36));
-        r.fillCircle(x + w / 3, y + h / 3, std::max(3, h / 3), rgb(28, 31, 36));
+        r.fillCircle(x - w / 3, y + h / 2, wheel, rgb(21, 24, 28));
+        r.fillCircle(x + w / 3, y + h / 2, wheel, rgb(21, 24, 28));
+        r.fillCircle(x - w / 3, y + h / 3, std::max(2, wheel * 2 / 3), rgb(28, 31, 36));
+        r.fillCircle(x + w / 3, y + h / 3, std::max(2, wheel * 2 / 3), rgb(28, 31, 36));
         r.fillQuad({static_cast<float>(x - w / 2), static_cast<float>(y + h / 3)},
                    {static_cast<float>(x + w / 2), static_cast<float>(y + h / 3)},
-                   {static_cast<float>(x + w / 3), static_cast<float>(y - h / 4)},
-                   {static_cast<float>(x - w / 3), static_cast<float>(y - h / 4)}, shade(body, 0.76f));
+                   {static_cast<float>(x + topW), static_cast<float>(y - h / 4)},
+                   {static_cast<float>(x - topW), static_cast<float>(y - h / 4)}, shade(body, 0.76f));
         r.fillQuad({static_cast<float>(x - w / 2), static_cast<float>(y + h / 4)},
                    {static_cast<float>(x + w / 2), static_cast<float>(y + h / 4)},
-                   {static_cast<float>(x + w / 3), static_cast<float>(y - h / 2)},
-                   {static_cast<float>(x - w / 3), static_cast<float>(y - h / 2)}, body);
-        r.fillQuad({static_cast<float>(x - w / 4), static_cast<float>(y - h / 2)},
-                   {static_cast<float>(x + w / 4), static_cast<float>(y - h / 2)},
-                   {static_cast<float>(x + w / 6), static_cast<float>(y - h)},
-                   {static_cast<float>(x - w / 6), static_cast<float>(y - h)}, kart.spec.glass);
-        r.fillCircle(x, y - h, std::max(2, h / 4), helmet);
+                   {static_cast<float>(x + topW), static_cast<float>(y - h / 2)},
+                   {static_cast<float>(x - topW), static_cast<float>(y - h / 2)}, body);
+        r.fillQuad({static_cast<float>(x - topW * 3 / 4), static_cast<float>(y - h / 2)},
+                   {static_cast<float>(x + topW * 3 / 4), static_cast<float>(y - h / 2)},
+                   {static_cast<float>(x + topW / 2), static_cast<float>(y - h / 2 - cabinH)},
+                   {static_cast<float>(x - topW / 2), static_cast<float>(y - h / 2 - cabinH)}, kart.spec.glass);
+        r.fillCircle(x, y - h / 2 - cabinH, std::max(2, h / 4), helmet);
+        if (kart.spec.bodyStyle == 3 || kart.spec.bodyStyle == 5) {
+            r.fillTriangle({static_cast<float>(x), static_cast<float>(y - h / 2 - cabinH - h / 3)},
+                           {static_cast<float>(x + topW), static_cast<float>(y - h / 2)},
+                           {static_cast<float>(x - topW / 2), static_cast<float>(y - h / 2)}, shade(kart.spec.accent, 1.06f));
+        } else if (kart.spec.bodyStyle == 4 || kart.spec.bodyStyle == 6) {
+            r.drawLine({static_cast<float>(x - topW), static_cast<float>(y - h / 2 - cabinH / 2)},
+                       {static_cast<float>(x + topW), static_cast<float>(y - h / 2 - cabinH / 2)}, std::max(1, h / 8),
+                       shade(kart.spec.accent, 0.82f));
+        }
         r.drawLine({static_cast<float>(x - w / 4), static_cast<float>(y - h / 3)},
-                   {static_cast<float>(x - w / 7), static_cast<float>(y - h)}, std::max(1, h / 8), rgb(35, 39, 44));
+                   {static_cast<float>(x - topW / 2), static_cast<float>(y - h / 2 - cabinH)}, std::max(1, h / 8), rgb(35, 39, 44));
         r.drawLine({static_cast<float>(x + w / 4), static_cast<float>(y - h / 3)},
-                   {static_cast<float>(x + w / 7), static_cast<float>(y - h)}, std::max(1, h / 8), rgb(35, 39, 44));
+                   {static_cast<float>(x + topW / 2), static_cast<float>(y - h / 2 - cabinH)}, std::max(1, h / 8), rgb(35, 39, 44));
         r.fillRect(x - w / 2, y - h / 8, w, std::max(2, h / 5), kart.spec.accent);
         r.fillRect(x - w / 5, y - h / 7, std::max(2, w / 9), std::max(2, h / 7), rgb(255, 238, 150));
         r.fillRect(x + w / 8, y - h / 7, std::max(2, w / 9), std::max(2, h / 7), rgb(255, 238, 150));
@@ -1611,11 +1639,12 @@ private:
         const float pullback = smoothstep(speedN);
         const int yBase = static_cast<int>(lerp(575.0f, 516.0f, pullback));
         const int w = static_cast<int>(lerp(256.0f, 142.0f, pullback));
-        const int noseW = static_cast<int>(lerp(104.0f, 70.0f, pullback));
+        const int noseW = static_cast<int>(lerp(104.0f, 70.0f, pullback) * kart.spec.noseScale);
         const int h = static_cast<int>(lerp(94.0f, 58.0f, pullback));
         const int slipShift = static_cast<int>(std::clamp(kart.slip * 0.55f, -36.0f, 36.0f) * (1.0f - speedN * 0.35f));
         const int x = kFrameW / 2 + slipShift;
-        const int wheel = static_cast<int>(lerp(32.0f, 19.0f, pullback));
+        const int wheel = static_cast<int>(lerp(32.0f, 19.0f, pullback) * kart.spec.wheelScale);
+        const int cabinH = static_cast<int>(lerp(44.0f, 30.0f, pullback) * kart.spec.cabinScale);
         const uint32_t body = mixColor(kart.spec.body, rgb(255, 244, 196), std::clamp(kart.contactTimer * 4.0f, 0.0f, 0.45f));
         const uint32_t helmet = racerColor(kart.racer);
         r.fillCircle(x - w / 3, yBase - 10, wheel + 3, rgb(15, 18, 22));
@@ -1634,16 +1663,27 @@ private:
                    {static_cast<float>(x - noseW / 2), static_cast<float>(yBase - h - 8)}, body);
         r.fillQuad({static_cast<float>(x - noseW / 2), static_cast<float>(yBase - h - 4)},
                    {static_cast<float>(x + noseW / 2), static_cast<float>(yBase - h - 4)},
-                   {static_cast<float>(x + noseW / 3), static_cast<float>(yBase - h - 44)},
-                   {static_cast<float>(x - noseW / 3), static_cast<float>(yBase - h - 44)}, kart.spec.glass);
-        r.fillCircle(x, yBase - h - 46, std::max(10, h / 5), helmet);
+                   {static_cast<float>(x + noseW / 3), static_cast<float>(yBase - h - cabinH)},
+                   {static_cast<float>(x - noseW / 3), static_cast<float>(yBase - h - cabinH)}, kart.spec.glass);
+        r.fillCircle(x, yBase - h - cabinH - 2, std::max(10, h / 5), helmet);
+        if (kart.spec.bodyStyle == 1 || kart.spec.bodyStyle == 5) {
+            r.fillTriangle({static_cast<float>(x), static_cast<float>(yBase - h - cabinH - h / 2)},
+                           {static_cast<float>(x + noseW / 2), static_cast<float>(yBase - h - 6)},
+                           {static_cast<float>(x - noseW / 3), static_cast<float>(yBase - h - 6)}, shade(kart.spec.accent, 1.1f));
+        } else if (kart.spec.bodyStyle == 2 || kart.spec.bodyStyle == 4) {
+            r.fillRect(x - w / 2 + 18, yBase - h - 10, w - 36, std::max(5, h / 10), shade(kart.spec.accent, 0.86f));
+        } else if (kart.spec.bodyStyle == 6 || kart.spec.bodyStyle == 7) {
+            r.drawLine({static_cast<float>(x - w / 3), static_cast<float>(yBase - h - cabinH / 2)},
+                       {static_cast<float>(x + w / 3), static_cast<float>(yBase - h - cabinH / 2)}, 5,
+                       shade(kart.spec.accent, 0.82f));
+        }
         r.fillRect(x - w / 2 + 18, yBase - h / 2, w - 36, std::max(10, h / 7), kart.spec.accent);
         r.fillRect(x - w / 3, yBase - h / 3, std::max(12, w / 6), std::max(8, h / 8), rgb(255, 232, 142));
         r.fillRect(x + w / 6, yBase - h / 3, std::max(12, w / 6), std::max(8, h / 8), rgb(255, 232, 142));
         r.drawLine({static_cast<float>(x - w / 4), static_cast<float>(yBase - h + 2)},
-                   {static_cast<float>(x - noseW / 5), static_cast<float>(yBase - h - 52)}, 5, rgb(36, 39, 45));
+                   {static_cast<float>(x - noseW / 5), static_cast<float>(yBase - h - cabinH - 8)}, 5, rgb(36, 39, 45));
         r.drawLine({static_cast<float>(x + w / 4), static_cast<float>(yBase - h + 2)},
-                   {static_cast<float>(x + noseW / 5), static_cast<float>(yBase - h - 52)}, 5, rgb(36, 39, 45));
+                   {static_cast<float>(x + noseW / 5), static_cast<float>(yBase - h - cabinH - 8)}, 5, rgb(36, 39, 45));
         r.drawLine({static_cast<float>(x - w / 2 + 10), static_cast<float>(yBase - 8)},
                    {static_cast<float>(x + w / 2 - 10), static_cast<float>(yBase - 8)}, 3, shade(kart.spec.accent, 0.78f));
         if (kart.drifting) {
@@ -1750,26 +1790,75 @@ private:
             r.drawText(300, 232, "CONNECT GAMEPAD", 4, rgb(255, 227, 145));
             r.drawText(326, 276, "CONTROLLER ONLY", 2, rgb(245, 237, 198));
         }
+        if (countdown_ > 0.0f && hasController) {
+            const bool go = countdown_ < 0.55f;
+            const std::string text = go ? "GO" : std::to_string(static_cast<int>(std::ceil(countdown_)));
+            const int scale = go ? 8 : 10;
+            const int width = static_cast<int>(text.size()) * 6 * scale;
+            r.fillRect(kFrameW / 2 - width / 2 - 24, 178, width + 48, 92, rgb(18, 44, 54));
+            r.drawText(kFrameW / 2 - width / 2, go ? 202 : 188, text, scale, go ? rgb(255, 218, 83) : rgb(255, 244, 204));
+        }
     }
 
     void drawGarageCar(Renderer& r, int cx, int cy, const KartSpec& spec) {
-        r.fillCircle(cx - 120, cy + 62, 48, rgb(24, 27, 31));
-        r.fillCircle(cx + 120, cy + 62, 48, rgb(24, 27, 31));
-        r.fillCircle(cx - 120, cy + 62, 22, shade(spec.accent, 0.8f));
-        r.fillCircle(cx + 120, cy + 62, 22, shade(spec.accent, 0.8f));
-        r.fillQuad({static_cast<float>(cx - 170), static_cast<float>(cy + 70)},
-                   {static_cast<float>(cx + 170), static_cast<float>(cy + 70)},
-                   {static_cast<float>(cx + 115), static_cast<float>(cy - 80)},
-                   {static_cast<float>(cx - 115), static_cast<float>(cy - 80)}, spec.body);
-        r.fillQuad({static_cast<float>(cx - 72), static_cast<float>(cy - 80)},
-                   {static_cast<float>(cx + 72), static_cast<float>(cy - 80)},
-                   {static_cast<float>(cx + 46), static_cast<float>(cy - 145)},
-                   {static_cast<float>(cx - 46), static_cast<float>(cy - 145)}, spec.glass);
+        const int wheel = static_cast<int>(48.0f * spec.wheelScale);
+        const int topW = static_cast<int>(115.0f * spec.noseScale);
+        const int cabinH = static_cast<int>(65.0f * spec.cabinScale);
+        r.fillCircle(cx - 120, cy + 62, wheel, rgb(24, 27, 31));
+        r.fillCircle(cx + 120, cy + 62, wheel, rgb(24, 27, 31));
+        r.fillCircle(cx - 120, cy + 62, std::max(14, wheel / 2), shade(spec.accent, 0.8f));
+        r.fillCircle(cx + 120, cy + 62, std::max(14, wheel / 2), shade(spec.accent, 0.8f));
+        r.fillQuad({static_cast<float>(cx - 178), static_cast<float>(cy + 70)},
+                   {static_cast<float>(cx + 178), static_cast<float>(cy + 70)},
+                   {static_cast<float>(cx + topW), static_cast<float>(cy - 80)},
+                   {static_cast<float>(cx - topW), static_cast<float>(cy - 80)}, spec.body);
+        r.fillQuad({static_cast<float>(cx - topW * 2 / 3), static_cast<float>(cy - 80)},
+                   {static_cast<float>(cx + topW * 2 / 3), static_cast<float>(cy - 80)},
+                   {static_cast<float>(cx + topW / 3), static_cast<float>(cy - 80 - cabinH)},
+                   {static_cast<float>(cx - topW / 3), static_cast<float>(cy - 80 - cabinH)}, spec.glass);
+        if (spec.bodyStyle == 1 || spec.bodyStyle == 3 || spec.bodyStyle == 5) {
+            r.fillTriangle({static_cast<float>(cx), static_cast<float>(cy - 80 - cabinH - 52)},
+                           {static_cast<float>(cx + topW), static_cast<float>(cy - 80)},
+                           {static_cast<float>(cx - topW / 2), static_cast<float>(cy - 80)}, shade(spec.accent, 1.08f));
+        } else if (spec.bodyStyle == 4 || spec.bodyStyle == 6 || spec.bodyStyle == 7) {
+            r.drawLine({static_cast<float>(cx - 130), static_cast<float>(cy - 80 - cabinH / 2)},
+                       {static_cast<float>(cx + 130), static_cast<float>(cy - 80 - cabinH / 2)}, 10, shade(spec.accent, 0.82f));
+        }
         r.fillRect(cx - 142, cy - 18, 284, 28, spec.accent);
         r.drawLine({static_cast<float>(cx - 118), static_cast<float>(cy - 76)},
-                   {static_cast<float>(cx - 44), static_cast<float>(cy - 140)}, 8, rgb(37, 42, 48));
+                   {static_cast<float>(cx - topW / 3), static_cast<float>(cy - 80 - cabinH + 6)}, 8, rgb(37, 42, 48));
         r.drawLine({static_cast<float>(cx + 118), static_cast<float>(cy - 76)},
-                   {static_cast<float>(cx + 44), static_cast<float>(cy - 140)}, 8, rgb(37, 42, 48));
+                   {static_cast<float>(cx + topW / 3), static_cast<float>(cy - 80 - cabinH + 6)}, 8, rgb(37, 42, 48));
+    }
+
+    void drawGarageThumbnail(Renderer& r, int cx, int cy, const KartSpec& spec, bool selected) {
+        if (selected) {
+            r.fillRect(cx - 43, cy - 27, 86, 54, rgb(255, 228, 123));
+            r.fillRect(cx - 39, cy - 23, 78, 46, rgb(20, 45, 56));
+        }
+        const int w = 58;
+        const int h = 22;
+        const int topW = std::max(12, static_cast<int>(22.0f * spec.noseScale));
+        const int wheel = std::max(7, static_cast<int>(9.0f * spec.wheelScale));
+        r.fillCircle(cx - w / 3, cy + 12, wheel, rgb(19, 22, 26));
+        r.fillCircle(cx + w / 3, cy + 12, wheel, rgb(19, 22, 26));
+        r.fillQuad({static_cast<float>(cx - w / 2), static_cast<float>(cy + 14)},
+                   {static_cast<float>(cx + w / 2), static_cast<float>(cy + 14)},
+                   {static_cast<float>(cx + topW), static_cast<float>(cy - h)},
+                   {static_cast<float>(cx - topW), static_cast<float>(cy - h)}, spec.body);
+        r.fillQuad({static_cast<float>(cx - topW * 2 / 3), static_cast<float>(cy - h)},
+                   {static_cast<float>(cx + topW * 2 / 3), static_cast<float>(cy - h)},
+                   {static_cast<float>(cx + topW / 3), static_cast<float>(cy - h - 14.0f * spec.cabinScale)},
+                   {static_cast<float>(cx - topW / 3), static_cast<float>(cy - h - 14.0f * spec.cabinScale)}, spec.glass);
+        if (spec.bodyStyle == 1 || spec.bodyStyle == 3 || spec.bodyStyle == 5) {
+            r.fillTriangle({static_cast<float>(cx), static_cast<float>(cy - h - 24)},
+                           {static_cast<float>(cx + topW), static_cast<float>(cy - h)},
+                           {static_cast<float>(cx - topW / 2), static_cast<float>(cy - h)}, shade(spec.accent, 1.06f));
+        } else if (spec.bodyStyle == 4 || spec.bodyStyle == 6 || spec.bodyStyle == 7) {
+            r.drawLine({static_cast<float>(cx - 21), static_cast<float>(cy - h - 8)},
+                       {static_cast<float>(cx + 21), static_cast<float>(cy - h - 8)}, 3, shade(spec.accent, 0.82f));
+        }
+        r.fillRect(cx - w / 2 + 4, cy - 6, w - 8, 5, spec.accent);
     }
 
     void drawDriverPortrait(Renderer& r, int cx, int cy, std::string_view racer) {
@@ -1795,6 +1884,9 @@ private:
         r.fillCircle(826, 76, 38, rgb(255, 220, 93));
         r.drawText(52, 42, "SHARK HARBOR KARTS", 5, rgb(20, 45, 56));
         r.drawText(56, 86, "ONE TRACK / INFINITE LAPS / NO POWERS", 2, rgb(20, 45, 56));
+        for (int i = 0; i < static_cast<int>(cars_.size()); ++i) {
+            drawGarageThumbnail(r, 136 + i * 92, 164, cars_[static_cast<size_t>(i)], i == selectedCar_);
+        }
 
         drawGarageCar(r, 488, 342, cars_[selectedCar_]);
         r.fillRect(58, 386, 310, 92, rgb(22, 45, 56));
@@ -1830,6 +1922,7 @@ private:
     float lapTime_ = 0.0f;
     float lastLap_ = 0.0f;
     float bestLap_ = 0.0f;
+    float countdown_ = 0.0f;
     bool quitRequested_ = false;
 };
 
