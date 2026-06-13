@@ -76,12 +76,16 @@ Gamepad is the intended input.
 ```sh
 make self-test
 make race-audit
+make capture-playtest
 ./build/game/harbor_karts --smoke-render --dev-keyboard
 ```
 
 `--self-test` runs a deterministic physics/AI smoke test without SDL.
 `--race-audit` runs a longer headless simulation and reports progress jumps,
 cave transitions, turn balance, no-brake corner speed, and off-road excursions.
+`--capture-playtest` writes deterministic garage and race frames to
+`build/playtest_frames` so visual and camera changes can be inspected without a
+working video device.
 The smoke render verifies SDL startup and framebuffer presentation.
 
 ## Source Layout

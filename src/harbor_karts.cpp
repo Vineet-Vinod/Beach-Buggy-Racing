@@ -5,10 +5,14 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <optional>
 #include <random>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -890,6 +894,25 @@ public:
 
     bool quitRequested() const { return quitRequested_; }
 
+    void startRaceForDiagnostics() {
+        resetRace();
+        mode_ = Mode::Race;
+        prevInput_ = {};
+    }
+
+    void updateAutoplay(float dt) {
+        if (mode_ != Mode::Race) {
+            startRaceForDiagnostics();
+        }
+        updateAi(karts_[0], dt, 0);
+        for (size_t ai = 1; ai < karts_.size(); ++ai) {
+            updateAi(karts_[ai], dt, static_cast<int>(ai));
+        }
+        updateCamera(dt);
+        updateAmbient(dt);
+        computeRacePosition();
+    }
+
     bool selfTest() {
         resetRace();
         mode_ = Mode::Race;
@@ -1580,6 +1603,61 @@ bool hasArg(int argc, char** argv, std::string_view arg) {
     return false;
 }
 
+std::optional<std::string> argValue(int argc, char** argv, std::string_view arg) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (arg == argv[i]) {
+            return std::string(argv[i + 1]);
+        }
+    }
+    return std::nullopt;
+}
+
+bool savePpm(const std::filesystem::path& path, const std::vector<uint32_t>& pixels, int width, int height) {
+    std::ofstream out(path, std::ios::binary);
+    if (!out) {
+        std::cerr << "failed to write " << path << "\n";
+        return false;
+    }
+    out << "P6\n" << width << " " << height << "\n255\n";
+    for (uint32_t pixel : pixels) {
+        const char rgbBytes[3] = {static_cast<char>((pixel >> 16) & 255), static_cast<char>((pixel >> 8) & 255),
+                                  static_cast<char>(pixel & 255)};
+        out.write(rgbBytes, sizeof(rgbBytes));
+    }
+    return static_cast<bool>(out);
+}
+
+bool capturePlaytest(const std::filesystem::path& outputDir) {
+    std::filesystem::create_directories(outputDir);
+    std::vector<uint32_t> pixels(static_cast<size_t>(kFrameW * kFrameH));
+    Renderer renderer(pixels, kFrameW, kFrameH);
+    Game game;
+
+    game.render(renderer, 60.0f, true);
+    if (!savePpm(outputDir / "garage.ppm", pixels, kFrameW, kFrameH)) {
+        return false;
+    }
+
+    game.startRaceForDiagnostics();
+    constexpr int kTotalSteps = 120 * 92;
+    const std::array<int, 10> captureSteps = {18, 240, 720, 1440, 2520, 3840, 5400, 7080, 8760, 10920};
+    size_t captureIndex = 0;
+    for (int step = 0; step <= kTotalSteps; ++step) {
+        if (captureIndex < captureSteps.size() && step == captureSteps[captureIndex]) {
+            game.render(renderer, 60.0f, true);
+            std::ostringstream name;
+            name << "race_" << std::setw(2) << std::setfill('0') << captureIndex << ".ppm";
+            if (!savePpm(outputDir / name.str(), pixels, kFrameW, kFrameH)) {
+                return false;
+            }
+            ++captureIndex;
+        }
+        game.updateAutoplay(kFixedDt);
+    }
+    std::cout << "captured " << (captureIndex + 1) << " frames to " << outputDir << "\n";
+    return captureIndex == captureSteps.size();
+}
+
 }  // namespace
 
 int runHarborKarts(int argc, char** argv) {
@@ -1592,6 +1670,11 @@ int runHarborKarts(int argc, char** argv) {
     if (hasArg(argc, argv, "--race-audit")) {
         const bool ok = game.raceAudit();
         std::cout << (ok ? "race-audit passed\n" : "race-audit failed\n");
+        return ok ? 0 : 1;
+    }
+    if (const auto outputDir = argValue(argc, argv, "--capture-playtest")) {
+        const bool ok = capturePlaytest(*outputDir);
+        std::cout << (ok ? "capture-playtest passed\n" : "capture-playtest failed\n");
         return ok ? 0 : 1;
     }
 

@@ -4,7 +4,7 @@ TARGET := $(GAME_BUILD_DIR)/harbor_karts
 LEGACY_TARGET := $(BUILD_DIR)/harbor_karts
 SDL_LIB := $(BUILD_DIR)/deps/install/lib/libSDL3.a
 
-.PHONY: all deps clean clean-all run self-test race-audit
+.PHONY: all deps clean clean-all run self-test race-audit capture-playtest
 
 all: $(TARGET) $(LEGACY_TARGET)
 
@@ -28,6 +28,9 @@ self-test: $(TARGET)
 
 race-audit: $(TARGET)
 	$(TARGET) --race-audit
+
+capture-playtest: $(TARGET)
+	$(TARGET) --capture-playtest build/playtest_frames
 
 clean:
 	rm -rf $(GAME_BUILD_DIR) $(LEGACY_TARGET)
