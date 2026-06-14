@@ -15,6 +15,7 @@
 
 #include <raylib.h>
 #include <rlgl.h>
+#include <SDL3/SDL.h>
 
 #include "core_math.hpp"
 #include "track_layout.hpp"
@@ -449,38 +450,197 @@ float triggerValue(int gamepad, int axis) {
     return std::clamp(raw, 0.0f, 1.0f);
 }
 
-Input3D readInput(bool devKeyboard) {
-    Input3D input;
-    if (IsGamepadAvailable(0)) {
-        input.steer = axisWithDeadzone(GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_X));
-        input.throttle = triggerValue(0, GAMEPAD_AXIS_RIGHT_TRIGGER);
-        input.brake = triggerValue(0, GAMEPAD_AXIS_LEFT_TRIGGER);
-        input.drift = IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1);
-        input.a = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
-        input.b = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT);
-        input.start = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT);
-        input.back = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_LEFT);
-        input.left = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_LEFT) || input.steer < -0.55f;
-        input.right = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_RIGHT) || input.steer > 0.55f;
-        input.up = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_UP);
-        input.down = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_DOWN);
+float sdlAxisUnit(Sint16 value) {
+    const float f = static_cast<float>(value) / 32767.0f;
+    return std::abs(f) < 0.08f ? 0.0f : std::clamp(f, -1.0f, 1.0f);
+}
+
+float sdlTriggerUnit(Sint16 value) {
+    if (value <= 0) {
+        return 0.0f;
+    }
+    return std::clamp(static_cast<float>(value) / 32767.0f, 0.0f, 1.0f);
+}
+
+float rawJoystickAxis(SDL_Joystick* joystick, int axis) {
+    if (!joystick || axis < 0 || axis >= SDL_GetNumJoystickAxes(joystick)) {
+        return 0.0f;
+    }
+    return sdlAxisUnit(SDL_GetJoystickAxis(joystick, axis));
+}
+
+bool rawJoystickButton(SDL_Joystick* joystick, int button) {
+    return joystick && button >= 0 && button < SDL_GetNumJoystickButtons(joystick) && SDL_GetJoystickButton(joystick, button);
+}
+
+void applyKeyboardFallback(Input3D& input, bool devKeyboard) {
+    if (!devKeyboard) {
+        return;
+    }
+    input.steer = axisWithDeadzone((IsKeyDown(KEY_RIGHT) ? 1.0f : 0.0f) - (IsKeyDown(KEY_LEFT) ? 1.0f : 0.0f));
+    input.throttle = IsKeyDown(KEY_UP) ? 1.0f : input.throttle;
+    input.brake = IsKeyDown(KEY_DOWN) ? 1.0f : input.brake;
+    input.drift = input.drift || IsKeyDown(KEY_RIGHT_SHIFT) || IsKeyDown(KEY_LEFT_SHIFT);
+    input.a = input.a || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE);
+    input.b = input.b || IsKeyPressed(KEY_BACKSPACE);
+    input.start = input.start || IsKeyPressed(KEY_P);
+    input.back = input.back || IsKeyPressed(KEY_R);
+    input.left = input.left || IsKeyPressed(KEY_A);
+    input.right = input.right || IsKeyPressed(KEY_D);
+    input.up = input.up || IsKeyPressed(KEY_W);
+    input.down = input.down || IsKeyPressed(KEY_S);
+}
+
+class ControllerReader {
+public:
+    ~ControllerReader() {
+        if (pad_) {
+            SDL_CloseGamepad(pad_);
+        } else if (joystick_) {
+            SDL_CloseJoystick(joystick_);
+        }
     }
 
-    if (devKeyboard) {
-        input.steer = axisWithDeadzone((IsKeyDown(KEY_RIGHT) ? 1.0f : 0.0f) - (IsKeyDown(KEY_LEFT) ? 1.0f : 0.0f));
-        input.throttle = IsKeyDown(KEY_UP) ? 1.0f : input.throttle;
-        input.brake = IsKeyDown(KEY_DOWN) ? 1.0f : input.brake;
-        input.drift = input.drift || IsKeyDown(KEY_RIGHT_SHIFT) || IsKeyDown(KEY_LEFT_SHIFT);
-        input.a = input.a || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE);
-        input.b = input.b || IsKeyPressed(KEY_BACKSPACE);
-        input.start = input.start || IsKeyPressed(KEY_P);
-        input.back = input.back || IsKeyPressed(KEY_R);
-        input.left = input.left || IsKeyPressed(KEY_A);
-        input.right = input.right || IsKeyPressed(KEY_D);
-        input.up = input.up || IsKeyPressed(KEY_W);
-        input.down = input.down || IsKeyPressed(KEY_S);
+    bool available() {
+        if (IsGamepadAvailable(0)) {
+            return true;
+        }
+        refresh();
+        return pad_ != nullptr || joystick_ != nullptr;
     }
-    return input;
+
+    Input3D read(bool devKeyboard) {
+        Input3D input = readRaylib();
+        refresh();
+        mergeSdl(input);
+        applyKeyboardFallback(input, devKeyboard);
+        return input;
+    }
+
+    void printSnapshot() {
+        refresh();
+        if (IsGamepadAvailable(0)) {
+            std::cout << "raylib controller: " << GetGamepadName(0) << " steer=" << GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_X)
+                      << " lt=" << triggerValue(0, GAMEPAD_AXIS_LEFT_TRIGGER) << " rt=" << triggerValue(0, GAMEPAD_AXIS_RIGHT_TRIGGER)
+                      << " rb=" << IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1)
+                      << " a=" << IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN) << "\n";
+        }
+        if (pad_) {
+            std::cout << "sdl gamepad: " << SDL_GetGamepadName(pad_) << " steer=" << sdlAxisUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_LEFTX))
+                      << " lt=" << sdlTriggerUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_LEFT_TRIGGER))
+                      << " rt=" << sdlTriggerUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER))
+                      << " rb=" << SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)
+                      << " a=" << SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_SOUTH) << "\n";
+        } else if (joystick_) {
+            std::cout << "sdl joystick: " << SDL_GetJoystickName(joystick_) << " axes=" << SDL_GetNumJoystickAxes(joystick_)
+                      << " buttons=" << SDL_GetNumJoystickButtons(joystick_) << " steer=" << rawJoystickAxis(joystick_, 0)
+                      << " lt=" << std::max(0.0f, rawJoystickAxis(joystick_, 2))
+                      << " rt=" << std::max(0.0f, rawJoystickAxis(joystick_, 5)) << " rb=" << rawJoystickButton(joystick_, 5)
+                      << " a=" << rawJoystickButton(joystick_, 0) << "\n";
+        }
+        if (!IsGamepadAvailable(0) && !pad_ && !joystick_) {
+            std::cout << "controller: none\n";
+        }
+    }
+
+private:
+    static Input3D readRaylib() {
+        Input3D input;
+        if (IsGamepadAvailable(0)) {
+            input.steer = axisWithDeadzone(GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_X));
+            input.throttle = triggerValue(0, GAMEPAD_AXIS_RIGHT_TRIGGER);
+            input.brake = triggerValue(0, GAMEPAD_AXIS_LEFT_TRIGGER);
+            input.drift = IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1);
+            input.a = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
+            input.b = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT);
+            input.start = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT);
+            input.back = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_LEFT);
+            input.left = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_LEFT) || input.steer < -0.55f;
+            input.right = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_RIGHT) || input.steer > 0.55f;
+            input.up = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_UP);
+            input.down = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_DOWN);
+        }
+        return input;
+    }
+
+    void refresh() {
+        if (pad_ && SDL_GamepadConnected(pad_)) {
+            joystick_ = SDL_GetGamepadJoystick(pad_);
+            return;
+        }
+        if (joystick_ && SDL_JoystickConnected(joystick_)) {
+            return;
+        }
+        close();
+
+        int count = 0;
+        SDL_JoystickID* pads = SDL_GetGamepads(&count);
+        if (pads && count > 0) {
+            pad_ = SDL_OpenGamepad(pads[0]);
+            if (pad_) {
+                joystick_ = SDL_GetGamepadJoystick(pad_);
+            }
+        }
+        SDL_free(pads);
+        if (pad_) {
+            return;
+        }
+
+        SDL_JoystickID* joysticks = SDL_GetJoysticks(&count);
+        if (joysticks && count > 0) {
+            joystick_ = SDL_OpenJoystick(joysticks[0]);
+        }
+        SDL_free(joysticks);
+    }
+
+    void close() {
+        if (pad_) {
+            SDL_CloseGamepad(pad_);
+            pad_ = nullptr;
+            joystick_ = nullptr;
+        } else if (joystick_) {
+            SDL_CloseJoystick(joystick_);
+            joystick_ = nullptr;
+        }
+    }
+
+    void mergeSdl(Input3D& input) {
+        if (pad_) {
+            input.steer = std::abs(input.steer) > 0.01f ? input.steer : axisWithDeadzone(sdlAxisUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_LEFTX)));
+            input.throttle = std::max(input.throttle, sdlTriggerUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)));
+            input.brake = std::max(input.brake, sdlTriggerUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_LEFT_TRIGGER)));
+            input.drift = input.drift || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+            input.a = input.a || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_SOUTH);
+            input.b = input.b || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_EAST);
+            input.start = input.start || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_START);
+            input.back = input.back || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_BACK);
+            input.left = input.left || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || input.steer < -0.55f;
+            input.right = input.right || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || input.steer > 0.55f;
+            input.up = input.up || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_UP);
+            input.down = input.down || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+        }
+        if (joystick_) {
+            input.steer = std::abs(input.steer) > 0.01f ? input.steer : axisWithDeadzone(rawJoystickAxis(joystick_, 0));
+            input.throttle = std::max(input.throttle, std::max(0.0f, rawJoystickAxis(joystick_, 5)));
+            input.brake = std::max(input.brake, std::max(0.0f, rawJoystickAxis(joystick_, 2)));
+            input.drift = input.drift || rawJoystickButton(joystick_, 5);
+            input.a = input.a || rawJoystickButton(joystick_, 0);
+            input.b = input.b || rawJoystickButton(joystick_, 1);
+            input.back = input.back || rawJoystickButton(joystick_, 6);
+            input.start = input.start || rawJoystickButton(joystick_, 7);
+            input.left = input.left || rawJoystickButton(joystick_, 11) || input.steer < -0.55f;
+            input.right = input.right || rawJoystickButton(joystick_, 12) || input.steer > 0.55f;
+            input.up = input.up || rawJoystickButton(joystick_, 13);
+            input.down = input.down || rawJoystickButton(joystick_, 14);
+        }
+    }
+
+    SDL_Gamepad* pad_ = nullptr;
+    SDL_Joystick* joystick_ = nullptr;
+};
+
+Input3D readInput(ControllerReader& controller, bool devKeyboard) {
+    return controller.read(devKeyboard);
 }
 
 struct Kart3D {
@@ -1287,17 +1447,6 @@ private:
     float fxAccumulator_ = 0.0f;
 };
 
-void printControllerSnapshot() {
-    if (!IsGamepadAvailable(0)) {
-        std::cout << "controller: none\n";
-        return;
-    }
-    std::cout << "controller: " << GetGamepadName(0) << " steer=" << GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_X)
-              << " lt=" << triggerValue(0, GAMEPAD_AXIS_LEFT_TRIGGER) << " rt=" << triggerValue(0, GAMEPAD_AXIS_RIGHT_TRIGGER)
-              << " rb=" << IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1)
-              << " a=" << IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN) << "\n";
-}
-
 }  // namespace
 
 int runHarborKarts3D(int argc, char** argv) {
@@ -1322,6 +1471,7 @@ int runHarborKarts3D(int argc, char** argv) {
         ToggleFullscreen();
     }
 
+    ControllerReader controller;
     Game3D game;
     if (capturePlaytest) {
         std::filesystem::create_directories(captureDir);
@@ -1343,8 +1493,8 @@ int runHarborKarts3D(int argc, char** argv) {
         accumulator += std::min(0.10, now - previous);
         previous = now;
 
-        const Input3D input = capturePlaytest ? game.scriptedInput() : readInput(devKeyboard);
-        const bool hasController = capturePlaytest || IsGamepadAvailable(0) || devKeyboard;
+        const Input3D input = capturePlaytest ? game.scriptedInput() : readInput(controller, devKeyboard);
+        const bool hasController = capturePlaytest || controller.available() || devKeyboard;
         while (accumulator >= kFixedDt) {
             game.update(kFixedDt, input, hasController);
             accumulator -= kFixedDt;
@@ -1357,11 +1507,11 @@ int runHarborKarts3D(int argc, char** argv) {
         }
 
         if (diagnoseController && now - diagnosticStamp > 0.25) {
-            printControllerSnapshot();
+            controller.printSnapshot();
             diagnosticStamp = now;
         }
         ++frames;
-        if ((smokeRender && frames > 180) || (capturePlaytest && frames > 430)) {
+        if ((smokeRender && frames > 180) || (capturePlaytest && frames > 430) || (diagnoseController && frames > 900)) {
             break;
         }
     }
