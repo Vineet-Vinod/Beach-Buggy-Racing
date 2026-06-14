@@ -3,15 +3,19 @@ GAME_BUILD_DIR := $(BUILD_DIR)/game
 TARGET := $(GAME_BUILD_DIR)/harbor_karts
 LEGACY_TARGET := $(BUILD_DIR)/harbor_karts
 SDL_LIB := $(BUILD_DIR)/deps/install/lib/libSDL3.a
+RAYLIB_LIB := $(BUILD_DIR)/deps/raylib-install/lib/libraylib.a
 
 .PHONY: all deps clean clean-all run self-test race-audit capture-playtest perf-audit
 
 all: $(TARGET) $(LEGACY_TARGET)
 
-deps: $(SDL_LIB)
+deps: $(SDL_LIB) $(RAYLIB_LIB)
 
 $(SDL_LIB): scripts/bootstrap_deps.sh third_party/_cache/SDL3-3.4.10.tar.gz third_party/_cache/libXext-1.3.6.tar.xz
 	scripts/bootstrap_deps.sh
+
+$(RAYLIB_LIB): scripts/bootstrap_raylib.sh third_party/_cache/raylib-6.0.tar.gz $(SDL_LIB)
+	scripts/bootstrap_raylib.sh
 
 $(TARGET): CMakeLists.txt src/main.cpp src/harbor_karts.cpp src/core_math.hpp src/renderer.hpp src/track_layout.hpp $(SDL_LIB)
 	cmake -S . -B $(GAME_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release

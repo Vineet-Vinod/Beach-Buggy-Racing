@@ -40,3 +40,17 @@ freely, subject to the following restrictions:
 
 The libXext distribution contains multiple permissive copyright notice blocks;
 the full upstream `COPYING` file is included verbatim at the path above.
+
+## raylib 6.0
+
+- Source: <https://github.com/raysan5/raylib/archive/refs/tags/6.0.tar.gz>
+- SHA-256: `2b3ee1e2120c7a0796b33062c7e9a694dd8a8caa56a96319ac8c8ecf54a90d0b`
+- Use: 3D rendering, camera, geometry helpers, and gamepad abstraction for the
+  new playable 3D build.
+- Local build choice: compiled as a static library with the SDL3 platform
+  backend, Raylib software renderer, and audio disabled. This avoids relying on
+  missing system OpenGL development headers on the target laptop.
+- Full license text: `third_party/licenses/raylib-6.0-LICENSE.txt`
+
+raylib is distributed under the zlib/libpng license; the full upstream
+`LICENSE` file is included verbatim at the path above.
