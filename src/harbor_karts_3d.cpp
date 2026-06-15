@@ -411,17 +411,22 @@ std::array<std::string, 10> makeRacers() {
     return {"KAI", "MAYA", "BRUNO", "LANI", "REX", "NOVA", "SKIP", "ZARA", "COBALT", "TESS"};
 }
 
+uint32_t stableHash(std::string_view text) {
+    uint32_t hash = 2166136261u;
+    for (char ch : text) {
+        hash ^= static_cast<uint8_t>(ch);
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
 Color racerColor(std::string_view racer) {
     static constexpr std::array<Color, 10> palette = {
         Color{255, 211, 80, 255}, Color{238, 78, 91, 255},  Color{71, 185, 131, 255}, Color{76, 151, 224, 255},
         Color{245, 132, 58, 255}, Color{179, 112, 219, 255}, Color{242, 233, 201, 255}, Color{39, 51, 63, 255},
         Color{86, 214, 222, 255}, Color{245, 164, 196, 255},
     };
-    uint32_t hash = 2166136261u;
-    for (char ch : racer) {
-        hash ^= static_cast<uint8_t>(ch);
-        hash *= 16777619u;
-    }
+    const uint32_t hash = stableHash(racer);
     return palette[hash % palette.size()];
 }
 
@@ -727,9 +732,91 @@ void drawLocalBox(Vector3 pos, Vector3 size, Color color) {
     DrawCubeV(pos, size, color);
 }
 
-void drawLocalWheel(float x, float z, float radius, float width, Color tire, Color hub) {
-    DrawCylinderEx({x - width * 0.5f, radius, z}, {x + width * 0.5f, radius, z}, radius, radius, 14, tire);
-    DrawCylinderEx({x - width * 0.52f, radius, z}, {x + width * 0.52f, radius, z}, radius * 0.42f, radius * 0.42f, 10, hub);
+void drawLocalEllipsoid(Vector3 pos, Vector3 radius, Color color) {
+    rlPushMatrix();
+    rlTranslatef(pos.x, pos.y, pos.z);
+    rlScalef(radius.x, radius.y, radius.z);
+    DrawSphere({0.0f, 0.0f, 0.0f}, 1.0f, color);
+    rlPopMatrix();
+}
+
+void drawLocalTaperedBox(Vector3 pos, Vector3 size, float frontScale, float rearScale, Color color) {
+    const float y0 = pos.y - size.y * 0.5f;
+    const float y1 = pos.y + size.y * 0.5f;
+    const float zf = pos.z + size.z * 0.5f;
+    const float zr = pos.z - size.z * 0.5f;
+    const float xf = size.x * 0.5f * frontScale;
+    const float xr = size.x * 0.5f * rearScale;
+
+    const Vector3 fbl{pos.x - xf, y0, zf};
+    const Vector3 fbr{pos.x + xf, y0, zf};
+    const Vector3 ftl{pos.x - xf, y1, zf};
+    const Vector3 ftr{pos.x + xf, y1, zf};
+    const Vector3 rbl{pos.x - xr, y0, zr};
+    const Vector3 rbr{pos.x + xr, y0, zr};
+    const Vector3 rtl{pos.x - xr, y1, zr};
+    const Vector3 rtr{pos.x + xr, y1, zr};
+
+    drawQuad(ftl, ftr, rtr, rtl, shade(color, 1.04f));
+    drawQuad(fbl, rbl, rbr, fbr, shade(color, 0.70f));
+    drawQuad(fbl, ftl, rtl, rbl, shade(color, 0.86f));
+    drawQuad(fbr, rbr, rtr, ftr, shade(color, 0.78f));
+    drawQuad(fbl, fbr, ftr, ftl, shade(color, 1.08f));
+    drawQuad(rbl, rtl, rtr, rbr, shade(color, 0.82f));
+}
+
+void drawLocalWedge(Vector3 pos, Vector3 size, float frontTopScale, Color color) {
+    const float x0 = pos.x - size.x * 0.5f;
+    const float x1 = pos.x + size.x * 0.5f;
+    const float y0 = pos.y - size.y * 0.5f;
+    const float yRear = pos.y + size.y * 0.5f;
+    const float yFront = y0 + size.y * std::clamp(frontTopScale, 0.10f, 1.0f);
+    const float zf = pos.z + size.z * 0.5f;
+    const float zr = pos.z - size.z * 0.5f;
+
+    const Vector3 fbl{x0, y0, zf};
+    const Vector3 fbr{x1, y0, zf};
+    const Vector3 ftl{x0, yFront, zf};
+    const Vector3 ftr{x1, yFront, zf};
+    const Vector3 rbl{x0, y0, zr};
+    const Vector3 rbr{x1, y0, zr};
+    const Vector3 rtl{x0, yRear, zr};
+    const Vector3 rtr{x1, yRear, zr};
+
+    drawQuad(ftl, ftr, rtr, rtl, shade(color, 1.10f));
+    drawQuad(fbl, rbl, rbr, fbr, shade(color, 0.70f));
+    drawQuad(fbl, ftl, rtl, rbl, shade(color, 0.86f));
+    drawQuad(fbr, rbr, rtr, ftr, shade(color, 0.78f));
+    drawQuad(fbl, fbr, ftr, ftl, shade(color, 1.02f));
+    drawQuad(rbl, rtl, rtr, rbr, shade(color, 0.92f));
+}
+
+void drawLocalWheel(float x, float z, float radius, float width, Color tire, Color hub, float spinDeg, float steerDeg, bool front) {
+    rlPushMatrix();
+    rlTranslatef(x, radius, z);
+    if (front) {
+        rlRotatef(steerDeg, 0.0f, 1.0f, 0.0f);
+    }
+    DrawCylinderEx({-width * 0.5f, 0.0f, 0.0f}, {width * 0.5f, 0.0f, 0.0f}, radius, radius, 20, tire);
+    DrawCylinderEx({-width * 0.54f, 0.0f, 0.0f}, {width * 0.54f, 0.0f, 0.0f}, radius * 0.46f, radius * 0.46f, 12, hub);
+    for (int i = 0; i < 8; ++i) {
+        const float a = (spinDeg + static_cast<float>(i) * 45.0f) * DEG2RAD;
+        const float cy = std::sin(a) * radius * 0.92f;
+        const float cz = std::cos(a) * radius * 0.92f;
+        rlPushMatrix();
+        rlTranslatef(0.0f, cy, cz);
+        rlRotatef(-spinDeg + static_cast<float>(i) * 12.0f, 1.0f, 0.0f, 0.0f);
+        DrawCubeV({0.0f, 0.0f, 0.0f}, {width * 1.12f, radius * 0.11f, radius * 0.24f}, shade(tire, 1.22f));
+        rlPopMatrix();
+    }
+    for (int i = 0; i < 5; ++i) {
+        const float a = (spinDeg + static_cast<float>(i) * 72.0f) * DEG2RAD;
+        DrawCylinderEx({-width * 0.58f, 0.0f, 0.0f}, {-width * 0.60f, std::sin(a) * radius * 0.38f, std::cos(a) * radius * 0.38f},
+                       radius * 0.035f, radius * 0.035f, 6, shade(hub, 1.25f));
+        DrawCylinderEx({width * 0.58f, 0.0f, 0.0f}, {width * 0.60f, std::sin(a) * radius * 0.38f, std::cos(a) * radius * 0.38f},
+                       radius * 0.035f, radius * 0.035f, 6, shade(hub, 1.25f));
+    }
+    rlPopMatrix();
 }
 
 void drawSkyGradient() {
@@ -995,8 +1082,8 @@ private:
     void updateGarageCamera(float dt) {
         (void)dt;
         const TrackPoint3D start = track_.sample(kRaceStartProgress);
-        const Vector3 focus = toWorld(start.pos + start.tangent * 64.0f, start.elevation + 10.0f);
-        camera_.position = toWorld(start.pos - start.tangent * 92.0f + start.normal * 24.0f, start.elevation + 46.0f);
+        const Vector3 focus = toWorld(start.pos + start.tangent * 32.0f + start.normal * 10.0f, start.elevation + 11.0f);
+        camera_.position = toWorld(start.pos + start.tangent * 88.0f + start.normal * 112.0f, start.elevation + 42.0f);
         camera_.target = focus;
         camera_.up = {0.0f, 1.0f, 0.0f};
         camera_.fovy = 42.0f;
@@ -1725,6 +1812,67 @@ private:
         }
     }
 
+    void drawDriver(const Kart3D& kart, float w, float l, float h, bool player) {
+        const uint32_t hash = stableHash(kart.racer);
+        static constexpr std::array<Color, 6> kSkin = {
+            Color{116, 67, 43, 255},  Color{154, 94, 55, 255}, Color{191, 121, 73, 255},
+            Color{218, 153, 98, 255}, Color{235, 177, 121, 255}, Color{92, 54, 41, 255},
+        };
+        static constexpr std::array<Color, 6> kHair = {
+            Color{39, 30, 25, 255},  Color{75, 48, 31, 255}, Color{132, 83, 38, 255},
+            Color{226, 174, 78, 255}, Color{35, 43, 51, 255}, Color{206, 79, 84, 255},
+        };
+
+        const Color skin = kSkin[hash % kSkin.size()];
+        const Color helmet = racerColor(kart.racer);
+        const Color shirt = shade(racerColor(kart.racer), 0.82f + static_cast<float>((hash >> 3) % 5) * 0.04f);
+        const Color glove = shade(kart.spec.body, 0.55f);
+        const bool garageIdle = mode_ == Mode::Garage && player;
+        const float idle = garageIdle ? std::sin(garageSpin_ * 2.2f + static_cast<float>(hash % 11)) : std::sin(kart.progress * 0.035f);
+        const float steerPose = kart.steerSmoothed * 0.22f;
+
+        DrawCylinderEx({0.0f, h * 1.02f, -l * 0.07f}, {0.0f, h * 1.38f, -l * 0.04f}, w * 0.10f, w * 0.145f, 12, shirt);
+        drawLocalEllipsoid({0.0f, h * 1.27f, -l * 0.03f}, {w * 0.155f, h * 0.17f, l * 0.095f}, shade(shirt, 1.12f));
+        drawLocalBox({0.0f, h * 1.08f, -l * 0.20f}, {w * 0.45f, h * 0.17f, l * 0.12f}, Color{34, 43, 49, 255});
+        DrawCylinderEx({0.0f, h * 1.42f, -l * 0.03f}, {0.0f, h * 1.54f, -l * 0.02f}, w * 0.07f, w * 0.06f, 8,
+                       skin);
+
+        const Vector3 leftShoulder{-w * 0.18f, h * 1.34f, -l * 0.01f};
+        const Vector3 rightShoulder{w * 0.18f, h * 1.34f, -l * 0.01f};
+        Vector3 leftHand{-w * (0.17f + steerPose), h * 1.18f, l * 0.23f};
+        Vector3 rightHand{w * (0.17f - steerPose), h * 1.18f, l * 0.23f};
+        if (garageIdle && (hash & 1u) == 0u) {
+            rightHand = {w * 0.34f, h * (1.62f + idle * 0.12f), l * 0.06f};
+        }
+        DrawCylinderEx(leftShoulder, leftHand, h * 0.038f, h * 0.044f, 8, skin);
+        DrawCylinderEx(rightShoulder, rightHand, h * 0.038f, h * 0.044f, 8, skin);
+        drawLocalEllipsoid(leftHand, {w * 0.055f, h * 0.048f, h * 0.048f}, glove);
+        drawLocalEllipsoid(rightHand, {w * 0.055f, h * 0.048f, h * 0.048f}, glove);
+
+        DrawCylinderEx({-w * 0.21f, h * 1.16f, l * 0.25f}, {w * 0.21f, h * 1.16f, l * 0.25f}, h * 0.032f, h * 0.032f,
+                       12, Color{31, 38, 44, 255});
+        DrawCylinderEx({0.0f, h * 1.08f, l * 0.15f}, {0.0f, h * 1.16f, l * 0.25f}, h * 0.024f, h * 0.024f, 8,
+                       Color{31, 38, 44, 255});
+
+        drawLocalEllipsoid({0.0f, h * 1.70f + idle * h * 0.018f, -l * 0.02f}, {h * 0.25f, h * 0.29f, h * 0.25f}, helmet);
+        drawLocalEllipsoid({0.0f, h * 1.66f + idle * h * 0.018f, l * 0.08f}, {h * 0.16f, h * 0.16f, h * 0.075f}, skin);
+        DrawCubeV({0.0f, h * 1.71f + idle * h * 0.018f, l * 0.145f}, {w * 0.25f, h * 0.075f, h * 0.045f},
+                  Color{34, 50, 60, 255});
+
+        const int hairStyle = static_cast<int>((hash >> 4) % 4u);
+        const Color hair = kHair[(hash >> 7) % kHair.size()];
+        if (hairStyle == 0) {
+            drawLocalEllipsoid({0.0f, h * 1.93f, -l * 0.03f}, {h * 0.18f, h * 0.08f, h * 0.20f}, hair);
+        } else if (hairStyle == 1) {
+            DrawCylinderEx({0.0f, h * 1.93f, -l * 0.05f}, {0.0f, h * 2.12f, -l * 0.07f}, h * 0.075f, 0.0f, 6, hair);
+        } else if (hairStyle == 2) {
+            DrawCubeV({0.0f, h * 1.96f, -l * 0.03f}, {w * 0.42f, h * 0.07f, l * 0.20f}, hair);
+        } else {
+            DrawCylinderEx({-w * 0.20f, h * 1.76f, -l * 0.08f}, {-w * 0.34f, h * 1.48f, -l * 0.11f}, h * 0.045f,
+                           h * 0.030f, 7, hair);
+        }
+    }
+
     void drawKart(const Kart3D& kart, bool player) {
         const TrackPoint3D ground = track_.sample(kart.progress);
         const Vector3 base = toWorld(kart.pos, ground.elevation + 3.2f);
@@ -1738,21 +1886,34 @@ private:
         rlPushMatrix();
         rlTranslatef(base.x, base.y, base.z);
         rlRotatef(90.0f - kart.heading * RAD2DEG, 0.0f, 1.0f, 0.0f);
+        const float speed = length(kart.vel);
+        const float speedT = std::clamp(speed / 150.0f, 0.0f, 1.0f);
+        const float bounce = std::sin(kart.progress * 0.075f + static_cast<float>(kart.spec.bodyStyle)) * 0.045f * speedT;
+        const float pitch = std::sin(kart.progress * 0.052f + static_cast<float>(kart.spec.bodyStyle) * 0.7f) * 1.8f * speedT -
+                            kart.brakeHold * 1.2f + (kart.boostTimer > 0.0f ? 1.2f : 0.0f);
+        rlTranslatef(0.0f, bounce + (kart.contactTimer > 0.0f ? std::sin(kart.contactTimer * 80.0f) * 0.035f : 0.0f), 0.0f);
+        rlRotatef(pitch, 1.0f, 0.0f, 0.0f);
         const float lean = std::clamp(kart.steerSmoothed * length(kart.vel) / 150.0f, -0.55f, 0.55f);
         rlRotatef(-lean * 8.0f, 0.0f, 0.0f, 1.0f);
 
-        drawLocalBox({0.0f, h * 0.55f, 0.0f}, {w, h * 0.55f, l}, shade(kart.spec.body, kart.contactTimer > 0.0f ? 1.25f : 1.0f));
-        drawLocalBox({0.0f, h * 1.05f, -l * 0.06f}, {w * 0.72f, h * 0.72f, l * 0.46f}, kart.spec.body);
-        drawLocalBox({0.0f, h * 1.42f, -l * 0.16f}, {w * 0.46f, h * 0.42f, l * 0.34f}, kart.spec.glass);
-        drawLocalBox({0.0f, h * 0.92f, l * 0.40f}, {w * 0.92f, h * 0.17f, l * 0.12f}, kart.spec.accent);
-        drawLocalBox({0.0f, h * 0.90f, -l * 0.52f}, {w * 0.58f, h * 0.15f, l * 0.15f}, kart.spec.accent);
-        drawLocalBox({0.0f, h * 0.52f, l * 0.58f}, {w * 1.05f, h * 0.20f, l * 0.12f}, shade(kart.spec.accent, 0.92f));
-        drawLocalBox({0.0f, h * 0.50f, -l * 0.66f}, {w * 0.88f, h * 0.18f, l * 0.11f}, shade(kart.spec.accent, 0.82f));
+        const Color body = shade(kart.spec.body, kart.contactTimer > 0.0f ? 1.24f : 1.0f);
+        drawLocalTaperedBox({0.0f, h * 0.48f, -l * 0.02f}, {w * 1.10f, h * 0.60f, l * 0.94f}, 0.72f, 1.03f, body);
+        drawLocalWedge({0.0f, h * 0.84f, l * 0.22f}, {w * 0.96f, h * 0.52f, l * 0.55f}, 0.34f, shade(body, 1.08f));
+        drawLocalTaperedBox({0.0f, h * 0.89f, -l * 0.37f}, {w * 0.90f, h * 0.56f, l * 0.44f}, 0.94f, 0.76f, shade(body, 0.96f));
+        drawLocalEllipsoid({0.0f, h * 1.32f, -l * 0.14f}, {w * 0.32f, h * 0.26f, l * 0.24f}, kart.spec.glass);
+        DrawCubeV({0.0f, h * 1.23f, l * 0.03f}, {w * 0.50f, h * 0.08f, l * 0.08f}, shade(kart.spec.glass, 0.72f));
+        drawLocalBox({0.0f, h * 0.78f, l * 0.48f}, {w * 0.84f, h * 0.13f, l * 0.11f}, kart.spec.accent);
+        drawLocalBox({0.0f, h * 0.76f, -l * 0.58f}, {w * 0.58f, h * 0.13f, l * 0.14f}, kart.spec.accent);
+        DrawCylinderEx({-w * 0.40f, h * 0.42f, l * 0.56f}, {w * 0.40f, h * 0.42f, l * 0.56f}, h * 0.060f, h * 0.060f, 10,
+                       shade(kart.spec.accent, 0.88f));
+        DrawCylinderEx({-w * 0.34f, h * 0.40f, -l * 0.67f}, {w * 0.34f, h * 0.40f, -l * 0.67f}, h * 0.050f, h * 0.050f,
+                       10, shade(kart.spec.accent, 0.78f));
 
         const Color fender = shade(kart.spec.body, 0.78f);
         for (float sx : {-1.0f, 1.0f}) {
-            drawLocalBox({sx * w * 0.57f, h * 0.62f, l * 0.34f}, {w * 0.30f, h * 0.22f, l * 0.28f}, fender);
-            drawLocalBox({sx * w * 0.57f, h * 0.60f, -l * 0.38f}, {w * 0.29f, h * 0.20f, l * 0.26f}, fender);
+            drawLocalEllipsoid({sx * w * 0.55f, h * 0.58f, l * 0.34f}, {w * 0.17f, h * 0.13f, l * 0.18f}, fender);
+            drawLocalEllipsoid({sx * w * 0.55f, h * 0.56f, -l * 0.38f}, {w * 0.16f, h * 0.12f, l * 0.17f}, fender);
+            drawLocalBox({sx * w * 0.51f, h * 0.38f, l * 0.04f}, {w * 0.08f, h * 0.28f, l * 0.54f}, shade(body, 0.72f));
         }
 
         switch (kart.spec.bodyStyle % 8) {
@@ -1795,14 +1956,14 @@ private:
 
         const float tireR = std::max(0.42f, h * 0.48f);
         const float tireW = w * 0.32f;
-        drawLocalWheel(-w * 0.55f, l * 0.35f, tireR, tireW, Color{25, 29, 32, 255}, kart.spec.accent);
-        drawLocalWheel(w * 0.55f, l * 0.35f, tireR, tireW, Color{25, 29, 32, 255}, kart.spec.accent);
-        drawLocalWheel(-w * 0.55f, -l * 0.38f, tireR, tireW, Color{25, 29, 32, 255}, kart.spec.accent);
-        drawLocalWheel(w * 0.55f, -l * 0.38f, tireR, tireW, Color{25, 29, 32, 255}, kart.spec.accent);
+        const float wheelSpin = std::fmod(-kart.progress * kRenderScale / std::max(0.01f, tireR) * RAD2DEG, 360.0f);
+        const float steerDeg = kart.steerSmoothed * 24.0f;
+        drawLocalWheel(-w * 0.55f, l * 0.35f, tireR, tireW, Color{25, 29, 32, 255}, kart.spec.accent, wheelSpin, steerDeg, true);
+        drawLocalWheel(w * 0.55f, l * 0.35f, tireR, tireW, Color{25, 29, 32, 255}, kart.spec.accent, wheelSpin, steerDeg, true);
+        drawLocalWheel(-w * 0.55f, -l * 0.38f, tireR, tireW, Color{25, 29, 32, 255}, kart.spec.accent, wheelSpin, 0.0f, false);
+        drawLocalWheel(w * 0.55f, -l * 0.38f, tireR, tireW, Color{25, 29, 32, 255}, kart.spec.accent, wheelSpin, 0.0f, false);
 
-        const Color helmet = racerColor(kart.racer);
-        DrawSphere({0.0f, h * 1.82f, -l * 0.12f}, h * 0.28f, helmet);
-        DrawCubeV({0.0f, h * 1.70f, h * 0.02f}, {w * 0.52f, h * 0.10f, l * 0.58f}, Color{35, 43, 51, 255});
+        drawDriver(kart, w, l, h, player);
         if (kart.boostTimer > 0.0f) {
             DrawCylinderEx({-w * 0.22f, h * 0.42f, -l * 0.62f}, {-w * 0.22f, h * 0.42f, -l * 1.12f}, h * 0.20f, 0.0f, 8,
                            Color{255, 171, 42, 220});
@@ -1822,8 +1983,8 @@ private:
             preview.spec = specs_[static_cast<size_t>(selectedCar_)];
             preview.racer = racers_[static_cast<size_t>(selectedRacer_)];
             preview.pos = start.pos;
-            preview.heading = angleOf(start.tangent);
-            preview.vel = {};
+            preview.heading = angleOf(start.tangent) + std::sin(garageSpin_ * 0.58f) * 0.10f;
+            preview.vel = start.tangent * 38.0f;
             preview.progress = start.progress;
             preview.nearest = track_.nearestIndex(preview.pos);
             preview.steerSmoothed = std::sin(garageSpin_ * 1.2f) * 0.08f;
