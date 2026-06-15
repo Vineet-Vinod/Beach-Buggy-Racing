@@ -2076,36 +2076,47 @@ private:
         const float s = prop.scale;
         switch (prop.type) {
             case Prop3D::Type::Palm:
-                DrawCylinderEx(base, add(base, {0.0f, 5.4f * s, 0.0f}), 0.18f * s, 0.12f * s, 8, Color{126, 82, 45, 255});
+                DrawCylinderEx(base, add(base, {0.0f, 5.4f * s, 0.0f}), 0.20f * s, 0.12f * s, 9, Color{126, 82, 45, 255});
+                drawLocalEllipsoid(add(base, {0.0f, 5.32f * s, 0.0f}), {0.34f * s, 0.24f * s, 0.34f * s},
+                                   Color{118, 90, 46, 255});
                 for (int i = 0; i < 5; ++i) {
                     rlPushMatrix();
                     rlTranslatef(base.x, base.y + 5.4f * s, base.z);
                     rlRotatef(static_cast<float>(i) * 72.0f, 0.0f, 1.0f, 0.0f);
-                    DrawCubeV({0.0f, 0.0f, 1.35f * s}, {0.38f * s, 0.16f * s, 2.8f * s}, Color{38, 151, 82, 255});
+                    rlRotatef(-12.0f, 1.0f, 0.0f, 0.0f);
+                    drawLocalEllipsoid({0.0f, 0.0f, 1.22f * s}, {0.30f * s, 0.070f * s, 1.35f * s},
+                                       i % 2 == 0 ? Color{39, 158, 86, 255} : Color{69, 174, 92, 255});
                     rlPopMatrix();
                 }
                 break;
             case Prop3D::Type::Rock:
             case Prop3D::Type::Cliff:
-                DrawCubeV(add(base, {0.0f, 0.65f * s, 0.0f}), {1.9f * s, 1.3f * s, 1.55f * s}, prop.color);
-                DrawCubeV(add(base, {0.6f * s, 1.25f * s, -0.2f * s}), {1.2f * s, 1.4f * s, 1.0f * s}, shade(prop.color, 1.15f));
+                drawLocalEllipsoid(add(base, {0.0f, 0.55f * s, 0.0f}), {1.12f * s, 0.66f * s, 0.92f * s}, prop.color);
+                drawLocalEllipsoid(add(base, {0.58f * s, 0.96f * s, -0.18f * s}), {0.72f * s, 0.78f * s, 0.58f * s},
+                                   shade(prop.color, 1.12f));
+                drawLocalEllipsoid(add(base, {-0.54f * s, 0.42f * s, 0.32f * s}), {0.58f * s, 0.42f * s, 0.52f * s},
+                                   shade(prop.color, 0.86f));
                 break;
             case Prop3D::Type::Hut:
-                DrawCubeV(add(base, {0.0f, 0.9f * s, 0.0f}), {2.8f * s, 1.8f * s, 2.4f * s}, Color{174, 91, 52, 255});
-                DrawCylinder(add(base, {0.0f, 2.2f * s, 0.0f}), 0.0f, 2.1f * s, 1.45f * s, 4, Color{239, 185, 92, 255});
+                drawLocalTaperedBox(add(base, {0.0f, 0.9f * s, 0.0f}), {2.8f * s, 1.8f * s, 2.4f * s}, 0.86f, 1.02f,
+                                    Color{174, 91, 52, 255});
+                DrawCylinder(add(base, {0.0f, 2.2f * s, 0.0f}), 0.0f, 2.1f * s, 1.45f * s, 6, Color{239, 185, 92, 255});
+                DrawCubeV(add(base, {0.0f, 1.0f * s, 1.22f * s}), {0.76f * s, 0.86f * s, 0.08f * s}, Color{76, 62, 48, 255});
                 break;
             case Prop3D::Type::Boat:
                 rlPushMatrix();
                 rlTranslatef(base.x, base.y + 0.55f * s, base.z);
                 rlRotatef(90.0f - angleOf(p.tangent) * RAD2DEG, 0.0f, 1.0f, 0.0f);
-                DrawCubeV({0.0f, 0.0f, 0.0f}, {3.7f * s, 0.8f * s, 1.4f * s}, prop.color);
+                drawLocalTaperedBox({0.0f, 0.0f, 0.0f}, {3.7f * s, 0.8f * s, 1.4f * s}, 0.52f, 1.06f, prop.color);
+                drawLocalEllipsoid({0.0f, 0.18f * s, 0.0f}, {1.34f * s, 0.20f * s, 0.38f * s}, shade(prop.color, 1.12f));
                 DrawCubeV({0.0f, 1.0f * s, 0.0f}, {0.18f * s, 2.4f * s, 0.18f * s}, Color{81, 66, 45, 255});
-                DrawCubeV({0.8f * s, 1.5f * s, 0.0f}, {1.3f * s, 1.8f * s, 0.08f * s}, Color{246, 239, 186, 255});
+                drawLocalWedge({0.8f * s, 1.5f * s, 0.0f}, {1.3f * s, 1.8f * s, 0.08f * s}, 0.18f, Color{246, 239, 186, 255});
                 rlPopMatrix();
                 break;
             case Prop3D::Type::Market:
-                DrawCubeV(add(base, {0.0f, 0.75f * s, 0.0f}), {2.8f * s, 1.5f * s, 2.1f * s}, shade(prop.color, 0.85f));
-                DrawCubeV(add(base, {0.0f, 1.75f * s, 0.0f}), {3.2f * s, 0.35f * s, 2.5f * s}, prop.color);
+                drawLocalTaperedBox(add(base, {0.0f, 0.75f * s, 0.0f}), {2.8f * s, 1.5f * s, 2.1f * s}, 0.92f, 1.02f,
+                                    shade(prop.color, 0.85f));
+                drawLocalWedge(add(base, {0.0f, 1.75f * s, 0.0f}), {3.2f * s, 0.42f * s, 2.5f * s}, 0.78f, prop.color);
                 break;
             case Prop3D::Type::Crane:
                 DrawCubeV(add(base, {0.0f, 2.1f * s, 0.0f}), {0.45f * s, 4.2f * s, 0.45f * s}, Color{92, 70, 55, 255});
@@ -2131,7 +2142,7 @@ private:
                 break;
             case Prop3D::Type::Sail:
                 DrawCubeV(add(base, {0.0f, 1.2f * s, 0.0f}), {0.18f * s, 2.4f * s, 0.18f * s}, Color{92, 70, 52, 255});
-                DrawCubeV(add(base, {0.65f * s, 1.8f * s, 0.0f}), {1.3f * s, 1.7f * s, 0.08f * s}, prop.color);
+                drawLocalWedge(add(base, {0.65f * s, 1.8f * s, 0.0f}), {1.3f * s, 1.7f * s, 0.08f * s}, 0.16f, prop.color);
                 break;
         }
     }
@@ -2240,8 +2251,9 @@ private:
         drawLocalTaperedBox({0.0f, h * 0.48f, -l * 0.02f}, {w * 1.10f, h * 0.60f, l * 0.94f}, 0.72f, 1.03f, body);
         drawLocalWedge({0.0f, h * 0.84f, l * 0.22f}, {w * 0.96f, h * 0.52f, l * 0.55f}, 0.34f, shade(body, 1.08f));
         drawLocalTaperedBox({0.0f, h * 0.89f, -l * 0.37f}, {w * 0.90f, h * 0.56f, l * 0.44f}, 0.94f, 0.76f, shade(body, 0.96f));
-        drawLocalEllipsoid({0.0f, h * 1.32f, -l * 0.14f}, {w * 0.32f, h * 0.26f, l * 0.24f}, kart.spec.glass);
-        DrawCubeV({0.0f, h * 1.23f, l * 0.03f}, {w * 0.50f, h * 0.08f, l * 0.08f}, shade(kart.spec.glass, 0.72f));
+        drawLocalEllipsoid({0.0f, h * 1.14f, -l * 0.13f}, {w * 0.32f, h * 0.075f, l * 0.24f}, shade(body, 0.62f));
+        drawLocalEllipsoid({0.0f, h * 1.30f, -l * 0.13f}, {w * 0.245f, h * 0.19f, l * 0.175f}, shade(kart.spec.glass, 0.84f));
+        DrawCubeV({0.0f, h * 1.20f, l * 0.025f}, {w * 0.38f, h * 0.055f, l * 0.060f}, shade(kart.spec.glass, 0.58f));
         drawLocalBox({0.0f, h * 0.78f, l * 0.48f}, {w * 0.84f, h * 0.13f, l * 0.11f}, kart.spec.accent);
         drawLocalBox({0.0f, h * 0.76f, -l * 0.58f}, {w * 0.58f, h * 0.13f, l * 0.14f}, kart.spec.accent);
         DrawCylinderEx({-w * 0.40f, h * 0.42f, l * 0.56f}, {w * 0.40f, h * 0.42f, l * 0.56f}, h * 0.060f, h * 0.060f, 10,
