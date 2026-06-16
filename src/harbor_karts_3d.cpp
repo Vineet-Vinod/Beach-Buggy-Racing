@@ -612,7 +612,7 @@ public:
         refresh();
         mergeSdl(input);
         applyKeyboardFallback(input, devKeyboard);
-        return input;
+        return edgeFiltered(input);
     }
 
     void printSnapshot() {
@@ -649,16 +649,31 @@ private:
             input.throttle = triggerValue(0, GAMEPAD_AXIS_RIGHT_TRIGGER);
             input.brake = triggerValue(0, GAMEPAD_AXIS_LEFT_TRIGGER);
             input.drift = IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1);
-            input.a = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
-            input.b = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT);
-            input.start = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_RIGHT);
-            input.back = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_MIDDLE_LEFT);
-            input.left = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_LEFT) || input.steer < -0.55f;
-            input.right = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_RIGHT) || input.steer > 0.55f;
-            input.up = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_UP);
-            input.down = IsGamepadButtonPressed(0, GAMEPAD_BUTTON_LEFT_FACE_DOWN);
+            input.a = IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
+            input.b = IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT);
+            input.start = IsGamepadButtonDown(0, GAMEPAD_BUTTON_MIDDLE_RIGHT);
+            input.back = IsGamepadButtonDown(0, GAMEPAD_BUTTON_MIDDLE_LEFT);
+            input.left = IsGamepadButtonDown(0, GAMEPAD_BUTTON_LEFT_FACE_LEFT) || input.steer < -0.55f;
+            input.right = IsGamepadButtonDown(0, GAMEPAD_BUTTON_LEFT_FACE_RIGHT) || input.steer > 0.55f;
+            input.up = IsGamepadButtonDown(0, GAMEPAD_BUTTON_LEFT_FACE_UP);
+            input.down = IsGamepadButtonDown(0, GAMEPAD_BUTTON_LEFT_FACE_DOWN);
         }
         return input;
+    }
+
+    Input3D edgeFiltered(const Input3D& current) {
+        const auto pressed = [](bool now, bool before) { return now && !before; };
+        Input3D out = current;
+        out.a = pressed(current.a, previousDigital_.a);
+        out.b = pressed(current.b, previousDigital_.b);
+        out.start = pressed(current.start, previousDigital_.start);
+        out.back = pressed(current.back, previousDigital_.back);
+        out.left = pressed(current.left, previousDigital_.left);
+        out.right = pressed(current.right, previousDigital_.right);
+        out.up = pressed(current.up, previousDigital_.up);
+        out.down = pressed(current.down, previousDigital_.down);
+        previousDigital_ = current;
+        return out;
     }
 
     void refresh() {
@@ -700,6 +715,7 @@ private:
             SDL_CloseJoystick(joystick_);
             joystick_ = nullptr;
         }
+        previousDigital_ = {};
     }
 
     void mergeSdl(Input3D& input) {
@@ -735,6 +751,7 @@ private:
 
     SDL_Gamepad* pad_ = nullptr;
     SDL_Joystick* joystick_ = nullptr;
+    Input3D previousDigital_{};
 };
 
 Input3D readInput(ControllerReader& controller, bool devKeyboard) {
@@ -1347,13 +1364,13 @@ private:
         (void)dt;
         const TrackPoint3D start = track_.sample(kRaceStartProgress);
         const float focusLane = 10.0f;
-        const float cameraLane = 112.0f;
+        const float cameraLane = 148.0f;
         const Vector3 focus = toWorld(start.pos + start.tangent * 32.0f + start.normal * focusLane, bankedElevation(start, focusLane) + 11.0f);
         camera_.position =
-            toWorld(start.pos + start.tangent * 88.0f + start.normal * cameraLane, bankedElevation(start, cameraLane) + 42.0f);
+            toWorld(start.pos + start.tangent * 132.0f + start.normal * cameraLane, bankedElevation(start, cameraLane) + 50.0f);
         camera_.target = focus;
         camera_.up = {0.0f, 1.0f, 0.0f};
-        camera_.fovy = 42.0f;
+        camera_.fovy = 48.0f;
         camera_.projection = CAMERA_PERSPECTIVE;
     }
 
@@ -2454,22 +2471,29 @@ private:
 
     void drawGarageHud(bool hasController) {
         const int w = GetScreenWidth();
-        DrawRectangle(0, 0, w, 96, Color{12, 40, 50, 220});
-        DrawText("SHARK HARBOR KARTS", 34, 20, 28, Color{255, 235, 145, 255});
-        DrawText(specs_[static_cast<size_t>(selectedCar_)].name.c_str(), 36, 58, 22, WHITE);
-        const int listX = w / 2 - 56;
-        DrawText("LAPS", listX, 18, 18, Color{216, 243, 236, 255});
+        DrawRectangle(0, 0, w, 116, Color{10, 35, 45, 230});
+        DrawRectangle(0, 112, w, 4, Color{255, 202, 63, 225});
+        DrawText("SHARK HARBOR KARTS", 34, 22, 28, Color{255, 235, 145, 255});
+        DrawText(specs_[static_cast<size_t>(selectedCar_)].name.c_str(), 36, 65, 24, WHITE);
+
+        const int selectorX = w / 2 - 154;
+        const int selectorY = 28;
+        DrawText("LAPS", selectorX, selectorY - 4, 18, Color{216, 243, 236, 255});
         for (int i = 0; i < static_cast<int>(kLapOptions.size()); ++i) {
-            const int y = 38 + i * 17;
+            const int x = selectorX + 72 + i * 60;
             const bool selected = i == selectedLapOption_;
-            if (selected) {
-                DrawRectangle(listX - 10, y - 2, 88, 18, Color{255, 202, 63, 225});
-            }
-            DrawText(lapOptionText(i), listX + (kLapOptions[static_cast<size_t>(i)] == 10 ? 17 : 24), y, 18,
-                     selected ? Color{23, 46, 51, 255} : Color{255, 241, 206, 255});
+            DrawRectangle(x, selectorY, 48, 38, selected ? Color{255, 202, 63, 235} : Color{25, 65, 76, 235});
+            DrawRectangleLines(x, selectorY, 48, 38, selected ? Color{255, 240, 180, 255} : Color{73, 124, 132, 255});
+            const int textX = x + (kLapOptions[static_cast<size_t>(i)] == 10 ? 11 : 18);
+            DrawText(lapOptionText(i), textX, selectorY + 10, 18, selected ? Color{20, 42, 48, 255} : Color{230, 247, 241, 255});
         }
-        DrawText(racers_[static_cast<size_t>(selectedRacer_)].c_str(), w - 240, 28, 30, Color{255, 235, 145, 255});
-        DrawText("A START  LEFT/RIGHT CAR  UP/DOWN LAPS", w - 486, 62, 18, Color{216, 243, 236, 255});
+
+        const int driverX = w - 276;
+        DrawText(racers_[static_cast<size_t>(selectedRacer_)].c_str(), driverX, 24, 30, Color{255, 235, 145, 255});
+        DrawRectangle(driverX, 64, 146, 34, Color{255, 202, 63, 235});
+        DrawText("START", driverX + 31, 72, 18, Color{20, 42, 48, 255});
+        DrawText("<  >", 36, 91, 18, Color{216, 243, 236, 255});
+        DrawText("^  v", selectorX + 141, 78, 18, Color{216, 243, 236, 255});
         if (!hasController) {
             DrawRectangle(0, GetScreenHeight() - 58, w, 58, Color{120, 32, 38, 225});
             DrawText("CONTROLLER REQUIRED", 34, GetScreenHeight() - 42, 24, Color{255, 241, 206, 255});
@@ -2665,10 +2689,18 @@ int runHarborKarts3D(int argc, char** argv) {
         accumulator += std::min(0.10, now - previous);
         previous = now;
 
-        const Input3D input = capturePlaytest ? game.scriptedInput() : readInput(controller, devKeyboard);
+        Input3D input = capturePlaytest ? game.scriptedInput() : readInput(controller, devKeyboard);
         const bool hasController = capturePlaytest || controller.available() || devKeyboard;
         while (accumulator >= kFixedDt) {
             game.update(kFixedDt, input, hasController);
+            input.a = false;
+            input.b = false;
+            input.start = false;
+            input.back = false;
+            input.left = false;
+            input.right = false;
+            input.up = false;
+            input.down = false;
             accumulator -= kFixedDt;
         }
         game.render(static_cast<float>(GetFPS()), hasController);
