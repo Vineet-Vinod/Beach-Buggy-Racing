@@ -4,11 +4,11 @@ Shark Harbor Karts is an original Linux/C++ arcade kart racer aimed at a
 bright tropical beach-buggy feel without copying proprietary Beach Buggy
 Racing assets, names, tracks, or game data.
 
-The primary build is now `harbor_karts_3d`: vendored SDL3 for Linux windowing
-and controller input, plus vendored raylib on SDL/EGL/OpenGL ES 2 for a real 3D
-camera, track, karts, props, particles, and HUD. The older SDL software
-framebuffer build is still kept as `harbor_karts` for diagnostics and
-comparison.
+The primary build is `harbor_karts_3d`: vendored SDL3 input plus vendored
+raylib on SDL/EGL/OpenGL ES 2. The game uses a fixed-step arcade vehicle model,
+checkpoint-validated races, custom GPU meshes, a stylized lighting/fog pass,
+and a responsive HUD. The older SDL software framebuffer build remains only
+for diagnostics and comparison.
 
 ## Build
 
@@ -48,33 +48,41 @@ make run
 
 ## Controls
 
-Gamepad is the intended input.
+Gamepad and keyboard are both supported.
 
-- Left stick / D-pad: steer, car and lap selection in the garage
+- Left stick / D-pad or A/D / arrows: steer; select a car in the garage
 - RT: accelerate
 - LT: brake, reverse at low speed
-- RB / R1: drift setup while steering
-- A / Cross: confirm, race, resume
-- B / Circle: back to garage from pause
-- Start: pause or resume
-- Back / Select: reset kart to racing line
-- Start + Back / Select: quit
+- W / up and S / down: keyboard accelerate and brake
+- RB / R1 or Shift / Space: drift while steering
+- D-pad up/down or W/S: select a driver in the garage
+- LB/RB or Q/E: select lap count in the garage
+- A / Cross or Enter: confirm and race
+- B / Circle or Backspace: back to garage from pause
+- Start or Escape: pause or resume
+- Back / Select or R: reset to the last valid checkpoint
+- Start + Back / Select or F10: quit
 
 ## Current Gameplay
 
-- One original Shark Harbor course with beach, dock, market, cave, cliff, pier,
-  and lagoon sections
+- One original Sunset Cove course with beach, dock, market, cliff, pier, and
+  lagoon sections
 - 2, 5, 10, or infinite lap race selection
 - 6-car racing pack with AI opponents
-- 8 maxed-out kart classes
-- 10 cosmetic drivers
+- 8 distinct vehicle tunes across four custom chassis families
+- 10 selectable original drivers with varied headwear and colors
 - No powerups and no character super powers
-- Raylib 3D course with wide road mesh, shoulders, simple banking, tropical
-  environment props, water/sand bands, and chunky 3D kart silhouettes
-- Speed-reactive chase camera that pulls back at speed and looks toward the
-  upcoming corner
-- Drift handling on RB/R1 with locked drift direction, charge tiers, boost
-  release, off-road drag, kart contacts, and wall speed scrub
+- Prebuilt, chunk-culled road mesh with banking, shoulders, surface texture,
+  themed materials, water, and dense tropical scenery
+- Custom lit buggy meshes with articulated steering, spinning wheels, working
+  suspension, body pitch/roll, drivers, boost flames, and soft particles
+- Speed-reactive chase camera with drift framing, restrained pullback, smooth
+  FOV, impact shake, boost vibration, and speed streaks
+- Momentum-preserving arcade handling with bounded tire grip, speed-sensitive
+  steering, explicit drift phases, three boost tiers, off-road surfaces,
+  collision response, and automatic stuck recovery
+- Grid countdown, ordered checkpoints, shortcut-resistant laps, wrong-way
+  detection, finish order, and checkpoint reset ghosting
 - Fullscreen Linux build with controller/gamepad support
 
 ## Verification
@@ -85,6 +93,8 @@ make race-audit
 make capture-playtest
 make perf-audit
 make smoke-3d
+make vehicle-audit-3d
+make race-flow-audit-3d
 make capture-playtest-3d
 make handling-audit-3d
 make race-audit-3d
@@ -94,6 +104,10 @@ make perf-audit-3d
 ```
 
 `--self-test` runs a deterministic physics/AI smoke test without SDL.
+`--vehicle-audit` runs 18 deterministic unit checks for momentum, steering,
+braking, drift boost, surfaces, and fixed-step consistency without opening a
+window. `--race-flow-audit` runs 20 checks for countdowns, checkpoints,
+wrong-way state, finish ordering, infinite races, and discontinuity handling.
 `--race-audit` runs a longer headless simulation and reports progress jumps,
 cave transitions, turn balance, no-brake corner speed, and off-road excursions.
 `--capture-playtest` writes deterministic garage and race frames to
@@ -117,6 +131,11 @@ which helps with USB receivers that expose a partial or unusual mapping.
 
 - `src/main.cpp`: process entry point only
 - `src/main3d.cpp`: 3D process entry point only
+- `src/arcade_vehicle.*`: deterministic arcade vehicle dynamics and unit audit
+- `src/arcade_race.*`: checkpoint race director and unit audit
+- `src/arcade_render.*`: GLES2 lighting plus custom vehicle/driver/prop meshes
+- `src/arcade_hud.*`: responsive garage, race, countdown, and pause HUD
+- `src/track_renderer.*`: textured, chunk-culled GPU road mesh
 - `src/core_math.hpp`: math, color, and geometry helpers
 - `src/renderer.hpp`: low-overhead software renderer and bitmap text
 - `src/harbor_karts.cpp`: SDL platform loop, renderer, simulation, controller input
