@@ -17,6 +17,7 @@
 #include <rlgl.h>
 #include <SDL3/SDL.h>
 
+#include "arcade_hud.hpp"
 #include "arcade_vehicle.hpp"
 #include "core_math.hpp"
 #include "track_layout.hpp"
@@ -551,6 +552,8 @@ struct Input3D {
     bool right = false;
     bool up = false;
     bool down = false;
+    bool pageLeft = false;
+    bool pageRight = false;
 };
 
 float axisWithDeadzone(float value) {
@@ -616,6 +619,8 @@ void applyKeyboardFallback(Input3D& input, bool keyboardEnabled) {
     input.right = input.right || IsKeyPressed(KEY_D) || IsKeyPressed(KEY_RIGHT);
     input.up = input.up || IsKeyPressed(KEY_W);
     input.down = input.down || IsKeyPressed(KEY_S);
+    input.pageLeft = input.pageLeft || IsKeyPressed(KEY_Q);
+    input.pageRight = input.pageRight || IsKeyPressed(KEY_E);
 }
 
 class ControllerReader {
@@ -686,6 +691,8 @@ private:
             input.right = IsGamepadButtonDown(0, GAMEPAD_BUTTON_LEFT_FACE_RIGHT) || input.steer > 0.55f;
             input.up = IsGamepadButtonDown(0, GAMEPAD_BUTTON_LEFT_FACE_UP);
             input.down = IsGamepadButtonDown(0, GAMEPAD_BUTTON_LEFT_FACE_DOWN);
+            input.pageLeft = IsGamepadButtonDown(0, GAMEPAD_BUTTON_LEFT_TRIGGER_1);
+            input.pageRight = IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1);
         }
         return input;
     }
@@ -701,6 +708,8 @@ private:
         out.right = pressed(current.right, previousDigital_.right);
         out.up = pressed(current.up, previousDigital_.up);
         out.down = pressed(current.down, previousDigital_.down);
+        out.pageLeft = pressed(current.pageLeft, previousDigital_.pageLeft);
+        out.pageRight = pressed(current.pageRight, previousDigital_.pageRight);
         previousDigital_ = current;
         return out;
     }
@@ -761,6 +770,8 @@ private:
             input.right = input.right || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || input.steer > 0.55f;
             input.up = input.up || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_UP);
             input.down = input.down || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+            input.pageLeft = input.pageLeft || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+            input.pageRight = input.pageRight || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
         }
         if (joystick_) {
             input.steer = std::abs(input.steer) > 0.01f ? input.steer : axisWithDeadzone(rawJoystickAxis(joystick_, 0));
@@ -768,6 +779,8 @@ private:
             input.brake = std::max(input.brake, std::max(0.0f, rawJoystickAxis(joystick_, 2)));
             input.drift = input.drift || rawJoystickButton(joystick_, 5);
             input.a = input.a || rawJoystickButton(joystick_, 0);
+            input.pageLeft = input.pageLeft || rawJoystickButton(joystick_, 4);
+            input.pageRight = input.pageRight || rawJoystickButton(joystick_, 5);
             input.b = input.b || rawJoystickButton(joystick_, 1);
             input.back = input.back || rawJoystickButton(joystick_, 6);
             input.start = input.start || rawJoystickButton(joystick_, 7);
@@ -1440,9 +1453,15 @@ private:
             selectedCar_ = (selectedCar_ + 1) % static_cast<int>(specs_.size());
         }
         if (input.up) {
-            selectedLapOption_ = (selectedLapOption_ + static_cast<int>(kLapOptions.size()) - 1) % static_cast<int>(kLapOptions.size());
+            selectedRacer_ = (selectedRacer_ + static_cast<int>(racers_.size()) - 1) % static_cast<int>(racers_.size());
         }
         if (input.down) {
+            selectedRacer_ = (selectedRacer_ + 1) % static_cast<int>(racers_.size());
+        }
+        if (input.pageLeft) {
+            selectedLapOption_ = (selectedLapOption_ + static_cast<int>(kLapOptions.size()) - 1) % static_cast<int>(kLapOptions.size());
+        }
+        if (input.pageRight) {
             selectedLapOption_ = (selectedLapOption_ + 1) % static_cast<int>(kLapOptions.size());
         }
         if ((input.a || input.start) && hasController) {
@@ -2724,17 +2743,70 @@ private:
     }
 
     void drawHud(float fps, bool hasController) {
+        (void)fps;
         if (mode_ == Mode::Garage) {
-            drawGarageHud(hasController);
+            const KartSpec3D& spec = specs_[static_cast<size_t>(selectedCar_)];
+            harbor::ui::GarageHudViewModel view;
+            view.eventName = "SUNSET COVE GRAND PRIX";
+            view.vehicleName = spec.name;
+            static constexpr std::array<const char*, 4> kClasses = {"ALL-ROUNDER", "RALLY", "DRIFTER", "HEAVY"};
+            view.vehicleClass = kClasses[static_cast<size_t>(spec.bodyStyle) % kClasses.size()];
+            view.driverName = racers_[static_cast<size_t>(selectedRacer_)];
+            view.stats.speed = std::clamp((spec.maxSpeed - 178.0f) / 34.0f, 0.12f, 1.0f);
+            view.stats.acceleration = std::clamp((spec.accel - 214.0f) / 82.0f, 0.12f, 1.0f);
+            view.stats.handling = std::clamp((spec.grip * 0.58f + spec.drift * 0.42f - 0.88f) / 0.36f, 0.12f, 1.0f);
+            view.stats.strength = std::clamp((spec.width - 30.0f) / 12.0f * 0.62f + (spec.height - 12.0f) / 8.0f * 0.38f,
+                                             0.12f, 1.0f);
+            view.vehicleIndex = selectedCar_;
+            view.vehicleCount = static_cast<int>(specs_.size());
+            view.driverIndex = selectedRacer_;
+            view.driverCount = static_cast<int>(racers_.size());
+            view.lapOptions = kLapOptions;
+            view.selectedLapOption = selectedLapOption_;
+            view.presentationTimeSeconds = garageSpin_;
+            view.canStart = true;
+            view.controllerConnected = hasController;
+            harbor::ui::DrawGarageHud(view);
         } else {
-            drawRaceHud(fps, hasController);
+            const Kart3D& player = karts_[0];
+            const int laps = targetLaps();
+            harbor::ui::RaceHudViewModel view;
+            view.vehicleName = player.spec.name;
+            view.driverName = player.racer;
+            view.speedKph = static_cast<int>(std::max(0.0f, player.telemetry.forwardSpeed) * 1.22f + 0.5f);
+            view.currentLap = laps == kInfiniteLaps ? std::max(1, player.lap + 1) : std::clamp(player.lap + 1, 1, laps);
+            view.totalLaps = laps;
+            view.position = playerPosition_;
+            view.racerCount = kKartCount;
+            view.raceTimeSeconds = raceTime_;
+            view.racerProgressCount = kKartCount;
+            view.playerProgressIndex = 0;
+            const float raceDistance = laps == kInfiniteLaps ? track_.totalLength() : track_.totalLength() * static_cast<float>(laps);
+            for (int i = 0; i < kKartCount; ++i) {
+                const float score = raceScore(karts_[static_cast<size_t>(i)]);
+                view.racerProgress[static_cast<size_t>(i)] = laps == kInfiniteLaps
+                                                                 ? raceLapProgress(karts_[static_cast<size_t>(i)]) / track_.totalLength()
+                                                                 : std::clamp(score / raceDistance, 0.0f, 1.0f);
+            }
+            view.raceProgress = view.racerProgress[0];
+            view.driftCharge = std::clamp(player.driftCharge / player.tuning.tierThreeCharge, 0.0f, 1.0f);
+            view.boostCharge = std::clamp(player.boostTimer / player.tuning.tierThreeBoostDuration, 0.0f, 1.0f);
+            view.presentationTimeSeconds = raceTime_;
+            view.boostActive = player.boostTimer > 0.0f;
+            view.finished = raceFinished_;
+            view.controllerConnected = hasController;
+            harbor::ui::DrawRaceHud(view);
         }
         if (mode_ == Mode::Pause) {
-            const int w = GetScreenWidth();
-            const int h = GetScreenHeight();
-            DrawRectangle(w / 2 - 160, h / 2 - 54, 320, 108, Color{10, 43, 55, 230});
-            DrawText("PAUSED", w / 2 - 70, h / 2 - 34, 34, Color{255, 235, 145, 255});
-            DrawText("START RESUME  B GARAGE", w / 2 - 120, h / 2 + 10, 18, Color{218, 242, 231, 255});
+            harbor::ui::PauseHudViewModel view;
+            view.eventName = "SUNSET COVE GRAND PRIX";
+            view.currentLap = std::max(1, karts_[0].lap + 1);
+            view.totalLaps = targetLaps();
+            view.raceTimeSeconds = raceTime_;
+            view.showRestart = false;
+            view.showQuit = false;
+            view.visible = true;
+            harbor::ui::DrawPauseHud(view);
         }
     }
 
@@ -2894,6 +2966,8 @@ int runHarborKarts3D(int argc, char** argv) {
             input.right = false;
             input.up = false;
             input.down = false;
+            input.pageLeft = false;
+            input.pageRight = false;
             accumulator -= kFixedDt;
         }
         game.render(static_cast<float>(GetFPS()), hasController);
