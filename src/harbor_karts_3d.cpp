@@ -575,10 +575,8 @@ float axisWithDeadzone(float value) {
 
 float triggerValue(int gamepad, int axis) {
     const float raw = GetGamepadAxisMovement(gamepad, axis);
-    if (raw < -0.2f) {
-        return std::clamp((raw + 1.0f) * 0.5f, 0.0f, 1.0f);
-    }
-    return std::clamp(raw, 0.0f, 1.0f);
+    const float normalized = std::clamp((raw + 1.0f) * 0.5f, 0.0f, 1.0f);
+    return normalized < 0.035f ? 0.0f : (normalized - 0.035f) / 0.965f;
 }
 
 float sdlAxisUnit(Sint16 value) {
@@ -631,13 +629,13 @@ void applyKeyboardFallback(Input3D& input, bool keyboardEnabled) {
 
 class ControllerReader {
 public:
+    explicit ControllerReader(bool sdlFallbackReady) : sdlFallbackReady_(sdlFallbackReady) {}
+
     ~ControllerReader() {
-        if (pad_) {
-            SDL_CloseGamepad(pad_);
-        } else if (joystick_) {
-            SDL_CloseJoystick(joystick_);
-        }
+        close();
     }
+
+    void shutdown() { close(); }
 
     bool available() {
         if (IsGamepadAvailable(0)) {
@@ -727,6 +725,9 @@ private:
     }
 
     void refresh() {
+        if (!sdlFallbackReady_) {
+            return;
+        }
         if (pad_ && SDL_GamepadConnected(pad_)) {
             joystick_ = SDL_GetGamepadJoystick(pad_);
             return;
@@ -813,6 +814,7 @@ private:
     SDL_Gamepad* pad_ = nullptr;
     SDL_Joystick* joystick_ = nullptr;
     Input3D previousDigital_{};
+    bool sdlFallbackReady_ = false;
 };
 
 Input3D readInput(ControllerReader& controller, bool devKeyboard) {
@@ -3027,8 +3029,27 @@ int runHarborKarts3D(int argc, char** argv) {
         ToggleFullscreen();
     }
 
-    ControllerReader controller;
+    constexpr SDL_InitFlags kSdlInputFlags = static_cast<SDL_InitFlags>(SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK);
+    const bool sdlInputReady = SDL_InitSubSystem(kSdlInputFlags);
+    if (!sdlInputReady) {
+        std::cerr << "SDL gamepad fallback unavailable: " << SDL_GetError() << "\n";
+    }
+
+    ControllerReader controller(sdlInputReady);
     Game3D game;
+    bool runtimeCleaned = false;
+    const auto cleanupRuntime = [&]() {
+        if (runtimeCleaned) {
+            return;
+        }
+        game.shutdown();
+        controller.shutdown();
+        if (sdlInputReady) {
+            SDL_QuitSubSystem(kSdlInputFlags);
+        }
+        CloseWindow();
+        runtimeCleaned = true;
+    };
     if (capturePlaytest || captureDrivenLap || captureSectionTour || perfAudit) {
         std::filesystem::create_directories(captureDir);
     }
@@ -3037,20 +3058,17 @@ int runHarborKarts3D(int argc, char** argv) {
     }
     if (handlingAudit) {
         const bool ok = game.runHandlingAudit();
-        game.shutdown();
-        CloseWindow();
+        cleanupRuntime();
         return ok ? 0 : 1;
     }
     if (raceAudit) {
         const bool ok = game.runRaceAudit();
-        game.shutdown();
-        CloseWindow();
+        cleanupRuntime();
         return ok ? 0 : 1;
     }
     if (collisionAudit) {
         const bool ok = game.runCollisionAudit();
-        game.shutdown();
-        CloseWindow();
+        cleanupRuntime();
         return ok ? 0 : 1;
     }
     if (captureSectionTour) {
@@ -3063,8 +3081,7 @@ int runHarborKarts3D(int argc, char** argv) {
                 std::filesystem::path("../playtest_frames") / TextFormat("harbor_karts_3d_section_tour_%02d.png", static_cast<int>(i));
             TakeScreenshot(path.string().c_str());
         }
-        game.shutdown();
-        CloseWindow();
+        cleanupRuntime();
         return 0;
     }
     if (captureDrivenLap) {
@@ -3091,8 +3108,7 @@ int runHarborKarts3D(int argc, char** argv) {
                 ++nextCapture;
             }
         }
-        game.shutdown();
-        CloseWindow();
+        cleanupRuntime();
         std::cout << "capture-driven-lap frames=" << simFrames << " captures=" << nextCapture
                   << " distance=" << distance << " lap_length=" << lapLength << "\n";
         return nextCapture == kLapMilestones.size() && distance >= lapLength ? 0 : 1;
@@ -3158,8 +3174,7 @@ int runHarborKarts3D(int argc, char** argv) {
         }
     }
 
-    game.shutdown();
-    CloseWindow();
+    cleanupRuntime();
     if (perfAudit) {
         std::sort(frameTimesMs.begin(), frameTimesMs.end());
         const auto percentile = [&](float p) {
