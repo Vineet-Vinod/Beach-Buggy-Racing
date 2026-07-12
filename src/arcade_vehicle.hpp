@@ -45,6 +45,15 @@ struct ArcadeVehicleState {
 
     float suspensionCompression = 0.0f;
     float suspensionVelocity = 0.0f;
+    float elevation = 0.0f;
+    float verticalSpeed = 0.0f;
+    float airborneTime = 0.0f;
+    float landingImpulse = 0.0f;
+    float launchCooldown = 0.0f;
+    bool grounded = true;
+
+    float brakeLoad = 0.0f;
+    float brakeSlip = 0.0f;
     float bodyPitch = 0.0f;
     float bodyPitchVelocity = 0.0f;
     float bodyRoll = 0.0f;
@@ -75,6 +84,16 @@ struct ArcadeVehicleConfig {
     float yawResponseExit = 11.0f;
     float maxYawRateLowSpeed = 2.8f;
     float maxYawRateHighSpeed = 1.50f;
+
+    float brakeLoadResponse = 16.0f;
+    float brakeReleaseResponse = 2.4f;
+    float brakeOversteerMinSpeed = 32.0f;
+    float brakeOversteerSteerThreshold = 0.06f;
+    float brakeOversteerYawGain = 8.30f;
+    float brakeOversteerSlip = 0.62f;
+    float brakeRearGripScale = 0.08f;
+    float brakeSlipResponse = 22.0f;
+    float brakeSlipRecovery = 1.8f;
 
     float lateralGripAcceleration = 310.0f;
     float lateralGripResponse = 14.0f;
@@ -116,7 +135,15 @@ struct ArcadeVehicleConfig {
     float bodyFrequency = 4.5f;
     float bodyDamping = 0.88f;
     float maxBodyPitch = 0.085f;
+    float maxBrakePitch = 0.16f;
     float maxBodyRoll = 0.12f;
+
+    float gravity = 94.0f;
+    float airControlScale = 0.26f;
+    float airDriveScale = 0.12f;
+    float landingImpulseDecay = 32.0f;
+    float landingCompressionScale = 0.032f;
+    float launchCooldown = 0.55f;
 };
 
 struct ArcadeVehicleControl {
@@ -136,6 +163,9 @@ struct ArcadeSurface {
     float maxSpeed = 1.0f;
     float driftCharge = 1.0f;
     float bumpiness = 0.0f;
+    float groundElevation = 0.0f;
+    float groundGrade = 0.0f;
+    float launchVelocity = 0.0f;
     bool allowsDrift = true;
 };
 
@@ -152,6 +182,12 @@ struct ArcadeVehicleTelemetry {
     float distanceDelta = 0.0f;
     float peakSlipAngle = 0.0f;
     float tractionUtilization = 0.0f;
+    float elevation = 0.0f;
+    float verticalSpeed = 0.0f;
+    float airborneTime = 0.0f;
+    float landingImpulse = 0.0f;
+    float brakeLoad = 0.0f;
+    bool grounded = true;
     ArcadeDriftPhase driftPhase = ArcadeDriftPhase::Grip;
     int driftTier = 0;
     int boostTierAwarded = 0;
@@ -171,7 +207,15 @@ struct ArcadeVehicleAuditResult {
     float driftPeakSlip = 0.0f;
     int driftBoostTier = 0;
     float looseSurfaceSpeedRatio = 0.0f;
+    float shoulderSpeedRatio = 0.0f;
     float fixedStepPositionError = 0.0f;
+    float brakeOversteerPeakYaw = 0.0f;
+    float brakeOversteerPeakSlip = 0.0f;
+    float brakeRecoverySlip = 0.0f;
+    float jumpApex = 0.0f;
+    float jumpAirTime = 0.0f;
+    float jumpLandingImpulse = 0.0f;
+    float jumpFixedStepError = 0.0f;
 };
 
 int arcadeDriftTier(float charge, const ArcadeVehicleConfig& config);

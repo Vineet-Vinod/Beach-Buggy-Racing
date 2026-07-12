@@ -88,6 +88,12 @@ ArcadeVehicleTelemetry sampleTelemetry(const ArcadeVehicleState& state, const Ar
     out.yawRate = state.yawRate;
     out.peakSlipAngle = std::abs(state.slipAngle);
     out.tractionUtilization = state.tractionUtilization;
+    out.elevation = state.elevation;
+    out.verticalSpeed = state.verticalSpeed;
+    out.airborneTime = state.airborneTime;
+    out.landingImpulse = state.landingImpulse;
+    out.brakeLoad = state.brakeLoad;
+    out.grounded = state.grounded;
     out.driftPhase = state.driftPhase;
     out.driftTier = arcadeDriftTier(state.driftCharge, config);
     out.boostActive = state.boostTimer > 0.0f;
@@ -112,6 +118,13 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
     surface.maxSpeed = std::max(0.1f, surface.maxSpeed);
     surface.driftCharge = std::max(0.0f, surface.driftCharge);
     surface.bumpiness = std::max(0.0f, surface.bumpiness);
+    if (!std::isfinite(surface.groundElevation)) {
+        surface.groundElevation = state.elevation;
+    }
+    if (!std::isfinite(surface.groundGrade)) {
+        surface.groundGrade = 0.0f;
+    }
+    surface.launchVelocity = std::max(0.0f, surface.launchVelocity);
 
     const bool driftPressed = control.driftPressed || (control.drift && !state.driftInputHeld);
     state.driftInputHeld = control.drift;
@@ -121,6 +134,8 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
 
     state.contactTimer = std::max(0.0f, state.contactTimer - dt);
     state.driftCooldown = std::max(0.0f, state.driftCooldown - dt);
+    state.launchCooldown = std::max(0.0f, state.launchCooldown - dt);
+    state.landingImpulse = std::max(0.0f, state.landingImpulse - config.landingImpulseDecay * dt);
     state.boostTimer = std::max(0.0f, state.boostTimer - dt);
     if (state.boostTimer <= 0.0f) {
         state.boostPower = 0.0f;
@@ -132,6 +147,8 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
     float lateralSpeed = dot(state.vel, left);
     const float absForwardSpeed = std::abs(forwardSpeed);
     const float normalizedSpeed = std::clamp(safeRatio(absForwardSpeed, config.maxForwardSpeed), 0.0f, 1.5f);
+    const float brakeResponse = control.brake > state.brakeLoad ? config.brakeLoadResponse : config.brakeReleaseResponse;
+    state.brakeLoad = expApproach(state.brakeLoad, control.brake, brakeResponse, dt);
 
     const float steerResponse = std::abs(control.steer) > std::abs(state.steerSmoothed) ? config.steerResponse : config.steerReturnResponse;
     state.steerSmoothed = expApproach(state.steerSmoothed, control.steer, steerResponse, dt);
@@ -179,6 +196,26 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
     float lateralResponse = config.lateralGripResponse;
     float lateralAccelerationLimit = config.lateralGripAcceleration * surface.grip;
 
+    const float brakeSpeed = smoothstep((absForwardSpeed - config.brakeOversteerMinSpeed) /
+                                        std::max(1.0f, config.maxForwardSpeed - config.brakeOversteerMinSpeed));
+    const float brakeSteer = smoothstep((std::abs(state.steerSmoothed) - config.brakeOversteerSteerThreshold) /
+                                        std::max(0.01f, 1.0f - config.brakeOversteerSteerThreshold));
+    const float brakeOversteer = state.grounded ? state.brakeLoad * brakeSpeed * brakeSteer : 0.0f;
+    const float signedBrakeSlip = -state.steerSmoothed * config.brakeOversteerSlip * brakeOversteer;
+    const float brakeSlipResponse = std::abs(signedBrakeSlip) > std::abs(state.brakeSlip) ? config.brakeSlipResponse
+                                                                                          : config.brakeSlipRecovery;
+    state.brakeSlip = expApproach(state.brakeSlip, signedBrakeSlip, brakeSlipResponse, dt);
+
+    if (state.driftPhase == ArcadeDriftPhase::Grip) {
+        const float brakeSlide = std::clamp(std::abs(state.brakeSlip) / std::max(0.01f, config.brakeOversteerSlip), 0.0f, 1.0f);
+        const float brakeSlideDirection = state.brakeSlip < 0.0f ? 1.0f : -1.0f;
+        targetSlip = state.brakeSlip;
+        targetYawRate += brakeSlideDirection * config.brakeOversteerYawGain * brakeSlide * brakeSpeed;
+        lateralResponse = lerp(config.lateralGripResponse, config.driftLateralResponse, brakeSlide * 0.86f);
+        const float rearGripFalloff = std::max(config.brakeRearGripScale, std::pow(1.0f - brakeSlide, 3.0f));
+        lateralAccelerationLimit *= rearGripFalloff;
+    }
+
     if (state.driftPhase == ArcadeDriftPhase::Entry || state.driftPhase == ArcadeDriftPhase::Sustain) {
         const float entryBlend = state.driftPhase == ArcadeDriftPhase::Entry
                                      ? smoothstep(state.driftPhaseTime / std::max(0.001f, config.driftEntryDuration))
@@ -199,6 +236,14 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
         yawResponse = config.yawResponseExit;
         lateralResponse = lerp(config.driftLateralResponse, config.lateralGripResponse, exitT);
         lateralAccelerationLimit = lerp(config.driftGripAcceleration, config.lateralGripAcceleration, exitT) * surface.grip;
+    }
+
+    if (!state.grounded) {
+        targetYawRate *= config.airControlScale;
+        yawResponse = std::min(yawResponse, 4.0f);
+        targetSlip = state.slipAngle;
+        lateralResponse = 0.0f;
+        lateralAccelerationLimit = 0.0f;
     }
 
     state.yawRate = expApproach(state.yawRate, targetYawRate, yawResponse, dt);
@@ -230,6 +275,10 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
         } else if (forwardSpeed < -2.0f || state.brakeHold >= config.reverseDelay) {
             driveAcceleration -= control.brake * config.reverseAcceleration * surface.acceleration;
         }
+    }
+
+    if (!state.grounded) {
+        driveAcceleration *= config.airDriveScale;
     }
 
     const bool boostActive = state.boostTimer > 0.0f;
@@ -296,10 +345,35 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
                                      state.driftCharge + dt * config.driftChargeRate * surface.driftCharge * chargeQuality);
     }
 
+    if (state.grounded && surface.launchVelocity > 0.0f && state.launchCooldown <= 0.0f && state.forwardSpeed > 24.0f) {
+        state.grounded = false;
+        state.airborneTime = 0.0f;
+        state.elevation = surface.groundElevation + 0.01f;
+        state.verticalSpeed = std::max(surface.launchVelocity, state.forwardSpeed * std::max(0.0f, surface.groundGrade));
+        state.launchCooldown = config.launchCooldown;
+    } else if (!state.grounded) {
+        state.airborneTime += dt;
+        state.verticalSpeed -= config.gravity * dt;
+        state.elevation += state.verticalSpeed * dt;
+        if (state.elevation <= surface.groundElevation && state.verticalSpeed <= 0.0f) {
+            state.landingImpulse = std::max(state.landingImpulse, -state.verticalSpeed);
+            state.elevation = surface.groundElevation;
+            state.verticalSpeed = state.forwardSpeed * surface.groundGrade;
+            state.grounded = true;
+        }
+    } else {
+        state.elevation = surface.groundElevation;
+        state.verticalSpeed = state.forwardSpeed * surface.groundGrade;
+        state.airborneTime = 0.0f;
+    }
+
     const float bumpPhase = state.distanceTravelled * 0.075f;
-    const float suspensionTarget = surface.bumpiness * (0.5f + 0.5f * std::sin(bumpPhase));
-    const float pitchTarget = std::clamp(-longitudinalAcceleration / std::max(1.0f, config.brakeDeceleration), -1.0f, 1.0f) *
-                              config.maxBodyPitch;
+    const float landingCompression = std::clamp(state.landingImpulse * config.landingCompressionScale, 0.0f, 1.0f);
+    const float suspensionTarget = (state.grounded ? surface.bumpiness * (0.5f + 0.5f * std::sin(bumpPhase)) : -0.14f) +
+                                   landingCompression;
+    const float accelerationPitch = std::clamp(-longitudinalAcceleration / std::max(1.0f, config.brakeDeceleration), -1.0f, 1.0f) *
+                                    config.maxBodyPitch;
+    const float pitchTarget = accelerationPitch + state.brakeLoad * config.maxBrakePitch + landingCompression * 0.045f;
     const float rollTarget = std::clamp(-lateralAcceleration / std::max(1.0f, config.lateralGripAcceleration), -1.0f, 1.0f) *
                              config.maxBodyRoll;
     springStep(state.suspensionCompression, state.suspensionVelocity, suspensionTarget, config.suspensionFrequency,
@@ -328,6 +402,37 @@ ArcadeVehicleState simulateScript(float dt, float seconds) {
         stepArcadeVehicle(state, config, control, surface, dt);
     }
     return state;
+}
+
+struct JumpScriptResult {
+    ArcadeVehicleState state;
+    float apex = 0.0f;
+    float airTime = 0.0f;
+    float landingImpulse = 0.0f;
+};
+
+JumpScriptResult simulateJump(float dt) {
+    ArcadeVehicleConfig config;
+    ArcadeVehicleState state;
+    state.vel = {132.0f, 0.0f};
+    ArcadeVehicleControl control;
+    control.throttle = 1.0f;
+    ArcadeSurface surface;
+    JumpScriptResult result;
+    bool launched = false;
+    for (int frame = 0; frame < static_cast<int>(2.0f / dt + 0.5f); ++frame) {
+        surface.launchVelocity = frame == 0 ? 43.0f : 0.0f;
+        const ArcadeVehicleTelemetry telemetry = stepArcadeVehicle(state, config, control, surface, dt);
+        launched = launched || !telemetry.grounded;
+        result.apex = std::max(result.apex, telemetry.elevation);
+        result.airTime = std::max(result.airTime, telemetry.airborneTime);
+        result.landingImpulse = std::max(result.landingImpulse, telemetry.landingImpulse);
+        if (launched && telemetry.grounded && result.airTime > 0.1f) {
+            break;
+        }
+    }
+    result.state = state;
+    return result;
 }
 
 }  // namespace
@@ -497,6 +602,60 @@ ArcadeVehicleAuditResult runArcadeVehicleUnitAudit() {
     }
     result.looseSurfaceSpeedRatio = safeRatio(looseRun.forwardSpeed, roadRun.forwardSpeed);
     check(result.looseSurfaceSpeedRatio > 0.45f && result.looseSurfaceSpeedRatio < 0.82f);
+
+    ArcadeVehicleState shoulderRun;
+    ArcadeVehicleState shoulderRoadRun;
+    ArcadeSurface shoulder = road;
+    shoulder.grip = 0.94f;
+    shoulder.acceleration = 0.97f;
+    shoulder.rollingResistance = 1.18f;
+    shoulder.maxSpeed = 1.0f;
+    for (int i = 0; i < 360; ++i) {
+        stepArcadeVehicle(shoulderRoadRun, config, throttle, road, kInternalStep);
+        stepArcadeVehicle(shoulderRun, config, throttle, shoulder, kInternalStep);
+    }
+    result.shoulderSpeedRatio = safeRatio(shoulderRun.forwardSpeed, shoulderRoadRun.forwardSpeed);
+    check(result.shoulderSpeedRatio > 0.92f);
+
+    ArcadeVehicleState brakeTurn;
+    brakeTurn.vel = {150.0f, 0.0f};
+    ArcadeVehicleControl brakeTurnControl;
+    brakeTurnControl.throttle = 1.0f;
+    brakeTurnControl.steer = 0.90f;
+    brakeTurnControl.brake = 1.0f;
+    for (int i = 0; i < 18; ++i) {
+        const ArcadeVehicleTelemetry telemetry = stepArcadeVehicle(brakeTurn, config, brakeTurnControl, road, kInternalStep);
+        result.brakeOversteerPeakYaw = std::max(result.brakeOversteerPeakYaw, std::abs(telemetry.yawRate));
+        result.brakeOversteerPeakSlip = std::max(result.brakeOversteerPeakSlip, std::abs(telemetry.slipAngle));
+    }
+    brakeTurnControl.brake = 0.0f;
+    for (int i = 0; i < 102; ++i) {
+        const ArcadeVehicleTelemetry telemetry = stepArcadeVehicle(brakeTurn, config, brakeTurnControl, road, kInternalStep);
+        result.brakeOversteerPeakYaw = std::max(result.brakeOversteerPeakYaw, std::abs(telemetry.yawRate));
+        result.brakeOversteerPeakSlip = std::max(result.brakeOversteerPeakSlip, std::abs(telemetry.slipAngle));
+    }
+    ArcadeVehicleControl recoverControl;
+    recoverControl.throttle = 1.0f;
+    recoverControl.steer = -0.16f;
+    for (int i = 0; i < 120; ++i) {
+        stepArcadeVehicle(brakeTurn, config, recoverControl, road, kInternalStep);
+    }
+    result.brakeRecoverySlip = std::abs(brakeTurn.slipAngle);
+    check(result.brakeOversteerPeakYaw > 1.0f);
+    check(result.brakeOversteerPeakSlip > 0.35f && result.brakeOversteerPeakSlip < 0.85f);
+    check(result.brakeRecoverySlip < 0.10f);
+
+    const JumpScriptResult jump120 = simulateJump(1.0f / 120.0f);
+    const JumpScriptResult jump60 = simulateJump(1.0f / 60.0f);
+    result.jumpApex = jump120.apex;
+    result.jumpAirTime = jump120.airTime;
+    result.jumpLandingImpulse = jump120.landingImpulse;
+    result.jumpFixedStepError = std::abs(jump120.apex - jump60.apex) + std::abs(jump120.airTime - jump60.airTime);
+    check(result.jumpApex > 7.0f);
+    check(result.jumpAirTime > 0.70f && result.jumpAirTime < 1.25f);
+    check(result.jumpLandingImpulse > 30.0f);
+    check(jump120.state.grounded && jump60.state.grounded);
+    check(result.jumpFixedStepError < 0.75f);
 
     const ArcadeVehicleState at120 = simulateScript(1.0f / 120.0f, 6.0f);
     const ArcadeVehicleState at60 = simulateScript(1.0f / 60.0f, 6.0f);
