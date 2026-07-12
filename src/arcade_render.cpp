@@ -87,9 +87,12 @@ void main()
     float specular = pow(max(dot(normal, halfDirection), 0.0), shine)*direct*materialGloss;
     float rim = pow(1.0 - max(dot(normal, viewDirection), 0.0), 3.0)*0.11;
 
-    vec3 lit = base.rgb*(ambient + sunColor*(0.08 + 0.64*wrapped));
+    // A broad fill keeps stylized vehicle silhouettes readable on shaded track
+    // sections without flattening their sun-facing planes.
+    vec3 lit = base.rgb*(ambient + vec3(0.075) + sunColor*(0.10 + 0.61*wrapped));
     lit += sunColor*specular*0.48 + skyAmbient*rim;
     lit *= exposure;
+    lit = lit/(vec3(0.92) + lit*0.22);
 
     float distanceToCamera = length(viewPos - fragPosition);
     float fogAmount = smoothstep(fogStart, max(fogStart + 0.01, fogEnd), distanceToCamera);
@@ -742,7 +745,9 @@ struct ArcadeRender::Impl {
         const float side = left ? -1.0f : 1.0f;
         const float z = (front ? 0.36f : -0.36f) * spec.length;
         const float compression = clamp01(state.suspensionCompression[static_cast<size_t>(index)]);
-        const float wheelY = spec.wheelRadius - compression * std::max(0.0f, state.suspensionTravel);
+        const float travel = std::max(spec.wheelRadius * 0.30f, std::max(0.0f, state.suspensionTravel));
+        const float droop = clamp01(state.airborneAmount) * travel * 0.36f;
+        const float wheelY = spec.wheelRadius + (0.48f - compression) * travel - droop;
         const float wheelX = side * spec.width * 0.56f;
         const Vector3 hub{wheelX, wheelY, z};
         const Vector3 upperAnchor{side * spec.width * 0.34f, bodyBase + spec.bodyHeight * 0.43f, z};
@@ -755,6 +760,12 @@ struct ArcadeRender::Impl {
                 spec.wheelRadius * 0.047f, shade(spec.trim, 0.75f), 0.32f);
         drawSpring(root, {side * spec.width * 0.36f, bodyBase + spec.bodyHeight * 0.62f, z}, upperHub,
                    spec.wheelRadius * 0.44f, spec.accent);
+
+        // The dark upright and bright cap make suspension movement legible even
+        // when the car occupies only a small part of the screen.
+        drawRod(root, upperHub, lowerHub, spec.wheelRadius * 0.080f, shade(spec.trim, 0.56f), 0.20f);
+        drawSphere(root, hub, {spec.wheelRadius * 0.18f, spec.wheelRadius * 0.18f, spec.wheelRadius * 0.18f},
+                   shade(spec.trim, 1.46f), 0.62f);
 
         Vector3 wheelRotation{state.wheelSpinRadians, front ? state.steeringRadians : 0.0f, 0.0f};
         Matrix wheelLocal = compose(hub, {spec.wheelWidth / 0.56f, spec.wheelRadius, spec.wheelRadius}, wheelRotation);
@@ -816,6 +827,52 @@ struct ArcadeRender::Impl {
         }
     }
 
+    void drawVehicleSignals(const BuggyVisualSpec& spec, const BuggyRenderState& state, Matrix root, float bodyBase) {
+        const float w = spec.width;
+        const float l = spec.length;
+        const float h = spec.bodyHeight;
+        const float braking = clamp01(state.brakeAmount);
+        const Color tail = mixColor(Color{150, 24, 18, 255}, Color{255, 77, 40, 255}, braking);
+
+        drawBox(root, {0.0f, bodyBase + h * 0.21f, -l * 0.565f}, {w * 0.76f, h * 0.11f, h * 0.10f},
+                shade(spec.trim, 1.28f), 0.40f);
+        for (float side : {-1.0f, 1.0f}) {
+            drawBox(root, {side * w * 0.34f, bodyBase + h * 0.52f, -l * 0.535f},
+                    {w * 0.16f, h * 0.17f, h * 0.055f}, tail, 0.76f);
+            drawPart(cylinder, root, {side * w * 0.24f, bodyBase + h * 0.18f, -l * 0.59f},
+                     {h * 0.075f, h * 0.18f, h * 0.075f}, shade(spec.trim, 1.54f), 0.72f,
+                     {kPi * 0.5f, 0.0f, 0.0f});
+        }
+        drawBox(root, {0.0f, bodyBase + h * 0.43f, -l * 0.548f}, {w * 0.24f, h * 0.14f, h * 0.035f},
+                Color{235, 221, 163, 255}, 0.24f);
+
+        drawBox(root, {0.0f, bodyBase + h * 0.22f, l * 0.565f}, {w * 0.71f, h * 0.10f, h * 0.11f},
+                shade(spec.trim, 1.24f), 0.38f);
+        for (float side : {-1.0f, 1.0f}) {
+            drawSphere(root, {side * w * 0.30f, bodyBase + h * 0.54f, l * 0.535f},
+                       {h * 0.13f, h * 0.13f, h * 0.07f}, Color{255, 239, 187, 255}, 0.82f);
+        }
+    }
+
+    void drawDust(const BuggyVisualSpec& spec, const BuggyRenderState& state, Matrix root, float bodyBase) {
+        const float amount = clamp01(state.dustAmount) * (0.35f + 0.65f * clamp01(state.speedNormalized));
+        if (amount < 0.015f) {
+            return;
+        }
+        const float phase = state.visualTime * (5.0f + 7.0f * clamp01(state.speedNormalized));
+        const Color dust{190, 155, 105, static_cast<unsigned char>(52 + static_cast<int>(amount * 100.0f))};
+        for (int i = 0; i < 4; ++i) {
+            const float lane = (i & 1) == 0 ? -1.0f : 1.0f;
+            const float age = 0.32f + 0.19f * static_cast<float>(i / 2);
+            const float wobble = std::sin(phase + static_cast<float>(i) * 2.17f);
+            const float radius = spec.wheelRadius * (0.38f + age * amount);
+            drawSphere(root,
+                       {lane * spec.width * (0.48f + 0.05f * wobble), bodyBase * 0.15f + radius * 0.42f,
+                        -spec.length * (0.43f + age * 0.46f)},
+                       {radius * 1.25f, radius * 0.68f, radius * 1.65f}, dust, 0.0f);
+        }
+    }
+
     void drawBuggy(const BuggyVisualSpec& spec, const BuggyRenderState& state) {
         const float w = std::max(1.2f, spec.width);
         const float l = std::max(2.0f, spec.length);
@@ -823,8 +880,10 @@ struct ArcadeRender::Impl {
         const float bodyBase = spec.wheelRadius * 0.64f + std::max(0.05f, spec.rideHeight);
         Matrix root = compose(state.position, {1.0f, 1.0f, 1.0f}, {state.pitchRadians, state.headingRadians, state.rollRadians});
 
-        const Color shadowColor{24, 31, 31, static_cast<unsigned char>(110 + static_cast<int>(55.0f * clamp01(state.speedNormalized)))};
-        Matrix shadowTransform = compose(add(state.position, {0.0f, 0.018f, 0.0f}), {w * 0.73f, 1.0f, l * 0.43f},
+        const float grounded = 1.0f - 0.74f * clamp01(state.airborneAmount);
+        const Color shadowColor{24, 31, 31, static_cast<unsigned char>((110 + static_cast<int>(55.0f * clamp01(state.speedNormalized))) * grounded)};
+        const Vector3 shadowPosition = state.useGroundShadowPosition ? state.shadowPosition : state.position;
+        Matrix shadowTransform = compose(add(shadowPosition, {0.0f, 0.018f, 0.0f}), {w * 0.73f, 1.0f, l * 0.43f},
                                           {0.0f, state.headingRadians, 0.0f});
         draw(shadow, shadowTransform, shadowColor, 0.0f);
 
@@ -846,7 +905,9 @@ struct ArcadeRender::Impl {
         drawBox(root, {w * 0.51f, bodyBase + h * 0.35f, 0.0f}, {w * 0.065f, h * 0.29f, l * 0.55f},
                 shade(bodyColor, 0.72f), 0.24f);
         drawStyleDetails(spec, root, bodyBase);
+        drawVehicleSignals(spec, state, root, bodyBase);
         drawDriver(spec, state, root, bodyBase);
+        drawDust(spec, state, root, bodyBase);
 
         const float boost = clamp01(state.boostAmount);
         if (boost > 0.01f) {
@@ -875,8 +936,8 @@ struct ArcadeRender::Impl {
         }
         const Vector3 crown = trunk.back();
         drawSphere(root, crown, {0.40f, 0.31f, 0.40f}, shade(spec.detail, 0.88f), 0.12f);
-        for (int i = 0; i < 7; ++i) {
-            const float yaw = static_cast<float>(i) * kTwoPi / 7.0f + static_cast<float>(spec.variant) * 0.29f;
+        for (int i = 0; i < 9; ++i) {
+            const float yaw = static_cast<float>(i) * kTwoPi / 9.0f + static_cast<float>(spec.variant) * 0.29f;
             const float droop = -0.14f - 0.06f * static_cast<float>(i & 1) + bend * std::cos(yaw);
             drawPart(leaf, root, crown, {1.0f + 0.08f * static_cast<float>((i + spec.variant) % 3), 1.0f, 1.0f},
                      (i & 1) == 0 ? spec.primary : shade(spec.primary, 1.13f), 0.08f, {droop, yaw, 0.0f});
@@ -885,6 +946,12 @@ struct ArcadeRender::Impl {
             const float yaw = static_cast<float>(i) * kTwoPi / 3.0f;
             drawSphere(root, add(crown, {std::cos(yaw) * 0.29f, -0.28f, std::sin(yaw) * 0.29f}),
                        {0.16f, 0.18f, 0.16f}, shade(spec.detail, 0.72f), 0.18f);
+        }
+        for (int i = 0; i < 3; ++i) {
+            const float yaw = static_cast<float>(i) * 2.17f + static_cast<float>(spec.variant);
+            drawPart(leaf, root, {std::cos(yaw) * 0.45f, 0.02f, std::sin(yaw) * 0.45f},
+                     {0.20f, 0.20f, 0.34f}, shade(spec.primary, 0.76f + 0.10f * static_cast<float>(i)), 0.03f,
+                     {-0.24f, yaw, 0.0f});
         }
     }
 
@@ -895,6 +962,11 @@ struct ArcadeRender::Impl {
                  {0.0f, 1.4f, 0.0f});
         drawPart(rock, root, {-0.72f, 0.30f, 0.31f}, {0.58f, 0.47f, 0.62f}, shade(spec.primary, 0.83f), 0.08f,
                  {0.0f, -0.7f, 0.0f});
+        for (int i = 0; i < 3; ++i) {
+            const float yaw = static_cast<float>(i) * 2.07f + static_cast<float>(spec.variant) * 0.31f;
+            drawPart(leaf, root, {std::cos(yaw) * 0.86f, 0.03f, std::sin(yaw) * 0.72f}, {0.15f, 0.16f, 0.30f},
+                     Color{61, 127, 70, 255}, 0.03f, {-0.30f, yaw, 0.0f});
+        }
     }
 
     void drawBeachHut(const TropicalPropSpec& spec, Matrix root) {
@@ -908,6 +980,8 @@ struct ArcadeRender::Impl {
         drawBox(root, {0.0f, 1.00f, 1.39f}, {0.78f, 1.24f, 0.08f}, shade(spec.detail, 0.72f), 0.08f);
         drawBox(root, {-0.95f, 1.28f, 1.40f}, {0.61f, 0.60f, 0.08f}, shade(spec.accent, 0.82f), 0.12f);
         drawBox(root, {0.95f, 1.28f, 1.40f}, {0.61f, 0.60f, 0.08f}, shade(spec.accent, 0.82f), 0.12f);
+        drawBox(root, {0.0f, 0.24f, 1.43f}, {3.02f, 0.14f, 0.10f}, shade(spec.detail, 1.22f), 0.14f);
+        drawBox(root, {0.0f, 2.16f, 1.43f}, {3.02f, 0.13f, 0.10f}, shade(spec.detail, 1.16f), 0.14f);
     }
 
     void drawMarket(const TropicalPropSpec& spec, Matrix root) {

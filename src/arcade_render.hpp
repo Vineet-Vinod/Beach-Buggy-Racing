@@ -74,6 +74,8 @@ struct BuggyVisualSpec {
 struct BuggyRenderState {
     // World-space tire contact-plane origin. Forward is local +Z.
     Vector3 position{};
+    Vector3 shadowPosition{};
+    bool useGroundShadowPosition = false;
     float headingRadians = 0.0f;
     float pitchRadians = 0.0f;
     float rollRadians = 0.0f;
@@ -83,6 +85,12 @@ struct BuggyRenderState {
     float suspensionTravel = 0.18f;
     float speedNormalized = 0.0f;
     float boostAmount = 0.0f;
+    // Presentation inputs. They are deliberately independent from the vehicle
+    // simulation so AI, replays, and garage previews can share this renderer.
+    float brakeAmount = 0.0f;
+    float dustAmount = 0.0f;
+    float airborneAmount = 0.0f;
+    float visualTime = 0.0f;
     float damageFlash = 0.0f;
     float driverLean = 0.0f;
 };
