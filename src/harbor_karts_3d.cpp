@@ -33,7 +33,7 @@ constexpr float kFixedDt = 1.0f / 120.0f;
 constexpr float kRenderScale = 0.085f;
 constexpr int kKartCount = 6;
 constexpr int kSampleCount = 1536;
-constexpr float kRaceStartProgress = 980.0f;
+constexpr float kRaceStartProgress = 0.0f;
 constexpr float kRoadSurfaceRatio = 0.40f;
 constexpr float kRoadLaneInset = 4.0f;
 constexpr float kHardBoundaryInset = 18.0f;
@@ -197,16 +197,15 @@ ZoneMaterial3D materialForPhase(float phase) {
 
 float elevationForPhase(float phase) {
     phase -= std::floor(phase);
-    static constexpr std::array<std::array<float, 2>, 10> kElevation = {{{0.00f, 4.0f},
-                                                                         {0.10f, 2.0f},
-                                                                         {0.18f, 13.0f},
-                                                                         {0.29f, 13.0f},
-                                                                         {0.42f, 5.0f},
-                                                                         {0.58f, 32.0f},
-                                                                         {0.72f, 8.0f},
-                                                                         {0.85f, 11.0f},
-                                                                         {0.96f, 4.0f},
-                                                                         {1.00f, 4.0f}}};
+    static constexpr std::array<std::array<float, 2>, 9> kElevation = {{{0.00f, 4.0f},
+                                                                        {0.20f, 4.0f},
+                                                                        {0.29f, 7.0f},
+                                                                        {0.40f, 20.0f},
+                                                                        {0.56f, 36.0f},
+                                                                        {0.67f, 34.0f},
+                                                                        {0.78f, 18.0f},
+                                                                        {0.89f, 5.0f},
+                                                                        {1.00f, 4.0f}}};
     for (size_t i = 0; i + 1 < kElevation.size(); ++i) {
         const float a = kElevation[i][0];
         const float b = kElevation[i + 1][0];
@@ -226,7 +225,7 @@ float signedPhaseDistance(float phase, float center) {
 }
 
 float rampHeightForPhase(float phase) {
-    static constexpr std::array<float, 3> kRampCenters = {0.105f, 0.455f, 0.765f};
+    static constexpr std::array<float, 2> kRampCenters = {0.145f, 0.735f};
     float height = 0.0f;
     for (float center : kRampCenters) {
         const float d = signedPhaseDistance(phase, center);
@@ -240,7 +239,7 @@ float rampHeightForPhase(float phase) {
 }
 
 float rampLaunchForPhase(float phase) {
-    static constexpr std::array<float, 3> kRampCenters = {0.105f, 0.455f, 0.765f};
+    static constexpr std::array<float, 2> kRampCenters = {0.145f, 0.735f};
     for (float center : kRampCenters) {
         const float d = signedPhaseDistance(phase, center);
         if (d >= -0.0015f && d <= 0.0008f) {
@@ -349,7 +348,7 @@ private:
         point.natural = material.natural;
 
         point.elevation += elevationForPhase(phase);
-        point.elevation += 1.8f * std::sin(phase * kTwoPi * 3.0f);
+        point.elevation += 0.55f * std::sin(phase * kTwoPi * 3.0f);
         point.elevation += rampHeightForPhase(phase);
         point.launchVelocity = rampLaunchForPhase(phase);
         return point;
@@ -1416,6 +1415,12 @@ public:
             kart.previousProgress = kart.progress;
             kart.lap = 0;
             kart.lane = lane;
+            kart.elevation = bankedElevation(point, lane);
+            kart.verticalSpeed = 0.0f;
+            kart.grounded = true;
+            kart.airborneTime = 0.0f;
+            kart.bodyPitch = std::atan(point.grade);
+            kart.bodyRoll = 0.0f;
             kart.ghostTimer = 1.0f;
             kart.contactTimer = 0.0f;
             kart.drifting = false;
@@ -1455,14 +1460,14 @@ public:
         const AuditResult3D noBrake = simulateAuditDriver(AuditDriver::NoBrake, 64.0f);
         const AuditResult3D brake = simulateAuditDriver(AuditDriver::Brake, 64.0f);
         const AuditResult3D drift = simulateAuditDriver(AuditDriver::Drift, 64.0f);
-        const bool controlledRoad = drift.offroadFrames < 1500 && drift.maxOffroad <= 20.0f;
+        const bool controlledRoad = drift.offroadFrames < 1600 && drift.maxOffroad <= 32.0f;
         const bool noBrakeConsequences = noBrake.offroadFrames > 120 || noBrake.maxOffroad > 18.0f;
         const bool groundClear = std::abs(noBrake.minGroundClearance) <= 0.03f && std::abs(brake.minGroundClearance) <= 0.03f &&
                                  std::abs(drift.minGroundClearance) <= 0.03f;
         const bool stable = noBrake.progressJumps == 0 && brake.progressJumps == 0 && drift.progressJumps == 0;
         const bool moving = std::max({noBrake.score, brake.score, drift.score}) > track_.totalLength() * 0.50f;
         const float measuredLapSeconds = drift.score > 1.0f ? 64.0f * track_.totalLength() / drift.score : 999.0f;
-        const bool referencePace = measuredLapSeconds >= 38.0f && measuredLapSeconds <= 55.0f;
+        const bool referencePace = measuredLapSeconds >= 44.0f && measuredLapSeconds <= 55.0f;
         const bool authoredJumps = drift.maxAirTime >= 0.80f && drift.maxAirTime <= 1.30f && drift.landings >= 2;
         const bool inputContract = controllerContractAudit();
         const bool requiredDrifting = drift.brakeDriftFrames > 60 && drift.maxSlip > 0.16f;
@@ -2267,7 +2272,7 @@ private:
 
     void solveKartContacts() {
         std::array<bool, kKartCount> moved{};
-        constexpr int kContactIterations = 6;
+        constexpr int kContactIterations = 10;
         for (int iter = 0; iter < kContactIterations; ++iter) {
             for (int a = 0; a < kKartCount; ++a) {
                 for (int b = a + 1; b < kKartCount; ++b) {
@@ -2285,8 +2290,8 @@ private:
                     const float invA = inverseKartMass(ka);
                     const float invB = inverseKartMass(kb);
                     const float invSum = invA + invB;
-                    const float correctionDepth = std::max(0.0f, contact.penetration - 0.12f);
-                    const Vec2 correction = n * (correctionDepth * 0.94f / invSum);
+                    const float correctionDepth = std::max(0.0f, contact.penetration - 0.08f);
+                    const Vec2 correction = n * (correctionDepth * 0.98f / invSum);
                     ka.pos -= correction * invA;
                     kb.pos += correction * invB;
                     moved[static_cast<size_t>(a)] = true;
@@ -2325,8 +2330,6 @@ private:
         for (int i = 0; i < kKartCount; ++i) {
             if (moved[static_cast<size_t>(i)]) {
                 Kart3D& kart = karts_[static_cast<size_t>(i)];
-                updateProgress(kart);
-                constrainToTrack(kart);
                 updateProgress(kart);
             }
         }

@@ -7,10 +7,11 @@ struct TrackControlPoint {
     float y = 0.0f;
 };
 
-inline constexpr float kBreakwaterCourseScale = 1.0f;
+inline constexpr float kBreakwaterCourseScale = 1.025f;
 
-// Original compact harbor circuit. Long waterfront runs are broken up by a
-// town chicane, a tightening hillside section, and two low-speed switchbacks.
+// Driving line reconstructed from the supplied Shark Harbor footage. The lap
+// follows its waterfront run, harbor bend, town complex, hillside climb,
+// crest bends, downhill return, jungle corner, and waterfront finish.
 // The route stays non-self-intersecting so the visible road is always the road
 // the player should follow.
 inline constexpr std::array<TrackControlPoint, 27> kBreakwaterControlPoints = {{
