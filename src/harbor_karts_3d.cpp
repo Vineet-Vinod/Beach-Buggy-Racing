@@ -18,6 +18,7 @@
 #include <rlgl.h>
 #include <SDL3/SDL.h>
 
+#include "arcade_audio.hpp"
 #include "arcade_hud.hpp"
 #include "arcade_race.hpp"
 #include "arcade_render.hpp"
@@ -1229,8 +1230,11 @@ class Game3D {
 public:
     enum class Mode { Garage, Race, Pause };
 
-    Game3D() : specs_(makeKartSpecs()), racers_(makeRacers()) {
+    explicit Game3D(bool enableAudio = true) : specs_(makeKartSpecs()), racers_(makeRacers()) {
         renderer_.initialize();
+        if (enableAudio) {
+            audio_.initialize();
+        }
         buildParticleTexture();
         buildTrackRenderer();
         resetRace();
@@ -1241,6 +1245,7 @@ public:
     }
 
     void shutdown() {
+        audio_.shutdown();
         if (IsWindowReady()) {
             trackRenderer_.unload();
             if (IsTextureValid(particleTexture_)) {
@@ -1255,6 +1260,7 @@ public:
         if (mode_ == Mode::Garage) {
             updateGarage(input, hasController);
             updateGarageCamera(dt);
+            updateAudio(dt, input, false);
             return;
         }
 
@@ -1262,6 +1268,7 @@ public:
             mode_ = mode_ == Mode::Race ? Mode::Pause : Mode::Race;
         }
         if (mode_ == Mode::Pause) {
+            updateAudio(dt, input, false);
             if (input.b) {
                 mode_ = Mode::Garage;
             }
@@ -1276,6 +1283,7 @@ public:
                 countdownGoTimer_ = 0.72f;
             }
             updateCamera(dt);
+            updateAudio(dt, input, false);
             return;
         }
         countdownGoTimer_ = std::max(0.0f, countdownGoTimer_ - dt);
@@ -1301,6 +1309,7 @@ public:
         updateRaceOrder();
         updateFinishState();
         updateCamera(dt);
+        updateAudio(dt, playerInput, !raceFinished_);
     }
 
     void render(float fps, bool hasController) {
@@ -1608,6 +1617,21 @@ public:
     float lapLengthForCapture() const { return track_.totalLength(); }
 
 private:
+    void updateAudio(float dt, const Input3D& input, bool driving) {
+        ArcadeAudioInput audioInput;
+        audioInput.deltaTime = dt;
+        if (driving && !karts_.empty()) {
+            const Kart3D& player = karts_[0];
+            audioInput.speedNormalized = std::clamp(player.telemetry.normalizedSpeed, 0.0f, 1.0f);
+            audioInput.throttle = input.throttle;
+            audioInput.brake = std::max(input.brake, player.brakeLoad);
+            audioInput.slip = std::clamp(std::abs(player.slipAngle) / 0.70f, 0.0f, 1.0f);
+            audioInput.grounded = player.grounded;
+            audioInput.landingImpulse = player.landingImpulse;
+        }
+        audio_.update(audioInput);
+    }
+
     void buildParticleTexture() {
         constexpr int size = 64;
         Image image = GenImageColor(size, size, BLANK);
@@ -2398,8 +2422,8 @@ private:
         // previously appeared to pop as the road renderer culled chunks.
         for (int i = 0; i < 11; ++i) {
             const float x = -119.0f + static_cast<float>(i) * 23.0f;
-            const float height = 6.0f + static_cast<float>((i * 7) % 5) * 1.5f;
-            DrawSphere({x, height * 0.34f, 105.0f + std::sin(static_cast<float>(i) * 1.8f) * 5.0f}, height,
+            const float height = 5.0f + static_cast<float>((i * 7) % 5) * 1.1f;
+            DrawSphere({x, height * 0.34f, 130.0f + std::sin(static_cast<float>(i) * 1.8f) * 4.0f}, height,
                        i % 2 == 0 ? Color{64, 121, 71, 255} : Color{78, 137, 73, 255});
         }
 
@@ -3138,6 +3162,7 @@ private:
     std::vector<Particle3D> particles_;
     std::unique_ptr<ArcadeRaceFlow> raceFlow_;
     arcade_render::ArcadeRender renderer_;
+    ArcadeAudio audio_;
     harbor::TrackRenderer trackRenderer_;
     Texture2D particleTexture_{};
     Camera camera_{};
@@ -3159,6 +3184,15 @@ private:
 }  // namespace
 
 int runHarborKarts3D(int argc, char** argv) {
+    const bool audioAudit = hasArg(argc, argv, "--audio-audit");
+    if (audioAudit) {
+        const ArcadeAudioAuditResult result = runArcadeAudioUnitAudit();
+        std::cout << "audio-audit checks=" << result.checks << " failures=" << result.failures << " idle_rms=" << result.idleRms
+                  << " full_rms=" << result.fullSpeedRms << " scrub_delta=" << result.scrubRmsIncrease
+                  << " landing_peak=" << result.landingPeak << " peak=" << result.peakMagnitude
+                  << " deterministic_hash=" << result.deterministicHash << " ok=" << result.ok << "\n";
+        return result.ok ? 0 : 1;
+    }
     const bool raceFlowAudit = hasArg(argc, argv, "--race-flow-audit");
     if (raceFlowAudit) {
         const ArcadeRaceAuditResult result = runArcadeRaceUnitAudit();
@@ -3223,7 +3257,9 @@ int runHarborKarts3D(int argc, char** argv) {
     }
 
     ControllerReader controller(sdlInputReady);
-    Game3D game;
+    const bool automatedRun = smokeRender || capturePlaytest || captureDrivenLap || captureSectionTour || handlingAudit || raceAudit ||
+                              collisionAudit || perfAudit || diagnoseController;
+    Game3D game(!automatedRun);
     bool runtimeCleaned = false;
     const auto cleanupRuntime = [&]() {
         if (runtimeCleaned) {
