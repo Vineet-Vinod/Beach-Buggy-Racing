@@ -964,6 +964,8 @@ struct RaceAuditResult3D {
 struct CollisionAuditResult3D {
     const char* name = "";
     float maxOverlap = 0.0f;
+    float strikerSpeedAfterContact = 0.0f;
+    float targetSpeedAfterContact = 0.0f;
     int overlapFrames = 0;
     int contactFrames = 0;
 };
@@ -1640,7 +1642,21 @@ public:
         light.ghostTimer = 0.0f;
         heavy.ghostTimer = 0.0f;
         const bool jumpClears = !shouldTestKartContact(light, heavy);
-        const bool ok = rearOk && headOk && sideOk && massDistinct && roleSymmetric && jumpClears;
+        Kart3D wallKart;
+        wallKart.spec = specs_[0];
+        const TrackPoint3D wallPoint = track_.sample(2600.0f);
+        const float wallLimit = hardBoundaryLaneLimit(wallKart, wallPoint);
+        wallKart.pos = wallPoint.pos + wallPoint.normal * (wallLimit + 6.0f);
+        wallKart.heading = angleOf(normalize(wallPoint.tangent + wallPoint.normal * 0.85f));
+        wallKart.vel = wallPoint.tangent * 92.0f + wallPoint.normal * 118.0f;
+        wallKart.nearest = track_.nearestIndex(wallKart.pos);
+        const float wallSpeedBefore = length(wallKart.vel);
+        constrainToTrack(wallKart);
+        const float wallRetention = length(wallKart.vel) / wallSpeedBefore;
+        const float wallForwardSpeed = dot(wallKart.vel, wallPoint.tangent);
+        const bool wallGlances = wallRetention > 0.68f && wallForwardSpeed > 82.0f && dot(wallKart.vel, wallPoint.normal) <= 0.0f;
+        const bool rearPushes = rearEnd.strikerSpeedAfterContact > 100.0f && rearEnd.targetSpeedAfterContact > 48.0f;
+        const bool ok = rearOk && headOk && sideOk && massDistinct && roleSymmetric && jumpClears && wallGlances && rearPushes;
 
         auto print = [](const CollisionAuditResult3D& r) {
             std::cout << r.name << "_max_overlap=" << r.maxOverlap << " " << r.name << "_overlap_frames=" << r.overlapFrames << " "
@@ -1651,7 +1667,10 @@ public:
         print(headOn);
         print(sideSwipe);
         std::cout << "rear_ok=" << rearOk << " head_ok=" << headOk << " side_ok=" << sideOk << " mass_distinct=" << massDistinct
-                  << " role_symmetric=" << roleSymmetric << " jump_clears=" << jumpClears << "\n";
+                  << " role_symmetric=" << roleSymmetric << " jump_clears=" << jumpClears
+                  << " rear_striker_speed=" << rearEnd.strikerSpeedAfterContact
+                  << " rear_target_speed=" << rearEnd.targetSpeedAfterContact << " rear_pushes=" << rearPushes
+                  << " wall_retention=" << wallRetention << " wall_forward=" << wallForwardSpeed << " wall_glances=" << wallGlances << "\n";
         return ok;
     }
 
@@ -2106,6 +2125,7 @@ private:
         }
 
         constexpr int kFrames = static_cast<int>(3.2f / kFixedDt);
+        bool sampledFirstContact = false;
         for (int frame = 0; frame < kFrames; ++frame) {
             for (int i = 0; i < 2; ++i) {
                 Kart3D& kart = karts_[static_cast<size_t>(i)];
@@ -2115,6 +2135,11 @@ private:
                 updateProgress(kart);
             }
             solveKartContacts();
+            if (!sampledFirstContact && (karts_[0].contactTimer > 0.05f || karts_[1].contactTimer > 0.05f)) {
+                result.strikerSpeedAfterContact = dot(karts_[0].vel, forward);
+                result.targetSpeedAfterContact = dot(karts_[1].vel, forward);
+                sampledFirstContact = true;
+            }
             const float overlap = maxKartOverlap();
             result.maxOverlap = std::max(result.maxOverlap, overlap);
             if (overlap > 1.25f) {
@@ -2202,13 +2227,21 @@ private:
         }
         const float sign = lane > 0.0f ? 1.0f : -1.0f;
         const float excess = std::abs(lane) - driveableLimit;
-        kart.pos -= center.normal * (sign * excess);
+        kart.pos -= center.normal * (sign * (excess + 0.20f));
         const float normalVelocity = dot(kart.vel, center.normal);
         if (normalVelocity * sign > 0.0f) {
-            kart.vel -= center.normal * normalVelocity;
-            kart.vel *= 0.96f;
-        } else {
-            kart.vel *= 0.992f;
+            const float incomingSpeed = length(kart.vel);
+            Vec2 travelTangent = center.tangent;
+            if (dot(travelTangent, kart.vel) < 0.0f) {
+                travelTangent *= -1.0f;
+            }
+            const float alongSpeed = std::max(0.0f, dot(kart.vel, travelTangent));
+            const float redirectedSpeed = std::max(alongSpeed, incomingSpeed * 0.72f);
+            kart.vel = travelTangent * redirectedSpeed - center.normal * (sign * std::abs(normalVelocity) * 0.055f);
+            const float incidence = std::clamp(std::abs(normalVelocity) / std::max(1.0f, incomingSpeed), 0.0f, 1.0f);
+            kart.heading = angleOf(normalize(lerp(fromAngle(kart.heading), travelTangent, 0.18f + incidence * 0.30f)));
+            kart.yawRate *= 0.58f;
+            kart.contactTimer = std::max(kart.contactTimer, 0.18f);
         }
         kart.drifting = false;
     }
@@ -2257,13 +2290,19 @@ private:
                         const Vec2 relativeVelocity = kb.vel - ka.vel;
                         const float closingSpeed = dot(relativeVelocity, n);
                         if (closingSpeed < 0.0f) {
-                            const float impulse = -(1.0f + 0.10f) * closingSpeed / invSum;
+                            const Vec2 forwardA = fromAngle(ka.heading);
+                            const Vec2 forwardB = fromAngle(kb.heading);
+                            const Vec2 averageForward = normalize(forwardA + forwardB);
+                            const bool sameDirection = dot(forwardA, forwardB) > 0.55f;
+                            const bool longitudinalContact = lengthSq(averageForward) > 0.01f && std::abs(dot(n, averageForward)) > 0.48f;
+                            const float impulseScale = sameDirection && longitudinalContact ? 0.22f : 1.10f;
+                            const float impulse = -impulseScale * closingSpeed / invSum;
                             ka.vel -= n * (impulse * invA);
                             kb.vel += n * (impulse * invB);
 
                             const Vec2 tangent{-n.y, n.x};
                             const float tangentSpeed = dot(kb.vel - ka.vel, tangent);
-                            const float tangentImpulse = std::clamp(-tangentSpeed * 0.08f / invSum, -impulse * 0.24f, impulse * 0.24f);
+                            const float tangentImpulse = std::clamp(-tangentSpeed * 0.05f / invSum, -impulse * 0.18f, impulse * 0.18f);
                             ka.vel -= tangent * (tangentImpulse * invA);
                             kb.vel += tangent * (tangentImpulse * invB);
                         }
@@ -2272,8 +2311,8 @@ private:
                         kb.vel *= 0.996f;
                     }
 
-                    ka.contactTimer = 0.40f;
-                    kb.contactTimer = 0.40f;
+                    ka.contactTimer = 0.26f;
+                    kb.contactTimer = 0.26f;
                 }
             }
         }
