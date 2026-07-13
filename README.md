@@ -150,7 +150,7 @@ which helps with USB receivers that expose a partial or unusual mapping.
 - `src/harbor_karts_3d.cpp`: raylib 3D renderer, simulation, controller input,
   capture harness, and 3D race loop
 - `src/harbor_karts_3d.hpp`: 3D entry-point declaration
-- `src/track_layout.hpp`: Shark Harbor control-point layout data
+- `src/track_layout.hpp`: Breakwater circuit control-point layout data
 
 ## Third-Party Code
 

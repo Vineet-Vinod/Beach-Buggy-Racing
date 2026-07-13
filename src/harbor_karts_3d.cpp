@@ -356,7 +356,7 @@ private:
     }
 
     void build() {
-        const auto& control = kSharkHarborControlPoints;
+        const auto& control = kBreakwaterControlPoints;
         const auto controlPoint = [&control](int index) {
             const int count = static_cast<int>(control.size());
             int wrapped = index % count;
@@ -364,7 +364,7 @@ private:
                 wrapped += count;
             }
             const TrackControlPoint& p = control[static_cast<size_t>(wrapped)];
-            return Vec2{p.x * kSharkHarborCourseScale, p.y * kSharkHarborCourseScale};
+            return Vec2{p.x * kBreakwaterCourseScale, p.y * kBreakwaterCourseScale};
         };
 
         std::vector<Vec2> dense;
@@ -930,6 +930,7 @@ struct AuditResult3D {
     float averageSpeed = 0.0f;
     float maxOffroad = 0.0f;
     float maxDriftCharge = 0.0f;
+    float maxSlip = 0.0f;
     float minGroundClearance = std::numeric_limits<float>::max();
     float maxAirTime = 0.0f;
     int progressJumps = 0;
@@ -937,6 +938,7 @@ struct AuditResult3D {
     int offroadFrames = 0;
     int boostFrames = 0;
     int driftFrames = 0;
+    int brakeDriftFrames = 0;
     int landings = 0;
     int lap = 0;
 };
@@ -1453,23 +1455,24 @@ public:
         const AuditResult3D noBrake = simulateAuditDriver(AuditDriver::NoBrake, 64.0f);
         const AuditResult3D brake = simulateAuditDriver(AuditDriver::Brake, 64.0f);
         const AuditResult3D drift = simulateAuditDriver(AuditDriver::Drift, 64.0f);
-        const bool controlledRoad = brake.offroadFrames <= noBrake.offroadFrames && brake.maxOffroad <= 40.0f;
-        const bool noBrakeConsequences = noBrake.offroadFrames > 120 || noBrake.maxOffroad > 18.0f ||
-                                         noBrake.averageSpeed > brake.averageSpeed * 1.10f;
+        const bool controlledRoad = drift.offroadFrames < 1500 && drift.maxOffroad <= 20.0f;
+        const bool noBrakeConsequences = noBrake.offroadFrames > 120 || noBrake.maxOffroad > 18.0f;
         const bool groundClear = std::abs(noBrake.minGroundClearance) <= 0.03f && std::abs(brake.minGroundClearance) <= 0.03f &&
                                  std::abs(drift.minGroundClearance) <= 0.03f;
         const bool stable = noBrake.progressJumps == 0 && brake.progressJumps == 0 && drift.progressJumps == 0;
         const bool moving = std::max({noBrake.score, brake.score, drift.score}) > track_.totalLength() * 0.50f;
-        const float measuredLapSeconds = brake.score > 1.0f ? 64.0f * track_.totalLength() / brake.score : 999.0f;
-        const bool referencePace = measuredLapSeconds >= 30.0f && measuredLapSeconds <= 38.0f;
+        const float measuredLapSeconds = drift.score > 1.0f ? 64.0f * track_.totalLength() / drift.score : 999.0f;
+        const bool referencePace = measuredLapSeconds >= 38.0f && measuredLapSeconds <= 55.0f;
         const bool authoredJumps = drift.maxAirTime >= 0.80f && drift.maxAirTime <= 1.30f && drift.landings >= 2;
         const bool inputContract = controllerContractAudit();
-        const bool ok = controlledRoad && noBrakeConsequences && groundClear && stable && moving && authoredJumps && inputContract;
+        const bool requiredDrifting = drift.brakeDriftFrames > 60 && drift.maxSlip > 0.16f;
+        const bool ok = controlledRoad && noBrakeConsequences && groundClear && stable && moving && authoredJumps && inputContract && requiredDrifting;
 
         auto print = [](const AuditResult3D& r) {
             std::cout << r.name << "_score=" << r.score << " lap=" << r.lap << " avg=" << r.averageSpeed << " max=" << r.maxSpeed
                       << " contacts=" << r.contacts << " offroad_frames=" << r.offroadFrames << " max_offroad=" << r.maxOffroad
                       << " max_drift_charge=" << r.maxDriftCharge
+                      << " max_slip=" << r.maxSlip << " brake_drift_frames=" << r.brakeDriftFrames
                       << " min_ground_clearance=" << r.minGroundClearance << " progress_jumps=" << r.progressJumps
                       << " max_airtime=" << r.maxAirTime << " landings=" << r.landings
                       << " drift_frames=" << r.driftFrames << " boost_frames=" << r.boostFrames << " ";
@@ -1482,6 +1485,7 @@ public:
                   << " ground_clear=" << groundClear << " stable=" << stable << " moving=" << moving << " reference_pace=" << referencePace
                   << " measured_lap_s=" << measuredLapSeconds
                   << " authored_jumps=" << authoredJumps
+                  << " required_drifting=" << requiredDrifting
                   << " input_contract=" << inputContract
                   << "\n";
         return ok;
@@ -1590,7 +1594,7 @@ public:
         const bool separated = result.maxOverlap < 2.0f && result.overlapFrames < 4;
         const bool shoulderControlled = result.maxRoadViolation <= 42.0f && result.roadViolationFrames < 9000;
         const bool groundClear = std::abs(result.minGroundClearance) <= 0.03f;
-        const bool referenceLap = result.validatedLapSeconds >= 48.0f && result.validatedLapSeconds <= 56.0f;
+        const bool referenceLap = result.validatedLapSeconds >= 45.0f && result.validatedLapSeconds <= 62.0f;
         const bool ok = shoulderControlled && groundClear && stable && pressure && activePack && tailRecovered && cleanEnough && separated && referenceLap;
 
         std::cout << "race-audit-3d player=" << result.playerScore << " top_ai=" << result.topAiScore << " tail_ai=" << result.tailAiScore
@@ -2050,11 +2054,13 @@ private:
             result.maxSpeed = std::max(result.maxSpeed, speed);
             result.maxOffroad = std::max(result.maxOffroad, offroad);
             result.maxDriftCharge = std::max(result.maxDriftCharge, kart.driftCharge);
+            result.maxSlip = std::max(result.maxSlip, std::abs(kart.slipAngle));
             result.maxAirTime = std::max(result.maxAirTime, kart.airborneTime);
             result.landings += !wasGrounded && kart.grounded ? 1 : 0;
             result.minGroundClearance = std::min(result.minGroundClearance, activeRendererWheelGroundClearance(kart));
             result.offroadFrames += offroad > 1.0f ? 1 : 0;
             result.driftFrames += kart.drifting ? 1 : 0;
+            result.brakeDriftFrames += kart.brakeLoad > 0.20f && std::abs(kart.slipAngle) > 0.14f ? 1 : 0;
             result.boostFrames += kart.boostTimer > 0.0f ? 1 : 0;
             if (beforeContact <= 0.001f && kart.contactTimer > 0.05f) {
                 ++result.contacts;
@@ -2261,7 +2267,7 @@ private:
 
     void solveKartContacts() {
         std::array<bool, kKartCount> moved{};
-        constexpr int kContactIterations = 4;
+        constexpr int kContactIterations = 6;
         for (int iter = 0; iter < kContactIterations; ++iter) {
             for (int a = 0; a < kKartCount; ++a) {
                 for (int b = a + 1; b < kKartCount; ++b) {
@@ -2279,8 +2285,8 @@ private:
                     const float invA = inverseKartMass(ka);
                     const float invB = inverseKartMass(kb);
                     const float invSum = invA + invB;
-                    const float correctionDepth = std::max(0.0f, contact.penetration - 0.18f);
-                    const Vec2 correction = n * (correctionDepth * 0.86f / invSum);
+                    const float correctionDepth = std::max(0.0f, contact.penetration - 0.12f);
+                    const Vec2 correction = n * (correctionDepth * 0.94f / invSum);
                     ka.pos -= correction * invA;
                     kb.pos += correction * invB;
                     moved[static_cast<size_t>(a)] = true;

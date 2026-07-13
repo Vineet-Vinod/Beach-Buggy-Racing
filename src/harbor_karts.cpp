@@ -220,7 +220,7 @@ private:
     }
 
     void build() {
-        const auto& control = kSharkHarborControlPoints;
+        const auto& control = kBreakwaterControlPoints;
         const auto controlPoint = [&control](int index) {
             const int count = static_cast<int>(control.size());
             int wrapped = index % count;
