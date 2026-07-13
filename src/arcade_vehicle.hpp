@@ -212,6 +212,7 @@ struct ArcadeVehicleAuditResult {
     float brakeOversteerPeakYaw = 0.0f;
     float brakeOversteerPeakSlip = 0.0f;
     float brakeRecoverySlip = 0.0f;
+    float brakeLoadAfterRelease = 0.0f;
     float jumpApex = 0.0f;
     float jumpAirTime = 0.0f;
     float jumpLandingImpulse = 0.0f;

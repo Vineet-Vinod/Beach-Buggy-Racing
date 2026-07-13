@@ -7,7 +7,7 @@ LEGACY_TARGET_3D := $(BUILD_DIR)/harbor_karts_3d
 SDL_LIB := $(BUILD_DIR)/deps/install/lib/libSDL3.a
 RAYLIB_LIB := $(BUILD_DIR)/deps/raylib-install/lib/libraylib.a
 
-.PHONY: all deps clean clean-all run run-2d run-3d self-test audio-audit-3d vehicle-audit-3d race-flow-audit-3d race-audit race-audit-3d capture-playtest capture-playtest-3d capture-lap-3d capture-section-tour-3d perf-audit perf-audit-3d smoke-3d handling-audit-3d collision-audit-3d
+.PHONY: all deps clean clean-all run run-2d run-3d self-test input-audit-3d audio-audit-3d vehicle-audit-3d race-flow-audit-3d race-audit race-audit-3d capture-playtest capture-playtest-3d capture-lap-3d capture-section-tour-3d perf-audit perf-audit-3d smoke-3d handling-audit-3d collision-audit-3d
 
 all: $(TARGET) $(TARGET_3D) $(LEGACY_TARGET) $(LEGACY_TARGET_3D)
 
@@ -79,6 +79,9 @@ vehicle-audit-3d: $(TARGET_3D)
 
 audio-audit-3d: $(TARGET_3D)
 	$(TARGET_3D) --audio-audit
+
+input-audit-3d: $(TARGET_3D)
+	$(TARGET_3D) --input-audit
 
 race-flow-audit-3d: $(TARGET_3D)
 	$(TARGET_3D) --race-flow-audit

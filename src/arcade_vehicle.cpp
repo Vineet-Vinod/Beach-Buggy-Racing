@@ -645,6 +645,17 @@ ArcadeVehicleAuditResult runArcadeVehicleUnitAudit() {
     check(result.brakeOversteerPeakSlip > 0.35f && result.brakeOversteerPeakSlip < 0.85f);
     check(result.brakeRecoverySlip < 0.10f);
 
+    ArcadeVehicleState brakeRelease;
+    brakeRelease.vel = {90.0f, 0.0f};
+    for (int i = 0; i < 30; ++i) {
+        stepArcadeVehicle(brakeRelease, config, brakeControl, road, kInternalStep);
+    }
+    for (int i = 0; i < 240; ++i) {
+        stepArcadeVehicle(brakeRelease, config, throttle, road, kInternalStep);
+    }
+    result.brakeLoadAfterRelease = brakeRelease.brakeLoad;
+    check(result.brakeLoadAfterRelease < 0.01f);
+
     const JumpScriptResult jump120 = simulateJump(1.0f / 120.0f);
     const JumpScriptResult jump60 = simulateJump(1.0f / 60.0f);
     result.jumpApex = jump120.apex;

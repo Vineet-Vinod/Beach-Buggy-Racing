@@ -558,6 +558,7 @@ struct Input3D {
     bool drift = false;
     bool a = false;
     bool b = false;
+    bool bHeld = false;
     bool start = false;
     bool back = false;
     bool left = false;
@@ -581,10 +582,17 @@ float axisWithDeadzone(float value) {
     return sign * curved;
 }
 
-float triggerValue(int gamepad, int axis) {
-    const float raw = GetGamepadAxisMovement(gamepad, axis);
-    const float normalized = std::clamp((raw + 1.0f) * 0.5f, 0.0f, 1.0f);
+float normalizeRaylibTrigger(float raw, bool& signedRange) {
+    raw = std::clamp(raw, -1.0f, 1.0f);
+    if (raw < -0.50f) {
+        signedRange = true;
+    }
+    const float normalized = signedRange ? std::clamp((raw + 1.0f) * 0.5f, 0.0f, 1.0f) : std::clamp(raw, 0.0f, 1.0f);
     return normalized < 0.035f ? 0.0f : (normalized - 0.035f) / 0.965f;
+}
+
+float triggerValue(int gamepad, int axis, bool& signedRange) {
+    return normalizeRaylibTrigger(GetGamepadAxisMovement(gamepad, axis), signedRange);
 }
 
 float canonicalHardBrake(float leftTrigger, bool bHeld) {
@@ -593,14 +601,31 @@ float canonicalHardBrake(float leftTrigger, bool bHeld) {
 }
 
 Input3D canonicalPlayerInput(Input3D input) {
-    input.brake = canonicalHardBrake(input.brake, input.b);
+    input.brake = canonicalHardBrake(input.brake, input.bHeld);
     return input;
 }
 
 bool controllerContractAudit() {
+    bool zeroBased = false;
+    const float zeroReleased = normalizeRaylibTrigger(0.0f, zeroBased);
+    const float zeroPressed = normalizeRaylibTrigger(1.0f, zeroBased);
+    bool signedRange = false;
+    const float signedReleased = normalizeRaylibTrigger(-1.0f, signedRange);
+    const float signedHalf = normalizeRaylibTrigger(0.0f, signedRange);
+    const float signedPressed = normalizeRaylibTrigger(1.0f, signedRange);
+    std::array<Input3D, 5> bSequence{};
+    bSequence[1].bHeld = true;
+    bSequence[2].bHeld = true;
+    const std::array<float, 5> expectedBrake = {0.0f, 1.0f, 1.0f, 0.0f, 0.0f};
+    bool bReleaseClears = true;
+    for (size_t i = 0; i < bSequence.size(); ++i) {
+        bReleaseClears = bReleaseClears && canonicalPlayerInput(bSequence[i]).brake == expectedBrake[i];
+    }
     return canonicalHardBrake(0.0f, false) == 0.0f && canonicalHardBrake(0.20f, false) == 1.0f &&
            canonicalHardBrake(0.55f, false) == 1.0f && canonicalHardBrake(1.0f, false) == 1.0f &&
-           canonicalHardBrake(0.0f, true) == 1.0f && canonicalHardBrake(1.0f, true) == 1.0f;
+           canonicalHardBrake(0.0f, true) == 1.0f && canonicalHardBrake(1.0f, true) == 1.0f && bReleaseClears &&
+           zeroReleased == 0.0f && zeroPressed == 1.0f && signedReleased == 0.0f && signedHalf > 0.45f &&
+           signedHalf < 0.55f && signedPressed == 1.0f;
 }
 
 float sdlAxisUnit(Sint16 value) {
@@ -670,11 +695,18 @@ public:
     }
 
     Input3D read(bool devKeyboard) {
-        Input3D input = readRaylib();
+        updateSdlState();
         refresh();
-        mergeSdl(input);
+        Input3D input;
+        if (pad_) {
+            mergeSdl(input);
+        } else if (IsGamepadAvailable(0)) {
+            input = readRaylib();
+        } else if (joystick_) {
+            mergeSdl(input);
+        }
         applyKeyboardFallback(input, devKeyboard);
-        input.brake = canonicalHardBrake(input.brake, input.b);
+        input.brake = canonicalHardBrake(input.brake, input.bHeld);
         return edgeFiltered(input);
     }
 
@@ -682,7 +714,8 @@ public:
         refresh();
         if (IsGamepadAvailable(0)) {
             std::cout << "raylib controller: " << GetGamepadName(0) << " steer=" << GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_X)
-                      << " lt=" << triggerValue(0, GAMEPAD_AXIS_LEFT_TRIGGER) << " rt=" << triggerValue(0, GAMEPAD_AXIS_RIGHT_TRIGGER)
+                      << " lt=" << triggerValue(0, GAMEPAD_AXIS_LEFT_TRIGGER, raylibLeftTriggerSigned_)
+                      << " rt=" << triggerValue(0, GAMEPAD_AXIS_RIGHT_TRIGGER, raylibRightTriggerSigned_)
                       << " rb=" << IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1)
                       << " a=" << IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN) << "\n";
         }
@@ -705,15 +738,15 @@ public:
     }
 
 private:
-    static Input3D readRaylib() {
+    Input3D readRaylib() {
         Input3D input;
         if (IsGamepadAvailable(0)) {
             input.steer = axisWithDeadzone(GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_X));
-            input.throttle = triggerValue(0, GAMEPAD_AXIS_RIGHT_TRIGGER);
-            input.brake = triggerValue(0, GAMEPAD_AXIS_LEFT_TRIGGER);
+            input.throttle = triggerValue(0, GAMEPAD_AXIS_RIGHT_TRIGGER, raylibRightTriggerSigned_);
+            input.brake = triggerValue(0, GAMEPAD_AXIS_LEFT_TRIGGER, raylibLeftTriggerSigned_);
             input.drift = IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1);
             input.a = IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
-            input.b = IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT);
+            input.bHeld = IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT);
             input.start = IsGamepadButtonDown(0, GAMEPAD_BUTTON_MIDDLE_RIGHT);
             input.back = IsGamepadButtonDown(0, GAMEPAD_BUTTON_MIDDLE_LEFT);
             input.left = IsGamepadButtonDown(0, GAMEPAD_BUTTON_LEFT_FACE_LEFT) || input.steer < -0.55f;
@@ -727,6 +760,9 @@ private:
             }
             input.pageLeft = IsGamepadButtonDown(0, GAMEPAD_BUTTON_LEFT_TRIGGER_1);
             input.pageRight = IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1);
+        } else {
+            raylibLeftTriggerSigned_ = false;
+            raylibRightTriggerSigned_ = false;
         }
         return input;
     }
@@ -735,7 +771,7 @@ private:
         const auto pressed = [](bool now, bool before) { return now && !before; };
         Input3D out = current;
         out.a = pressed(current.a, previousDigital_.a);
-        out.b = pressed(current.b, previousDigital_.b);
+        out.b = current.b || pressed(current.bHeld, previousDigital_.bHeld);
         out.start = pressed(current.start, previousDigital_.start);
         out.back = pressed(current.back, previousDigital_.back);
         out.left = pressed(current.left, previousDigital_.left);
@@ -747,6 +783,15 @@ private:
         out.quit = current.quit || (current.start && current.back);
         previousDigital_ = current;
         return out;
+    }
+
+    void updateSdlState() {
+        if (!sdlFallbackReady_) {
+            return;
+        }
+        SDL_PumpEvents();
+        SDL_UpdateGamepads();
+        SDL_UpdateJoysticks();
     }
 
     void refresh() {
@@ -792,6 +837,8 @@ private:
             joystick_ = nullptr;
         }
         previousDigital_ = {};
+        raylibLeftTriggerSigned_ = false;
+        raylibRightTriggerSigned_ = false;
     }
 
     void mergeSdl(Input3D& input) {
@@ -801,7 +848,7 @@ private:
             input.brake = std::max(input.brake, sdlTriggerUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_LEFT_TRIGGER)));
             input.drift = input.drift || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
             input.a = input.a || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_SOUTH);
-            input.b = input.b || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_EAST);
+            input.bHeld = input.bHeld || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_EAST);
             input.start = input.start || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_START);
             input.back = input.back || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_BACK);
             input.left = input.left || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || input.steer < -0.55f;
@@ -815,8 +862,7 @@ private:
             if (std::abs(dpadSteer) > std::abs(input.steer)) {
                 input.steer = dpadSteer;
             }
-        }
-        if (joystick_) {
+        } else if (joystick_) {
             input.steer = std::abs(input.steer) > 0.01f ? input.steer : axisWithDeadzone(rawJoystickAxis(joystick_, 0));
             input.throttle = std::max(input.throttle, std::max(0.0f, rawJoystickAxis(joystick_, 5)));
             input.brake = std::max(input.brake, std::max(0.0f, rawJoystickAxis(joystick_, 2)));
@@ -826,9 +872,7 @@ private:
             input.start = input.start || rawJoystickButton(joystick_, 7);
             input.pageLeft = input.pageLeft || rawJoystickButton(joystick_, 4);
             input.pageRight = input.pageRight || rawJoystickButton(joystick_, 5);
-            input.b = input.b || rawJoystickButton(joystick_, 1);
-            input.back = input.back || rawJoystickButton(joystick_, 6);
-            input.start = input.start || rawJoystickButton(joystick_, 7);
+            input.bHeld = input.bHeld || rawJoystickButton(joystick_, 1);
             input.left = input.left || rawJoystickButton(joystick_, 11) || input.steer < -0.55f;
             input.right = input.right || rawJoystickButton(joystick_, 12) || input.steer > 0.55f;
             input.up = input.up || rawJoystickButton(joystick_, 13);
@@ -840,6 +884,8 @@ private:
     SDL_Joystick* joystick_ = nullptr;
     Input3D previousDigital_{};
     bool sdlFallbackReady_ = false;
+    bool raylibLeftTriggerSigned_ = false;
+    bool raylibRightTriggerSigned_ = false;
 };
 
 Input3D readInput(ControllerReader& controller, bool devKeyboard) {
@@ -3184,6 +3230,12 @@ private:
 }  // namespace
 
 int runHarborKarts3D(int argc, char** argv) {
+    const bool inputAudit = hasArg(argc, argv, "--input-audit");
+    if (inputAudit) {
+        const bool ok = controllerContractAudit();
+        std::cout << "input-audit sequence=0,1,1,0,0 trigger_ranges=valid authoritative_backend=single ok=" << ok << "\n";
+        return ok ? 0 : 1;
+    }
     const bool audioAudit = hasArg(argc, argv, "--audio-audit");
     if (audioAudit) {
         const ArcadeAudioAuditResult result = runArcadeAudioUnitAudit();
@@ -3212,6 +3264,7 @@ int runHarborKarts3D(int argc, char** argv) {
                   << " drift_boost_tier=" << result.driftBoostTier << " loose_surface_ratio=" << result.looseSurfaceSpeedRatio
                   << " shoulder_ratio=" << result.shoulderSpeedRatio << " brake_yaw=" << result.brakeOversteerPeakYaw
                   << " brake_slip=" << result.brakeOversteerPeakSlip << " brake_recovery=" << result.brakeRecoverySlip
+                  << " brake_load_2s=" << result.brakeLoadAfterRelease
                   << " jump_apex=" << result.jumpApex << " jump_airtime=" << result.jumpAirTime
                   << " landing_impulse=" << result.jumpLandingImpulse << " jump_step_error=" << result.jumpFixedStepError
                   << " fixed_step_error=" << result.fixedStepPositionError << " ok=" << result.ok << "\n";
