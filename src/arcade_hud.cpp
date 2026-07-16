@@ -8,6 +8,8 @@
 #include <cstdio>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace harbor::ui {
 namespace {
@@ -21,6 +23,18 @@ constexpr Color kCoral = {238, 79, 67, 255};
 constexpr Color kAqua = {65, 203, 205, 255};
 constexpr Color kLeaf = {92, 190, 113, 255};
 constexpr Color kOutline = {105, 143, 139, 190};
+constexpr Color kSky = {97, 203, 218, 255};
+constexpr Color kSkyDeep = {35, 151, 181, 255};
+constexpr Color kSand = {238, 202, 126, 255};
+constexpr Color kSandShade = {214, 160, 84, 255};
+constexpr Color kSea = {16, 128, 160, 255};
+
+Font gUiFont{};
+bool gUiFontLoaded = false;
+
+Font uiFont() {
+    return gUiFontLoaded ? gUiFont : GetFontDefault();
+}
 
 struct Metrics {
     float width = 1280.0f;
@@ -57,13 +71,13 @@ void drawPanel(Rectangle bounds, Color fill, Color accent, float scale) {
 }
 
 float fittedFontSize(std::string_view text, float preferred, float minimum, float maximumWidth) {
-    const Font font = GetFontDefault();
+    const Font font = uiFont();
     float size = preferred;
     const std::string owned(text);
-    while (size > minimum && MeasureTextEx(font, owned.c_str(), size, 0.0f).x > maximumWidth) {
+    while (size > minimum && MeasureTextEx(font, owned.c_str(), size, size * 0.015f).x > maximumWidth) {
         size -= 1.0f;
     }
-    const float minimumWidth = MeasureTextEx(font, owned.c_str(), minimum, 0.0f).x;
+    const float minimumWidth = MeasureTextEx(font, owned.c_str(), minimum, minimum * 0.015f).x;
     if (minimumWidth > maximumWidth && minimumWidth > 0.0f) {
         size = std::max(6.0f, minimum * maximumWidth / minimumWidth);
     }
@@ -72,7 +86,7 @@ float fittedFontSize(std::string_view text, float preferred, float minimum, floa
 
 void drawText(std::string_view text, Vector2 position, float fontSize, Color color) {
     const std::string owned(text);
-    DrawTextEx(GetFontDefault(), owned.c_str(), position, fontSize, 0.0f, color);
+    DrawTextEx(uiFont(), owned.c_str(), position, fontSize, fontSize * 0.015f, color);
 }
 
 void drawFittedText(std::string_view text, Rectangle bounds, float preferred, float minimum, Color color) {
@@ -82,8 +96,78 @@ void drawFittedText(std::string_view text, Rectangle bounds, float preferred, fl
 
 void drawCenteredText(std::string_view text, Vector2 center, float fontSize, Color color) {
     const std::string owned(text);
-    const Vector2 size = MeasureTextEx(GetFontDefault(), owned.c_str(), fontSize, 0.0f);
-    DrawTextEx(GetFontDefault(), owned.c_str(), {center.x - size.x * 0.5f, center.y - size.y * 0.5f}, fontSize, 0.0f, color);
+    const Vector2 size = MeasureTextEx(uiFont(), owned.c_str(), fontSize, fontSize * 0.015f);
+    DrawTextEx(uiFont(), owned.c_str(), {center.x - size.x * 0.5f, center.y - size.y * 0.5f}, fontSize,
+               fontSize * 0.015f, color);
+}
+
+void drawWrappedText(std::string_view text, Rectangle bounds, float fontSize, float lineHeight, Color color, int maxLines) {
+    const std::string input(text);
+    std::vector<std::string> lines;
+    std::string line;
+    size_t cursor = 0;
+    while (cursor < input.size() && static_cast<int>(lines.size()) < maxLines) {
+        while (cursor < input.size() && input[cursor] == ' ') {
+            ++cursor;
+        }
+        size_t end = input.find(' ', cursor);
+        if (end == std::string::npos) {
+            end = input.size();
+        }
+        const std::string word = input.substr(cursor, end - cursor);
+        const std::string candidate = line.empty() ? word : line + " " + word;
+        if (!line.empty() && MeasureTextEx(uiFont(), candidate.c_str(), fontSize, fontSize * 0.015f).x > bounds.width) {
+            lines.push_back(line);
+            line = word;
+        } else {
+            line = candidate;
+        }
+        cursor = end;
+    }
+    if (!line.empty() && static_cast<int>(lines.size()) < maxLines) {
+        lines.push_back(line);
+    }
+    for (size_t index = 0; index < lines.size(); ++index) {
+        drawText(lines[index], {bounds.x, bounds.y + static_cast<float>(index) * lineHeight}, fontSize, color);
+    }
+}
+
+void drawBeachBackdrop(const Metrics& m, float time, bool subdued = false) {
+    const Color sky = subdued ? Color{62, 145, 160, 255} : kSky;
+    DrawRectangleGradientV(0, 0, static_cast<int>(m.width), static_cast<int>(m.height * 0.67f), sky, kSkyDeep);
+    DrawCircleV({m.width * 0.82f, m.height * 0.19f}, 64.0f * m.scale, Fade(kSun, subdued ? 0.55f : 0.92f));
+
+    const float seaY = m.height * 0.57f;
+    DrawRectangle(0, static_cast<int>(seaY), static_cast<int>(m.width), static_cast<int>(m.height * 0.18f), kSea);
+    for (int wave = -1; wave < static_cast<int>(m.width / (54.0f * m.scale)) + 2; ++wave) {
+        const float phase = std::fmod(time * 18.0f, 54.0f * m.scale);
+        const Vector2 center{static_cast<float>(wave) * 54.0f * m.scale + phase, seaY + 16.0f * m.scale};
+        DrawRing(center, 17.0f * m.scale, 20.0f * m.scale, 195.0f, 345.0f, 18, Fade(kPaper, 0.42f));
+    }
+
+    DrawTriangle({0.0f, m.height * 0.69f}, {m.width, m.height * 0.63f}, {m.width, m.height}, kSand);
+    DrawTriangle({0.0f, m.height * 0.69f}, {m.width * 0.45f, m.height * 0.665f}, {0.0f, m.height}, kSandShade);
+    const float tile = 58.0f * m.scale;
+    for (int row = 0; row < 7; ++row) {
+        for (int column = -1; column < static_cast<int>(m.width / tile) + 2; ++column) {
+            const float x = column * tile + (row % 2) * tile * 0.5f;
+            const float y = m.height * 0.72f + row * 28.0f * m.scale;
+            DrawCircleLines(static_cast<int>(x), static_cast<int>(y), 3.0f * m.scale, Fade(kInk, subdued ? 0.08f : 0.12f));
+        }
+    }
+}
+
+void drawFormulaBuggyLogo(const Metrics& m, float centerY, float scaleMultiplier = 1.0f) {
+    const float titleSize = 68.0f * m.scale * scaleMultiplier;
+    const float formulaSize = 22.0f * m.scale * scaleMultiplier;
+    drawCenteredText("FORMULA", {m.width * 0.5f + 3.0f * m.scale, centerY - 36.0f * m.scale}, formulaSize,
+                     Fade(kInk, 0.68f));
+    drawCenteredText("FORMULA", {m.width * 0.5f, centerY - 39.0f * m.scale}, formulaSize, kPaper);
+    drawCenteredText("BUGGY", {m.width * 0.5f + 5.0f * m.scale, centerY + 9.0f * m.scale}, titleSize, Fade(kInk, 0.76f));
+    drawCenteredText("BUGGY", {m.width * 0.5f, centerY + 3.0f * m.scale}, titleSize, kSun);
+    DrawLineEx({m.width * 0.5f - 142.0f * m.scale * scaleMultiplier, centerY + 48.0f * m.scale * scaleMultiplier},
+               {m.width * 0.5f + 142.0f * m.scale * scaleMultiplier, centerY + 48.0f * m.scale * scaleMultiplier},
+               5.0f * m.scale, kCoral);
 }
 
 std::string formatTime(float seconds) {
@@ -191,6 +275,31 @@ void drawRaceAlert(const RaceHudViewModel& viewModel, const Metrics& m) {
 
 }  // namespace
 
+bool InitializeUiFont(const char* fontPath, int baseSize) {
+    ShutdownUiFont();
+    if (fontPath == nullptr || fontPath[0] == '\0' || !FileExists(fontPath)) {
+        return false;
+    }
+    gUiFont = LoadFontEx(fontPath, std::max(24, baseSize), nullptr, 0);
+    gUiFontLoaded = gUiFont.texture.id != 0 && gUiFont.glyphCount > 0;
+    if (gUiFontLoaded) {
+        SetTextureFilter(gUiFont.texture, TEXTURE_FILTER_BILINEAR);
+    }
+    return gUiFontLoaded;
+}
+
+void ShutdownUiFont() {
+    if (gUiFontLoaded) {
+        UnloadFont(gUiFont);
+    }
+    gUiFont = {};
+    gUiFontLoaded = false;
+}
+
+bool IsUiFontLoaded() {
+    return gUiFontLoaded;
+}
+
 void DrawRaceHud(const RaceHudViewModel& viewModel) {
     const Metrics m = metrics();
     drawPlacePanel(viewModel, m);
@@ -223,7 +332,7 @@ void DrawGarageHud(const GarageHudViewModel& viewModel) {
         const Rectangle classBounds{vehiclePanel.x + 220.0f * m.scale, vehiclePanel.y + 76.0f * m.scale,
                                     vehiclePanel.width - 244.0f * m.scale, 23.0f * m.scale};
         const float classSize = fittedFontSize(viewModel.vehicleClass, 15.0f * m.scale, 10.0f * m.scale, classBounds.width);
-        const float classWidth = MeasureTextEx(GetFontDefault(), viewModel.vehicleClass.c_str(), classSize, 0.0f).x;
+        const float classWidth = MeasureTextEx(uiFont(), viewModel.vehicleClass.c_str(), classSize, classSize * 0.015f).x;
         drawText(viewModel.vehicleClass,
                  {classBounds.x + classBounds.width - classWidth, classBounds.y + (classBounds.height - classSize) * 0.5f}, classSize,
                  kSun);
@@ -276,7 +385,7 @@ void DrawGarageHud(const GarageHudViewModel& viewModel) {
         const bool selected = index == std::clamp(viewModel.selectedLapOption, 0, std::max(0, lapCount - 1));
         DrawRectangleRec(segment, selected ? kSun : Color{32, 61, 63, 235});
         DrawRectangleLinesEx(segment, selected ? 2.0f * m.scale : 1.0f * m.scale, selected ? kPaper : kOutline);
-        std::array<char, 16> laps{};
+        std::array<char, 32> laps{};
         if (viewModel.lapOptions[static_cast<size_t>(index)] <= 0) {
             std::snprintf(laps.data(), laps.size(), "INF");
         } else {
@@ -298,6 +407,161 @@ void DrawGarageHud(const GarageHudViewModel& viewModel) {
     drawText("RACE", {startPanel.x + 65.0f * m.scale, startPanel.y + 17.0f * m.scale}, 25.0f * m.scale,
              enabled ? kInk : kPaperMuted);
 
+    if (!viewModel.controllerConnected) {
+        drawConnectionBanner(m);
+    }
+}
+
+void DrawLoadingScreen(const LoadingScreenViewModel& viewModel) {
+    const Metrics m = metrics();
+    drawBeachBackdrop(m, viewModel.presentationTimeSeconds);
+
+    const float stripeWidth = 46.0f * m.scale;
+    for (int stripe = -3; stripe < static_cast<int>(m.width / stripeWidth) + 4; ++stripe) {
+        const float travel = std::fmod(viewModel.presentationTimeSeconds * 24.0f, stripeWidth * 2.0f);
+        const float x = static_cast<float>(stripe) * stripeWidth * 2.0f + travel;
+        DrawTriangle({x, 0.0f}, {x + stripeWidth, 0.0f}, {x - 22.0f * m.scale, m.height * 0.54f}, Fade(kPaper, 0.055f));
+    }
+
+    drawFormulaBuggyLogo(m, m.height * 0.35f);
+    const float railWidth = std::min(430.0f * m.scale, m.width - 2.0f * m.margin);
+    const Rectangle rail{(m.width - railWidth) * 0.5f, m.height * 0.73f, railWidth, 8.0f * m.scale};
+    DrawRectangleRec(rail, Fade(kInk, 0.42f));
+    DrawRectangleRec({rail.x, rail.y, rail.width * clamp01(viewModel.progress), rail.height}, kCoral);
+    DrawCircleV({rail.x + rail.width * clamp01(viewModel.progress), rail.y + rail.height * 0.5f}, 7.0f * m.scale, kSun);
+    drawCenteredText(viewModel.statusText, {m.width * 0.5f, rail.y + 32.0f * m.scale}, 15.0f * m.scale, kInk);
+}
+
+void DrawSelectionHud(const SelectionHudViewModel& viewModel) {
+    const Metrics m = metrics();
+    drawBeachBackdrop(m, viewModel.presentationTimeSeconds, true);
+    DrawRectangle(0, 0, static_cast<int>(m.width), static_cast<int>(m.height), Fade(kInk, 0.12f));
+
+    static constexpr std::array<const char*, 4> kStageNames = {"DRIVER", "CAR", "MAP", "LAPS"};
+    const int stage = std::clamp(static_cast<int>(viewModel.stage), 0, 3);
+    const float headerHeight = 98.0f * m.scale;
+    DrawRectangleRec({0.0f, 0.0f, m.width, headerHeight}, Fade(kInk, 0.93f));
+    drawText("FORMULA BUGGY", {m.margin, 17.0f * m.scale}, 25.0f * m.scale, kSun);
+    drawText("RACE SETUP", {m.margin, 52.0f * m.scale}, 13.0f * m.scale, kPaperMuted);
+
+    const float stepsX = std::max(300.0f * m.scale, m.width * 0.38f);
+    const float stepsWidth = m.width - stepsX - m.margin;
+    const float segmentWidth = stepsWidth / 4.0f;
+    for (int index = 0; index < 4; ++index) {
+        const bool complete = index < stage;
+        const bool current = index == stage;
+        const float centerX = stepsX + segmentWidth * (static_cast<float>(index) + 0.5f);
+        if (index < 3) {
+            DrawLineEx({centerX + 15.0f * m.scale, 35.0f * m.scale},
+                       {centerX + segmentWidth - 15.0f * m.scale, 35.0f * m.scale}, 3.0f * m.scale,
+                       index < stage ? kAqua : Fade(kOutline, 0.55f));
+        }
+        DrawCircleV({centerX, 35.0f * m.scale}, 12.0f * m.scale, current ? kSun : (complete ? kAqua : kInkSoft));
+        DrawCircleLines(static_cast<int>(centerX), static_cast<int>(35.0f * m.scale), 12.0f * m.scale,
+                        current ? kPaper : kOutline);
+        if (complete) {
+            DrawLineEx({centerX - 5.0f * m.scale, 35.0f * m.scale}, {centerX - 1.0f * m.scale, 40.0f * m.scale},
+                       2.0f * m.scale, kInk);
+            DrawLineEx({centerX - 1.0f * m.scale, 40.0f * m.scale}, {centerX + 6.0f * m.scale, 30.0f * m.scale},
+                       2.0f * m.scale, kInk);
+        } else {
+            std::array<char, 4> number{};
+            std::snprintf(number.data(), number.size(), "%d", index + 1);
+            drawCenteredText(number.data(), {centerX, 35.0f * m.scale}, 12.0f * m.scale, current ? kInk : kPaperMuted);
+        }
+        drawCenteredText(kStageNames[static_cast<size_t>(index)], {centerX, 70.0f * m.scale}, 12.0f * m.scale,
+                         current ? kSun : (complete ? kPaper : kPaperMuted));
+    }
+
+    const float footerHeight = 62.0f * m.scale;
+    const float contentTop = headerHeight + 22.0f * m.scale;
+    const float contentBottom = m.height - footerHeight - 18.0f * m.scale;
+    const float contentHeight = std::max(260.0f * m.scale, contentBottom - contentTop);
+    const float gap = 20.0f * m.scale;
+    const float contentWidth = m.width - m.margin * 2.0f;
+    const float leftWidth = contentWidth * 0.58f;
+    const Rectangle showcase{m.margin, contentTop, leftWidth, contentHeight};
+    const Rectangle detail{showcase.x + showcase.width + gap, contentTop, contentWidth - leftWidth - gap, contentHeight};
+
+    DrawRectangleRec(showcase, Fade(Color{235, 246, 228, 255}, 0.90f));
+    DrawRectangleLinesEx(showcase, 2.0f * m.scale, Fade(kPaper, 0.62f));
+    DrawRectangleRec({showcase.x, showcase.y, 7.0f * m.scale, showcase.height}, stage == 0 ? kCoral : (stage == 1 ? kSun : kAqua));
+
+    const std::string eyebrow = stage == 0 ? "CHOOSE YOUR DRIVER" : stage == 1 ? "CHOOSE YOUR RIDE" :
+                                  stage == 2 ? "CHOOSE YOUR COURSE" : "SET THE DISTANCE";
+    drawText(eyebrow, {showcase.x + 28.0f * m.scale, showcase.y + 24.0f * m.scale}, 14.0f * m.scale, kSea);
+    std::array<char, 32> indexText{};
+    std::snprintf(indexText.data(), indexText.size(), "%02d  /  %02d", std::clamp(viewModel.itemIndex + 1, 1, std::max(1, viewModel.itemCount)),
+                  std::max(1, viewModel.itemCount));
+    const float indexSize = 14.0f * m.scale;
+    const float indexWidth = MeasureTextEx(uiFont(), indexText.data(), indexSize, indexSize * 0.015f).x;
+    drawText(indexText.data(), {showcase.x + showcase.width - indexWidth - 25.0f * m.scale, showcase.y + 24.0f * m.scale},
+             indexSize, kInkSoft);
+
+    if (stage == 3) {
+        const int count = std::clamp(viewModel.lapOptionCount, 0, static_cast<int>(viewModel.lapOptions.size()));
+        const float optionGap = 12.0f * m.scale;
+        const float optionWidth = std::min(108.0f * m.scale,
+                                           (showcase.width - 56.0f * m.scale - optionGap * std::max(0, count - 1)) /
+                                               static_cast<float>(std::max(1, count)));
+        float x = showcase.x + (showcase.width - (optionWidth * count + optionGap * std::max(0, count - 1))) * 0.5f;
+        const float y = showcase.y + showcase.height * 0.37f;
+        for (int index = 0; index < count; ++index) {
+            const bool selected = index == std::clamp(viewModel.selectedLapOption, 0, std::max(0, count - 1));
+            const Rectangle option{x, y, optionWidth, 96.0f * m.scale};
+            DrawRectangleRec(option, selected ? kSun : Fade(kInk, 0.87f));
+            DrawRectangleLinesEx(option, selected ? 4.0f * m.scale : 1.0f * m.scale, selected ? kPaper : kOutline);
+            std::array<char, 16> value{};
+            std::snprintf(value.data(), value.size(), viewModel.lapOptions[static_cast<size_t>(index)] <= 0 ? "INF" : "%d",
+                          viewModel.lapOptions[static_cast<size_t>(index)]);
+            drawCenteredText(value.data(), {option.x + option.width * 0.5f, option.y + 40.0f * m.scale}, 31.0f * m.scale,
+                             selected ? kInk : kPaper);
+            drawCenteredText("LAPS", {option.x + option.width * 0.5f, option.y + 75.0f * m.scale}, 11.0f * m.scale,
+                             selected ? kInkSoft : kPaperMuted);
+            x += optionWidth + optionGap;
+        }
+    } else {
+        const std::string name = stage == 2 && !viewModel.mapName.empty() ? viewModel.mapName : viewModel.itemName;
+        drawFittedText(name.empty() ? kStageNames[static_cast<size_t>(stage)] : name,
+                       {showcase.x + 28.0f * m.scale, showcase.y + showcase.height * 0.35f,
+                        showcase.width - 56.0f * m.scale, 74.0f * m.scale},
+                       54.0f * m.scale, 24.0f * m.scale, kInk);
+        if (!viewModel.itemSubtitle.empty()) {
+            drawText(viewModel.itemSubtitle, {showcase.x + 30.0f * m.scale, showcase.y + showcase.height * 0.35f + 76.0f * m.scale},
+                     17.0f * m.scale, kCoral);
+        }
+        const float arrowY = showcase.y + showcase.height - 46.0f * m.scale;
+        drawCenteredText("<", {showcase.x + 39.0f * m.scale, arrowY}, 28.0f * m.scale, kSea);
+        drawCenteredText(">", {showcase.x + showcase.width - 39.0f * m.scale, arrowY}, 28.0f * m.scale, kSea);
+    }
+
+    drawPanel(detail, Fade(kInk, 0.96f), stage == 1 ? kSun : kCoral, m.scale);
+    const char* detailTitle = stage == 0 ? "DRIVER STORY" : stage == 1 ? "RIDE PROFILE" : stage == 2 ? "COURSE NOTES" : "RACE FORMAT";
+    drawText(detailTitle, {detail.x + 24.0f * m.scale, detail.y + 23.0f * m.scale}, 15.0f * m.scale, kAqua);
+    const std::string description = stage == 2 ? viewModel.mapDescription : viewModel.backstory;
+    drawWrappedText(description.empty() ? "Ready for a new run along the coast." : description,
+                    {detail.x + 24.0f * m.scale, detail.y + 61.0f * m.scale, detail.width - 48.0f * m.scale,
+                     104.0f * m.scale},
+                    17.0f * m.scale, 25.0f * m.scale, kPaper, 4);
+    if (stage == 1) {
+        const float x = detail.x + 24.0f * m.scale;
+        const float width = detail.width - 48.0f * m.scale;
+        const float baseY = detail.y + detail.height - 142.0f * m.scale;
+        drawStatRow("SPEED", viewModel.stats.speed, {x, baseY, width, 18.0f * m.scale}, kCoral, m.scale);
+        drawStatRow("ACCEL", viewModel.stats.acceleration, {x, baseY + 30.0f * m.scale, width, 18.0f * m.scale}, kSun, m.scale);
+        drawStatRow("HANDLING", viewModel.stats.handling, {x, baseY + 60.0f * m.scale, width, 18.0f * m.scale}, kAqua, m.scale);
+        drawStatRow("STRENGTH", viewModel.stats.strength, {x, baseY + 90.0f * m.scale, width, 18.0f * m.scale}, kLeaf, m.scale);
+    }
+
+    const Rectangle footer{0.0f, m.height - footerHeight, m.width, footerHeight};
+    DrawRectangleRec(footer, Fade(kInk, 0.96f));
+    drawText(viewModel.navigationHint, {m.margin, footer.y + 22.0f * m.scale}, 14.0f * m.scale, kPaperMuted);
+    if (stage > 0) {
+        drawCenteredText(viewModel.backHint, {m.width * 0.64f, footer.y + footer.height * 0.5f}, 14.0f * m.scale, kPaper);
+    }
+    const Color confirmColor = viewModel.canContinue ? kSun : kPaperMuted;
+    drawCenteredText(stage == 3 ? "A  START RACE" : viewModel.confirmHint,
+                     {m.width - m.margin - 83.0f * m.scale, footer.y + footer.height * 0.5f}, 15.0f * m.scale, confirmColor);
     if (!viewModel.controllerConnected) {
         drawConnectionBanner(m);
     }
@@ -342,22 +606,17 @@ void DrawPauseHud(const PauseHudViewModel& viewModel) {
     struct ActionEntry {
         PauseAction action;
         const char* label;
-        bool visible;
     };
-    const std::array<ActionEntry, 4> actions = {{{PauseAction::Resume, "RESUME", true},
-                                                 {PauseAction::Restart, "RESTART", viewModel.showRestart},
-                                                 {PauseAction::Garage, "GARAGE", viewModel.showGarage},
-                                                 {PauseAction::Quit, "QUIT", viewModel.showQuit}}};
-    const int visibleActions = static_cast<int>(std::count_if(actions.begin(), actions.end(), [](const ActionEntry& entry) {
-        return entry.visible;
-    }));
+    const std::array<ActionEntry, 3> actions = {{{PauseAction::Resume, "RESUME"},
+                                                 {PauseAction::Restart, "RESTART"},
+                                                 {PauseAction::Home, "HOME"}}};
     const bool selectedActionVisible = std::any_of(actions.begin(), actions.end(), [&](const ActionEntry& entry) {
-        return entry.visible && entry.action == viewModel.selectedAction;
+        return entry.action == viewModel.selectedAction;
     });
     const PauseAction selectedAction = selectedActionVisible ? viewModel.selectedAction : PauseAction::Resume;
 
     const float panelWidth = 430.0f * m.scale;
-    const float panelHeight = (190.0f + static_cast<float>(visibleActions) * 48.0f) * m.scale;
+    const float panelHeight = 334.0f * m.scale;
     const Rectangle panel{(m.width - panelWidth) * 0.5f, (m.height - panelHeight) * 0.5f, panelWidth, panelHeight};
     drawPanel(panel, Color{14, 31, 34, 252}, kSun, m.scale);
     drawCenteredText("PAUSED", {panel.x + panel.width * 0.5f, panel.y + 42.0f * m.scale}, 34.0f * m.scale, kSun);
@@ -370,15 +629,12 @@ void DrawPauseHud(const PauseHudViewModel& viewModel) {
     const std::string lap = lapText(viewModel.currentLap, viewModel.totalLaps);
     drawText(lap, {panel.x + 34.0f * m.scale, panel.y + 108.0f * m.scale}, 15.0f * m.scale, kPaperMuted);
     const std::string time = formatTime(viewModel.raceTimeSeconds);
-    const float timeWidth = MeasureTextEx(GetFontDefault(), time.c_str(), 15.0f * m.scale, 0.0f).x;
+    const float timeWidth = MeasureTextEx(uiFont(), time.c_str(), 15.0f * m.scale, 15.0f * m.scale * 0.015f).x;
     drawText(time, {panel.x + panel.width - timeWidth - 34.0f * m.scale, panel.y + 108.0f * m.scale}, 15.0f * m.scale,
              kPaperMuted);
 
     float y = panel.y + 148.0f * m.scale;
     for (const ActionEntry& entry : actions) {
-        if (!entry.visible) {
-            continue;
-        }
         const Rectangle actionBounds{panel.x + 34.0f * m.scale, y, panel.width - 68.0f * m.scale, 38.0f * m.scale};
         const bool selected = entry.action == selectedAction;
         DrawRectangleRec(actionBounds, selected ? kSun : Color{28, 54, 56, 245});
@@ -390,6 +646,98 @@ void DrawPauseHud(const PauseHudViewModel& viewModel) {
         drawText(entry.label, {actionBounds.x + 44.0f * m.scale, actionBounds.y + 10.0f * m.scale}, 18.0f * m.scale,
                  selected ? kInk : kPaper);
         y += 48.0f * m.scale;
+    }
+
+    drawCenteredText("B  BACK TO RACE", {panel.x + panel.width * 0.5f, panel.y + panel.height - 19.0f * m.scale},
+                     11.0f * m.scale, kPaperMuted);
+}
+
+void DrawResultsHud(const ResultsHudViewModel& viewModel) {
+    const Metrics m = metrics();
+    drawBeachBackdrop(m, viewModel.presentationTimeSeconds, true);
+    DrawRectangle(0, 0, static_cast<int>(m.width), static_cast<int>(m.height), Fade(kInk, 0.28f));
+
+    const float panelWidth = std::min(940.0f * m.scale, m.width - 2.0f * m.margin);
+    const float panelHeight = std::min(610.0f * m.scale, m.height - 2.0f * m.margin);
+    const Rectangle panel{(m.width - panelWidth) * 0.5f, (m.height - panelHeight) * 0.5f, panelWidth, panelHeight};
+    DrawRectangleRec(panel, Fade(kInk, 0.97f));
+    DrawRectangleRec({panel.x, panel.y, panel.width, 8.0f * m.scale}, kSun);
+    DrawTriangle({panel.x, panel.y}, {panel.x + 100.0f * m.scale, panel.y}, {panel.x, panel.y + 100.0f * m.scale},
+                 Fade(kCoral, 0.90f));
+
+    drawCenteredText("RACE COMPLETE", {panel.x + panel.width * 0.5f, panel.y + 42.0f * m.scale}, 30.0f * m.scale, kSun);
+    if (!viewModel.eventName.empty()) {
+        drawCenteredText(viewModel.eventName, {panel.x + panel.width * 0.5f, panel.y + 75.0f * m.scale}, 14.0f * m.scale,
+                         kPaperMuted);
+    }
+
+    const float tableX = panel.x + 32.0f * m.scale;
+    const float tableWidth = panel.width - 64.0f * m.scale;
+    const float tableY = panel.y + 105.0f * m.scale;
+    const float headerHeight = 30.0f * m.scale;
+    DrawRectangleRec({tableX, tableY, tableWidth, headerHeight}, Color{34, 67, 69, 255});
+    const float positionX = tableX + 16.0f * m.scale;
+    const float driverX = tableX + 82.0f * m.scale;
+    const float vehicleX = tableX + tableWidth * 0.48f;
+    const float timeX = tableX + tableWidth * 0.72f;
+    const float lapX = tableX + tableWidth - 72.0f * m.scale;
+    drawText("POS", {positionX, tableY + 8.0f * m.scale}, 12.0f * m.scale, kPaperMuted);
+    drawText("DRIVER", {driverX, tableY + 8.0f * m.scale}, 12.0f * m.scale, kPaperMuted);
+    drawText("CAR", {vehicleX, tableY + 8.0f * m.scale}, 12.0f * m.scale, kPaperMuted);
+    drawText("TIME", {timeX, tableY + 8.0f * m.scale}, 12.0f * m.scale, kPaperMuted);
+    drawText("LAPS", {lapX, tableY + 8.0f * m.scale}, 12.0f * m.scale, kPaperMuted);
+
+    const int rowCount = std::clamp(viewModel.rowCount, 0, kMaxResultRacers);
+    const float actionsHeight = 73.0f * m.scale;
+    const float availableRowsHeight = panel.height - (tableY - panel.y) - actionsHeight - headerHeight - 12.0f * m.scale;
+    const float rowHeight = std::clamp(availableRowsHeight / static_cast<float>(std::max(1, rowCount)), 30.0f * m.scale,
+                                       43.0f * m.scale);
+    for (int index = 0; index < rowCount; ++index) {
+        const ResultRowViewModel& row = viewModel.rows[static_cast<size_t>(index)];
+        const float y = tableY + headerHeight + rowHeight * static_cast<float>(index);
+        const Color fill = row.isPlayer ? Fade(kSun, 0.95f) : (index % 2 == 0 ? Color{23, 48, 51, 250} : Color{29, 57, 59, 250});
+        DrawRectangleRec({tableX, y, tableWidth, rowHeight - 2.0f * m.scale}, fill);
+        const Color textColor = row.isPlayer ? kInk : kPaper;
+        std::array<char, 12> position{};
+        std::snprintf(position.data(), position.size(), "%d", std::max(1, row.position));
+        drawText(position.data(), {positionX, y + 9.0f * m.scale}, 17.0f * m.scale, textColor);
+        drawFittedText(row.driverName, {driverX, y, vehicleX - driverX - 16.0f * m.scale, rowHeight - 2.0f * m.scale},
+                       16.0f * m.scale, 11.0f * m.scale, textColor);
+        drawFittedText(row.vehicleName, {vehicleX, y, timeX - vehicleX - 14.0f * m.scale, rowHeight - 2.0f * m.scale},
+                       14.0f * m.scale, 10.0f * m.scale, row.isPlayer ? kInkSoft : kPaperMuted);
+        drawText(formatTime(row.finishTimeSeconds), {timeX, y + 10.0f * m.scale}, 14.0f * m.scale, textColor);
+        std::array<char, 32> laps{};
+        if (viewModel.totalLaps > 0) {
+            std::snprintf(laps.data(), laps.size(), "%d/%d", std::max(0, row.lapsCompleted), viewModel.totalLaps);
+        } else {
+            std::snprintf(laps.data(), laps.size(), "%d", std::max(0, row.lapsCompleted));
+        }
+        drawText(laps.data(), {lapX, y + 10.0f * m.scale}, 14.0f * m.scale, textColor);
+    }
+
+    const float buttonY = panel.y + panel.height - 58.0f * m.scale;
+    const float buttonWidth = 180.0f * m.scale;
+    const float buttonGap = 14.0f * m.scale;
+    const float buttonsX = panel.x + panel.width - 2.0f * buttonWidth - buttonGap - 32.0f * m.scale;
+    const std::array<std::pair<ResultsAction, const char*>, 2> actions = {{{ResultsAction::Replay, "REPLAY"},
+                                                                           {ResultsAction::Home, "HOME"}}};
+    for (size_t index = 0; index < actions.size(); ++index) {
+        const Rectangle button{buttonsX + static_cast<float>(index) * (buttonWidth + buttonGap), buttonY, buttonWidth,
+                               38.0f * m.scale};
+        const bool selected = viewModel.selectedAction == actions[index].first;
+        DrawRectangleRec(button, selected ? kSun : Color{35, 68, 70, 255});
+        DrawRectangleLinesEx(button, selected ? 2.0f * m.scale : 1.0f * m.scale, selected ? kPaper : kOutline);
+        if (selected) {
+            DrawTriangle({button.x + 14.0f * m.scale, button.y + 11.0f * m.scale},
+                         {button.x + 14.0f * m.scale, button.y + 27.0f * m.scale},
+                         {button.x + 27.0f * m.scale, button.y + 19.0f * m.scale}, kInk);
+        }
+        drawCenteredText(actions[index].second, {button.x + button.width * 0.5f, button.y + button.height * 0.5f},
+                         16.0f * m.scale, selected ? kInk : kPaper);
+    }
+    drawText("A  SELECT", {panel.x + 34.0f * m.scale, buttonY + 12.0f * m.scale}, 13.0f * m.scale, kPaperMuted);
+    if (!viewModel.controllerConnected) {
+        drawConnectionBanner(m);
     }
 }
 
