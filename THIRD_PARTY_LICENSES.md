@@ -1,7 +1,27 @@
 # Third-Party Licenses
 
-This project vendors source archives for Linux platform support only. The game
-assets, track, car roster, and handling code are original to this repository.
+This project vendors source archives for Linux platform support and the font
+documented below. The track, car roster, and handling code are original to this
+repository.
+
+## Noto Sans Display Bold
+
+- Asset: `assets/fonts/NotoSansDisplay-Bold.ttf`
+- Upstream recorded by the package:
+  <https://github.com/googlei18n/noto-fonts>
+- Local provenance: copied without modification from
+  `/usr/share/fonts/truetype/noto/NotoSansDisplay-Bold.ttf`, installed by the
+  Debian `fonts-noto-core` package version `20201225-2`.
+- Font metadata: family `Noto Sans Display`, style `Bold`, PostScript name
+  `NotoSansDisplay-Bold`, font revision `2.003` (`fontversion` 131269).
+- Copyright: 2010, 2012-2020 Google Inc.; 2015-2020 Google LLC.
+- License: SIL Open Font License, Version 1.1.
+- SHA-256:
+  `1640ba8acb852d9e00406e166d1fc0cedd62a4c20342fd92f1f6dbc7baa61de2`
+- Complete package copyright and OFL 1.1 text:
+  `third_party/licenses/fonts-noto-core-copyright.txt`
+
+The vendored TTF is the unmodified package file.
 
 ## SDL 3.4.10
 
