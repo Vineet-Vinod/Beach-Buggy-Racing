@@ -56,14 +56,21 @@ struct LoadingScreenViewModel {
 };
 
 enum class SelectionStage {
+    Mode,
     Driver,
     Car,
     Map,
     Laps,
 };
 
+enum class GameModeOption {
+    Race,
+    TimeTrial,
+};
+
 struct SelectionHudViewModel {
-    SelectionStage stage = SelectionStage::Driver;
+    SelectionStage stage = SelectionStage::Mode;
+    GameModeOption selectedMode = GameModeOption::Race;
     std::string itemName;
     std::string itemSubtitle;
     std::string backstory;
