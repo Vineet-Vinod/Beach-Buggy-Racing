@@ -1,4 +1,4 @@
-# Beach Buggy Racing
+# Formula Buggy
 
 This project attempts to recreate Beach Buggy Racing as closely as possible without infringing on copyright. The following features are extremely important:
 
@@ -13,7 +13,7 @@ This is expected to be a large C++ project because the qualitative feel of playi
 ## Guidelines
 
 - Commit regularly
-- Use subagents for implementation liberally; if needed to experiment in different worktrees, create them ONLY IN `~/worktrees/BBR`
+- Use subagents for implementation liberally; if needed to experiment in different worktrees, create them ONLY IN `~/worktrees/FormulaB`
 - Feel free to tear up and rewrite entire sections of code with impunity
 - Get real 3D graphics
 - Make it as similar to the beach buggy racing experience as possible
