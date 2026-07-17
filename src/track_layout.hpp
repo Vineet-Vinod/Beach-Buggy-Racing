@@ -7,6 +7,16 @@ struct TrackControlPoint {
     float y = 0.0f;
 };
 
+enum class TrackLayoutId {
+    SunsetCove,
+    SpaCoast,
+};
+
+struct TrackElevationPoint {
+    float distanceMeters = 0.0f;
+    float elevationMeters = 0.0f;
+};
+
 inline constexpr float kBreakwaterCourseScale = 1.50f;
 
 // Centerline traced from the supplied top-down outline, starting on the lower
@@ -28,4 +38,80 @@ inline constexpr std::array<TrackControlPoint, 57> kBreakwaterControlPoints = {{
     {-969.0f, -123.0f}, {-1011.0f, -150.0f}, {-1071.0f, -153.0f}, {-1116.0f, -186.0f},
     {-1149.0f, -240.0f}, {-1152.0f, -378.0f}, {-1116.0f, -450.0f}, {-1080.0f, -504.0f},
     {-984.0f, -534.0f}, {-852.0f, -546.0f}, {-693.0f, -543.0f}, {-591.0f, -531.0f},
+}};
+
+inline constexpr float kSpaTargetLength = 7004.0f;
+inline constexpr float kSpaElevationRelief = 102.2f;
+inline constexpr float kSpaStartPhase = 0.0f;
+
+// Starts after the Bus Stop and follows the 19 turns in race order. These
+// survey-space points retain the distinctive La Source hairpin, Eau Rouge S,
+// long Kemmel run, technical middle sector, and fast Blanchimont return.
+inline constexpr std::array<TrackControlPoint, 121> kSpaControlPoints = {{
+    {-198.0f, -139.0f}, {-210.0f, -151.0f}, {-230.0f, -166.0f}, {-250.0f, -184.0f},
+    {-275.0f, -204.0f}, {-294.0f, -216.0f}, {-305.0f, -217.0f}, {-309.0f, -211.0f},
+    {-306.0f, -198.0f}, {-297.0f, -181.0f}, {-286.0f, -162.0f}, {-274.0f, -141.0f},
+    {-261.0f, -118.0f}, {-248.0f, -94.0f},  {-235.0f, -71.0f},  {-220.0f, -48.0f},
+    {-205.0f, -31.0f},  {-190.0f, -24.0f},  {-180.0f, -32.0f},  {-175.0f, -15.0f},
+    {-185.0f, 5.0f},    {-192.0f, 14.0f},   {-187.0f, 22.0f},   {-170.0f, 25.0f},
+    {-150.0f, 24.0f},   {-133.0f, 20.0f},   {-110.0f, 43.0f},   {-85.0f, 66.0f},
+    {-57.0f, 89.0f},    {-28.0f, 109.0f},   {3.0f, 128.0f},     {36.0f, 145.0f},
+    {69.0f, 161.0f},    {101.0f, 176.0f},   {130.0f, 185.0f},   {145.0f, 191.0f},
+    {156.0f, 190.0f},   {166.0f, 181.0f},   {174.0f, 171.0f},   {184.0f, 170.0f},
+    {194.0f, 177.0f},   {207.0f, 188.0f},   {218.0f, 193.0f},   {230.0f, 190.0f},
+    {242.0f, 178.0f},   {252.0f, 165.0f},   {266.0f, 150.0f},   {279.0f, 133.0f},
+    {289.0f, 117.0f},   {294.0f, 102.0f},   {293.0f, 91.0f},    {287.0f, 85.0f},
+    {278.0f, 83.0f},    {269.0f, 88.0f},    {259.0f, 99.0f},    {249.0f, 110.0f},
+    {236.0f, 119.0f},   {220.0f, 124.0f},   {203.0f, 122.0f},   {186.0f, 115.0f},
+    {168.0f, 104.0f},   {149.0f, 91.0f},    {130.0f, 74.0f},    {115.0f, 56.0f},
+    {102.0f, 37.0f},    {95.0f, 18.0f},     {96.0f, 1.0f},      {104.0f, -12.0f},
+    {117.0f, -20.0f},   {133.0f, -25.0f},   {151.0f, -26.0f},   {170.0f, -29.0f},
+    {190.0f, -34.0f},   {209.0f, -42.0f},   {220.0f, -53.0f},   {222.0f, -67.0f},
+    {218.0f, -80.0f},   {221.0f, -92.0f},   {232.0f, -101.0f},  {249.0f, -106.0f},
+    {270.0f, -109.0f},  {291.0f, -114.0f},  {311.0f, -123.0f},  {322.0f, -134.0f},
+    {324.0f, -149.0f},  {319.0f, -165.0f},  {310.0f, -181.0f},  {299.0f, -198.0f},
+    {286.0f, -210.0f},  {272.0f, -215.0f},  {258.0f, -214.0f},  {242.0f, -207.0f},
+    {225.0f, -197.0f},  {207.0f, -184.0f},  {189.0f, -170.0f},  {169.0f, -154.0f},
+    {150.0f, -139.0f},  {130.0f, -123.0f},  {111.0f, -108.0f},  {92.0f, -94.0f},
+    {74.0f, -82.0f},    {55.0f, -74.0f},    {35.0f, -70.0f},    {15.0f, -74.0f},
+    {-4.0f, -83.0f},    {-25.0f, -96.0f},   {-46.0f, -108.0f},  {-67.0f, -119.0f},
+    {-89.0f, -127.0f},  {-110.0f, -130.0f}, {-129.0f, -126.0f}, {-144.0f, -117.0f},
+    {-151.0f, -105.0f}, {-151.0f, -91.0f},  {-149.0f, -76.0f},  {-155.0f, -67.0f},
+    {-168.0f, -65.0f},  {-185.0f, -72.0f},  {-194.0f, -88.0f},  {-196.0f, -109.0f},
+    {-195.0f, -128.0f},
+}};
+
+// Scale is calibrated against the closed Catmull-Rom centerline above so one
+// simulation unit represents one metre over Spa's 7,004 m lap.
+inline constexpr float kSpaCourseScale = 2.9584332f;
+
+// Distance is normalized lap phase converted to metres. Elevation is relative
+// to Eau Rouge so interpolation spans the supplied 102.2 m total relief.
+inline constexpr std::array<TrackElevationPoint, 26> kSpaElevationProfile = {{
+    {0.00f, 65.408f},    // Start/finish
+    {245.14f, 70.518f},
+    {385.22f, 73.584f},  // La Source
+    {525.30f, 61.320f},
+    {700.40f, 32.704f},
+    {875.50f, 0.000f},   // Eau Rouge, low point
+    {980.56f, 14.308f},
+    {1120.64f, 59.276f},  // Raidillon climb
+    {1260.72f, 93.002f},
+    {1470.84f, 100.156f},  // Kemmel
+    {1891.08f, 102.200f},  // Highest point
+    {2171.24f, 96.068f},   // Les Combes
+    {2451.40f, 84.826f},
+    {2731.56f, 71.540f},
+    {3081.76f, 59.276f},
+    {3431.96f, 49.056f},  // Pouhon
+    {3852.20f, 44.968f},  // Fagnes
+    {4342.48f, 38.836f},
+    {4762.72f, 29.638f},  // Stavelot
+    {5253.00f, 17.374f},
+    {5603.20f, 12.264f},  // Low return
+    {5883.36f, 18.396f},
+    {6233.56f, 36.792f},  // Blanchimont climb
+    {6513.72f, 55.188f},
+    {6723.84f, 64.386f},  // Bus Stop
+    {7004.00f, 65.408f},
 }};
