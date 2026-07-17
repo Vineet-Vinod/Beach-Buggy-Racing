@@ -7,7 +7,7 @@ LEGACY_TARGET_3D := $(BUILD_DIR)/harbor_karts_3d
 SDL_LIB := $(BUILD_DIR)/deps/install/lib/libSDL3.a
 RAYLIB_LIB := $(BUILD_DIR)/deps/raylib-install/lib/libraylib.a
 
-.PHONY: all deps clean clean-all run run-2d run-3d self-test input-audit-3d audio-audit-3d vehicle-audit-3d race-flow-audit-3d race-audit race-audit-3d capture-playtest capture-playtest-3d capture-lap-3d capture-section-tour-3d capture-spa-tour-3d spa-audit-3d perf-audit perf-audit-3d spa-perf-audit-3d smoke-3d handling-audit-3d collision-audit-3d terrain-audit-3d ai-pace-audit-3d
+.PHONY: all deps clean clean-all run run-2d run-3d self-test input-audit-3d audio-audit-3d vehicle-audit-3d race-flow-audit-3d race-audit race-audit-3d capture-playtest capture-playtest-3d capture-lap-3d capture-section-tour-3d capture-spa-tour-3d capture-time-trial-3d spa-audit-3d time-trial-audit-3d perf-audit perf-audit-3d spa-perf-audit-3d smoke-3d handling-audit-3d collision-audit-3d terrain-audit-3d ai-pace-audit-3d
 
 all: $(TARGET) $(TARGET_3D) $(LEGACY_TARGET) $(LEGACY_TARGET_3D)
 
@@ -23,7 +23,7 @@ $(TARGET): CMakeLists.txt src/main.cpp src/harbor_karts.cpp src/core_math.hpp sr
 	cmake -S . -B $(GAME_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(GAME_BUILD_DIR) --parallel
 
-$(TARGET_3D): CMakeLists.txt src/main3d.cpp src/arcade_audio.cpp src/arcade_audio.hpp src/arcade_hud.cpp src/arcade_hud.hpp src/arcade_race.cpp src/arcade_race.hpp src/arcade_render.cpp src/arcade_render.hpp src/arcade_vehicle.cpp src/arcade_vehicle.hpp src/harbor_karts_3d.cpp src/harbor_karts_3d.hpp src/core_math.hpp src/track_renderer.cpp src/track_renderer.hpp src/track_layout.hpp $(SDL_LIB) $(RAYLIB_LIB)
+$(TARGET_3D): CMakeLists.txt src/main3d.cpp src/arcade_audio.cpp src/arcade_audio.hpp src/arcade_hud.cpp src/arcade_hud.hpp src/arcade_race.cpp src/arcade_race.hpp src/arcade_render.cpp src/arcade_render.hpp src/arcade_vehicle.cpp src/arcade_vehicle.hpp src/harbor_karts_3d.cpp src/harbor_karts_3d.hpp src/core_math.hpp src/track_clearance_audit.hpp src/track_renderer.cpp src/track_renderer.hpp src/track_layout.hpp $(SDL_LIB) $(RAYLIB_LIB)
 	cmake -S . -B $(GAME_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
 	cmake --build $(GAME_BUILD_DIR) --parallel
 
@@ -65,8 +65,14 @@ capture-section-tour-3d: $(TARGET_3D)
 capture-spa-tour-3d: $(TARGET_3D)
 	$(TARGET_3D) --capture-spa-tour
 
+capture-time-trial-3d: $(TARGET_3D)
+	$(TARGET_3D) --capture-time-trial
+
 spa-audit-3d: $(TARGET_3D)
 	$(TARGET_3D) --spa-audit
+
+time-trial-audit-3d: $(TARGET_3D)
+	$(TARGET_3D) --time-trial-audit --windowed
 
 perf-audit: $(TARGET)
 	$(TARGET) --perf-audit

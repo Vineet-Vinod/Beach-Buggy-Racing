@@ -88,6 +88,8 @@ Gamepad and keyboard are both supported.
 - Reference-calibrated 49-53 second baseline race laps with pack interaction
 - Two selectable beach circuits, including the 7.004 km, 19-turn Spa Coast
   layout with a distance-calibrated 102.2 m elevation profile
+- Race and Time Trial sessions: full-grid finite races or solo infinite-lap
+  running with current and best lap timing
 - Grid countdown, ordered checkpoints, shortcut-resistant laps, wrong-way
   detection, finish order, and checkpoint reset ghosting
 - Fullscreen Linux build with controller/gamepad support
@@ -107,7 +109,9 @@ make capture-playtest-3d
 make handling-audit-3d
 make race-audit-3d
 make spa-audit-3d
+make time-trial-audit-3d
 make capture-spa-tour-3d
+make capture-time-trial-3d
 make spa-perf-audit-3d
 make collision-audit-3d
 make perf-audit-3d
@@ -134,8 +138,12 @@ for visual inspection.
 `race-audit-3d` runs the 3D scripted player against live AI and validates lap
 pace, pack pressure, contact rate, overtakes, and every kart's progress stability.
 `spa-audit-3d` verifies Spa Coast's lap length, sampled FIA elevation stations,
-overall relief, mesh length, and maximum grade without opening a window.
+overall relief, mesh length, road width, two-kart passing room, and non-local
+branch clearance without opening a window.
+`time-trial-audit-3d` drives more than two solo Spa laps and verifies one-racer
+flow, infinite laps, best-lap timing, parked opponents, and no results transition.
 `capture-spa-tour-3d` writes nine course views for visual inspection.
+`capture-time-trial-3d` writes the live and paused solo timing HUD states.
 `collision-audit-3d` runs deterministic rear-end, head-on, and side-swipe
 contact cases and fails if the kart bodies remain overlapped.
 `perf-audit-3d` records 3D frame timings and fails if p95 misses the 60fps

@@ -58,6 +58,7 @@ if(BUILD_TESTING)
     add_test(NAME track_gradient_audit COMMAND harbor_karts_3d --terrain-audit)
     add_test(NAME ai_attacking_pace_audit COMMAND harbor_karts_3d --ai-pace-audit)
     add_test(NAME spa_geometry_audit COMMAND harbor_karts_3d --spa-audit)
+    add_test(NAME time_trial_session_audit COMMAND harbor_karts_3d --time-trial-audit --windowed)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
