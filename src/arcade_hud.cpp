@@ -324,6 +324,34 @@ void drawRaceProgress(const RaceHudViewModel& viewModel, const Metrics& m) {
     }
 }
 
+void drawTimeTrialProgress(const RaceHudViewModel& viewModel, const Metrics& m) {
+    const float width = 460.0f * m.scale;
+    const Rectangle panel{(m.width - width) * 0.5f, m.margin, width, 82.0f * m.scale};
+    DrawRectangleRec(panel, Fade(kInk, 0.84f));
+    DrawRectangleRec({panel.x, panel.y, 5.0f * m.scale, panel.height}, kAqua);
+
+    const float halfWidth = panel.width * 0.5f;
+    drawCenteredText("CURRENT LAP", {panel.x + halfWidth * 0.5f, panel.y + 14.0f * m.scale},
+                     12.0f * m.scale, kPaperMuted);
+    drawCenteredText(formatTime(viewModel.currentLapTimeSeconds),
+                     {panel.x + halfWidth * 0.5f, panel.y + 39.0f * m.scale}, 21.0f * m.scale, kPaper);
+
+    DrawLineEx({panel.x + halfWidth, panel.y + 10.0f * m.scale},
+               {panel.x + halfWidth, panel.y + 58.0f * m.scale}, 1.0f * m.scale, Fade(kOutline, 0.70f));
+    drawCenteredText("BEST", {panel.x + halfWidth * 1.5f, panel.y + 14.0f * m.scale},
+                     12.0f * m.scale, viewModel.hasBestLap ? kSun : kPaperMuted);
+    drawCenteredText(viewModel.hasBestLap ? formatTime(viewModel.bestLapTimeSeconds) : "--:--.--",
+                     {panel.x + halfWidth * 1.5f, panel.y + 39.0f * m.scale}, 21.0f * m.scale,
+                     viewModel.hasBestLap ? kSun : kPaperMuted);
+
+    const Rectangle rail{panel.x + 21.0f * m.scale, panel.y + 68.0f * m.scale,
+                         panel.width - 42.0f * m.scale, 5.0f * m.scale};
+    DrawRectangleRec(rail, Color{7, 18, 21, 240});
+    DrawRectangleRec({rail.x, rail.y, rail.width * clamp01(viewModel.raceProgress), rail.height}, kAqua);
+    DrawCircleV({rail.x + rail.width * clamp01(viewModel.raceProgress), rail.y + rail.height * 0.5f},
+                4.5f * m.scale, kPaper);
+}
+
 void drawPlacePanel(const RaceHudViewModel& viewModel, const Metrics& m) {
     const Rectangle panel{m.margin, m.margin, 184.0f * m.scale, 82.0f * m.scale};
     DrawRectangleRec(panel, Fade(kInk, 0.76f));
@@ -390,8 +418,12 @@ bool IsUiFontLoaded() {
 
 void DrawRaceHud(const RaceHudViewModel& viewModel) {
     const Metrics m = metrics();
-    drawPlacePanel(viewModel, m);
-    drawRaceProgress(viewModel, m);
+    if (viewModel.isTimeTrial) {
+        drawTimeTrialProgress(viewModel, m);
+    } else {
+        drawPlacePanel(viewModel, m);
+        drawRaceProgress(viewModel, m);
+    }
     drawLapPanel(viewModel, m);
     drawRaceAlert(viewModel, m);
     if (!viewModel.controllerConnected) {
@@ -423,6 +455,8 @@ void DrawSelectionHud(const SelectionHudViewModel& viewModel) {
     const Metrics m = metrics();
     static constexpr std::array<const char*, 5> kStageNames = {"MODE", "DRIVER", "CAR", "MAP", "LAPS"};
     const int stage = std::clamp(static_cast<int>(viewModel.stage), 0, 4);
+    const int stageCount = viewModel.selectedMode == GameModeOption::TimeTrial ? 4 : 5;
+    const int stepperStage = std::min(stage, stageCount - 1);
     if (stage == 0 || stage >= 3) {
         drawBeachBackdrop(m, viewModel.presentationTimeSeconds, true);
         DrawRectangle(0, 0, static_cast<int>(m.width), static_cast<int>(m.height), Fade(kInk, 0.12f));
@@ -432,19 +466,21 @@ void DrawSelectionHud(const SelectionHudViewModel& viewModel) {
     const float headerHeight = 98.0f * m.scale;
     DrawRectangleRec({0.0f, 0.0f, m.width, headerHeight}, Fade(kInk, 0.93f));
     drawText("FORMULA BUGGY", {m.margin, 17.0f * m.scale}, 25.0f * m.scale, kSun);
-    drawText(stage == 0 ? "MAIN MENU" : "RACE SETUP", {m.margin, 52.0f * m.scale}, 15.0f * m.scale, kPaperMuted);
+    const char* setupTitle = stage == 0 ? "MAIN MENU" :
+                             viewModel.selectedMode == GameModeOption::TimeTrial ? "TIME TRIAL SETUP" : "RACE SETUP";
+    drawText(setupTitle, {m.margin, 52.0f * m.scale}, 15.0f * m.scale, kPaperMuted);
 
     const float stepsX = std::max(300.0f * m.scale, m.width * 0.38f);
     const float stepsWidth = m.width - stepsX - m.margin;
-    const float segmentWidth = stepsWidth / static_cast<float>(kStageNames.size());
-    for (int index = 0; index < static_cast<int>(kStageNames.size()); ++index) {
-        const bool complete = index < stage;
-        const bool current = index == stage;
+    const float segmentWidth = stepsWidth / static_cast<float>(stageCount);
+    for (int index = 0; index < stageCount; ++index) {
+        const bool complete = index < stepperStage;
+        const bool current = index == stepperStage;
         const float centerX = stepsX + segmentWidth * (static_cast<float>(index) + 0.5f);
-        if (index + 1 < static_cast<int>(kStageNames.size())) {
+        if (index + 1 < stageCount) {
             DrawLineEx({centerX + 15.0f * m.scale, 35.0f * m.scale},
                        {centerX + segmentWidth - 15.0f * m.scale, 35.0f * m.scale}, 3.0f * m.scale,
-                       index < stage ? kAqua : Fade(kOutline, 0.55f));
+                       index < stepperStage ? kAqua : Fade(kOutline, 0.55f));
         }
         DrawCircleV({centerX, 35.0f * m.scale}, 12.0f * m.scale, current ? kSun : (complete ? kAqua : kInkSoft));
         DrawCircleLines(static_cast<int>(centerX), static_cast<int>(35.0f * m.scale), 12.0f * m.scale,
@@ -727,7 +763,7 @@ void DrawPauseHud(const PauseHudViewModel& viewModel) {
     const PauseAction selectedAction = selectedActionVisible ? viewModel.selectedAction : PauseAction::Resume;
 
     const float panelWidth = 430.0f * m.scale;
-    const float panelHeight = 334.0f * m.scale;
+    const float panelHeight = (viewModel.isTimeTrial ? 360.0f : 334.0f) * m.scale;
     const Rectangle panel{(m.width - panelWidth) * 0.5f, (m.height - panelHeight) * 0.5f, panelWidth, panelHeight};
     drawPanel(panel, Color{14, 31, 34, 252}, kSun, m.scale);
     drawCenteredText("PAUSED", {panel.x + panel.width * 0.5f, panel.y + 42.0f * m.scale}, 34.0f * m.scale, kSun);
@@ -744,7 +780,20 @@ void DrawPauseHud(const PauseHudViewModel& viewModel) {
     drawText(time, {panel.x + panel.width - timeWidth - 34.0f * m.scale, panel.y + 108.0f * m.scale}, 15.0f * m.scale,
              kPaperMuted);
 
-    float y = panel.y + 148.0f * m.scale;
+    if (viewModel.isTimeTrial) {
+        const std::string currentLapTime = "CURRENT  " + formatTime(viewModel.currentLapTimeSeconds);
+        const std::string bestLapTime = viewModel.hasBestLap ? "BEST  " + formatTime(viewModel.bestLapTimeSeconds)
+                                                             : "BEST  --:--.--";
+        drawText(currentLapTime, {panel.x + 34.0f * m.scale, panel.y + 136.0f * m.scale},
+                 13.0f * m.scale, kAqua);
+        const float bestWidth = MeasureTextEx(uiFont(), bestLapTime.c_str(), 13.0f * m.scale,
+                                              13.0f * m.scale * 0.015f).x;
+        drawText(bestLapTime,
+                 {panel.x + panel.width - bestWidth - 34.0f * m.scale, panel.y + 136.0f * m.scale},
+                 13.0f * m.scale, viewModel.hasBestLap ? kSun : kPaperMuted);
+    }
+
+    float y = panel.y + (viewModel.isTimeTrial ? 171.0f : 148.0f) * m.scale;
     for (const ActionEntry& entry : actions) {
         const Rectangle actionBounds{panel.x + 34.0f * m.scale, y, panel.width - 68.0f * m.scale, 38.0f * m.scale};
         const bool selected = entry.action == selectedAction;

@@ -31,6 +31,8 @@ struct RaceHudViewModel {
     int position = 1;
     int racerCount = 1;
     float raceTimeSeconds = 0.0f;
+    float currentLapTimeSeconds = 0.0f;
+    float bestLapTimeSeconds = 0.0f;
     float raceProgress = 0.0f;
     std::array<float, kMaxHudRacers> racerProgress{};
     int racerProgressCount = 0;
@@ -41,6 +43,8 @@ struct RaceHudViewModel {
     bool boostActive = false;
     bool wrongWay = false;
     bool finished = false;
+    bool isTimeTrial = false;
+    bool hasBestLap = false;
     bool controllerConnected = true;
 };
 
@@ -105,8 +109,12 @@ struct PauseHudViewModel {
     int currentLap = 1;
     int totalLaps = 2;
     float raceTimeSeconds = 0.0f;
+    float currentLapTimeSeconds = 0.0f;
+    float bestLapTimeSeconds = 0.0f;
     PauseAction selectedAction = PauseAction::Resume;
     bool visible = false;
+    bool isTimeTrial = false;
+    bool hasBestLap = false;
 };
 
 struct ResultRowViewModel {
