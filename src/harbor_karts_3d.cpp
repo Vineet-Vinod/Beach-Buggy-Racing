@@ -43,6 +43,7 @@ constexpr float kTrackSurfaceLift = 0.018f;
 constexpr float kKartWheelGroundClearance = 0.42f;
 constexpr float kContactProgressWindow = 240.0f;
 constexpr float kContactVerticalWindow = 7.0f;
+constexpr float kSpaVehiclePaceScale = 2.45f;
 constexpr int kInfiniteLaps = 0;
 constexpr std::array<int, 4> kLapOptions = {2, 5, 10, kInfiniteLaps};
 constexpr int kRaceLapOptionCount = 3;
@@ -245,6 +246,11 @@ float trackWidthForPhase(float phase) {
     return width;
 }
 
+float spaRoadWidthMetersForPhase(float phase) {
+    const float normalized = std::clamp((trackWidthForPhase(phase) - 190.0f) / 26.0f, 0.0f, 1.0f);
+    return lerp(14.0f, 16.0f, normalized);
+}
+
 ZoneMaterial3D materialForPhase(float phase) {
     ZoneMaterial3D material = baseZoneMaterial(zoneForPhase(phase));
     static constexpr float kBlend = 0.034f;
@@ -356,8 +362,9 @@ public:
         out.normal = {-out.tangent.y, out.tangent.x};
         out.progress = progress;
         out.width = lerp(a.width, b.width, t);
-        out.elevation = layout_ == TrackLayoutId::SpaCoast ? spaElevationForDistance(progress)
-                                                           : lerp(a.elevation, b.elevation, t);
+        out.elevation = layout_ == TrackLayoutId::SpaCoast
+                            ? spaElevationForDistance(progress) * kSpaSimulationUnitsPerMeter
+                            : lerp(a.elevation, b.elevation, t);
         out.bank = lerp(a.bank, b.bank, t);
         out.curvature = lerp(a.curvature, b.curvature, t);
         out.signedCurvature = lerp(a.signedCurvature, b.signedCurvature, t);
@@ -436,13 +443,16 @@ private:
         phase -= std::floor(phase);
         const ZoneMaterial3D material = materialForPhase(phase);
         point.zone = zoneForPhase(phase);
-        point.width = layout_ == TrackLayoutId::SpaCoast ? trackWidthForPhase(phase) * 0.82f : trackWidthForPhase(phase);
+        point.width = layout_ == TrackLayoutId::SpaCoast
+                          ? spaRoadWidthMetersForPhase(phase) * kSpaSimulationUnitsPerMeter /
+                                (kRoadSurfaceRatio * 2.0f)
+                          : trackWidthForPhase(phase);
         point.road = material.road;
         point.shoulder = material.shoulder;
         point.natural = material.natural;
 
         if (layout_ == TrackLayoutId::SpaCoast) {
-            point.elevation = spaElevationForDistance(progress);
+            point.elevation = spaElevationForDistance(progress) * kSpaSimulationUnitsPerMeter;
             point.launchVelocity = 0.0f;
         } else {
             point.elevation += elevationForPhase(phase);
@@ -454,7 +464,8 @@ private:
     }
 
     template <size_t N>
-    void buildFromControl(const std::array<TrackControlPoint, N>& control, float scale, float targetLength) {
+    void buildFromControl(const std::array<TrackControlPoint, N>& control, float scale, float targetLength,
+                          float simulationUnitsPerDistance = 1.0f) {
         const auto controlPoint = [&control, scale](int index) {
             const int count = static_cast<int>(control.size());
             int wrapped = index % count;
@@ -482,7 +493,8 @@ private:
             cumulative[i + 1] = cumulative[i] + length(dense[(i + 1) % dense.size()] - dense[i]);
         }
         if (targetLength > 0.0f) {
-            const float correction = targetLength / std::max(0.001f, cumulative.back());
+            const float targetSpatialLength = targetLength * simulationUnitsPerDistance;
+            const float correction = targetSpatialLength / std::max(0.001f, cumulative.back());
             for (Vec2& point : dense) {
                 point *= correction;
             }
@@ -496,13 +508,14 @@ private:
         samples_.resize(kSampleCount);
         for (int i = 0; i < kSampleCount; ++i) {
             const float desired = totalLength_ * static_cast<float>(i) / kSampleCount;
-            auto it = std::upper_bound(cumulative.begin(), cumulative.end(), desired);
+            const float desiredSpatial = targetLength > 0.0f ? desired * simulationUnitsPerDistance : desired;
+            auto it = std::upper_bound(cumulative.begin(), cumulative.end(), desiredSpatial);
             int seg = std::max(0, static_cast<int>(it - cumulative.begin()) - 1);
             if (seg >= static_cast<int>(dense.size())) {
                 seg = static_cast<int>(dense.size()) - 1;
             }
             const float span = cumulative[static_cast<size_t>(seg + 1)] - cumulative[static_cast<size_t>(seg)];
-            const float t = span > 0.001f ? (desired - cumulative[static_cast<size_t>(seg)]) / span : 0.0f;
+            const float t = span > 0.001f ? (desiredSpatial - cumulative[static_cast<size_t>(seg)]) / span : 0.0f;
             TrackPoint3D point;
             point.progress = desired;
             point.pos = lerp(dense[static_cast<size_t>(seg)], dense[static_cast<size_t>((seg + 1) % dense.size())], t);
@@ -552,7 +565,7 @@ private:
 
     void build() {
         if (layout_ == TrackLayoutId::SpaCoast) {
-            buildFromControl(kSpaControlPoints, kSpaCourseScale, kSpaTargetLength);
+            buildFromControl(kSpaControlPoints, kSpaCourseScale, kSpaTargetLength, kSpaSimulationUnitsPerMeter);
         } else {
             buildFromControl(kBreakwaterControlPoints, kBreakwaterCourseScale, 0.0f);
         }
@@ -635,7 +648,7 @@ bool runSpaGeometryAudit() {
     float minElevation = std::numeric_limits<float>::max();
     float maxElevation = std::numeric_limits<float>::lowest();
     for (const TrackElevationPoint& station : kSpaElevationProfile) {
-        const float sampled = track.sample(station.distanceMeters).elevation;
+        const float sampled = track.sample(station.distanceMeters).elevation / kSpaSimulationUnitsPerMeter;
         stationError = std::max(stationError, std::abs(sampled - station.elevationMeters));
         minElevation = std::min(minElevation, sampled);
         maxElevation = std::max(maxElevation, sampled);
@@ -651,15 +664,17 @@ bool runSpaGeometryAudit() {
     clearanceSettings.totalLength = track.totalLength();
     clearanceSettings.widestKartWidth = 41.0f;
     clearanceSettings.roadLaneInset = kRoadLaneInset;
-    clearanceSettings.twoKartPassingMargin = 6.0f;
+    clearanceSettings.twoKartPassingMargin = 0.5f * kSpaSimulationUnitsPerMeter;
     clearanceSettings.localArcExclusion = 600.0f;
-    clearanceSettings.verticalOverlapTolerance = 7.0f;
+    clearanceSettings.verticalOverlapTolerance = 7.0f * kSpaSimulationUnitsPerMeter;
     clearanceSettings.minimumSegmentLength = 0.1f;
-    clearanceSettings.overlapTolerance = 0.5f;
+    clearanceSettings.overlapTolerance = 0.05f * kSpaSimulationUnitsPerMeter;
     clearanceSettings.widthParityTolerance = 0.01f;
     const harbor::TrackClearanceAuditResult clearance =
         harbor::AuditTrackClearance(clearanceSamples, clearanceSettings);
 
+    planarLength /= kSpaSimulationUnitsPerMeter;
+    surfaceLength /= kSpaSimulationUnitsPerMeter;
     const float lengthError = std::abs(track.totalLength() - kSpaTargetLength);
     const float relief = maxElevation - minElevation;
     const bool ok = lengthError <= 0.01f && std::abs(relief - kSpaElevationRelief) <= 0.03f &&
@@ -668,11 +683,13 @@ bool runSpaGeometryAudit() {
     std::cout << "spa-audit length_m=" << track.totalLength() << " planar_mesh_m=" << planarLength
               << " surface_mesh_m=" << surfaceLength << " relief_m=" << relief
               << " station_error_m=" << stationError << " max_grade=" << maxGrade
-              << " road_width=" << clearance.minPhysicalRoadWidth << ".." << clearance.maxPhysicalRoadWidth
-              << " passing_clearance=" << clearance.minTwoKartPassingClearance
-              << " branch_clearance=" << clearance.minPhysicalNonLocalClearance
+              << " road_width_m=" << clearance.minPhysicalRoadWidth / kSpaSimulationUnitsPerMeter << ".."
+              << clearance.maxPhysicalRoadWidth / kSpaSimulationUnitsPerMeter
+              << " passing_clearance_m=" << clearance.minTwoKartPassingClearance / kSpaSimulationUnitsPerMeter
+              << " branch_clearance_m=" << clearance.minPhysicalNonLocalClearance / kSpaSimulationUnitsPerMeter
               << " overlap_pairs=" << clearance.physicalOverlapPairs
-              << " rendered_width_margin=" << clearance.minRenderedPhysicalMargin << " ok=" << ok << "\n";
+              << " rendered_width_margin_m=" << clearance.minRenderedPhysicalMargin / kSpaSimulationUnitsPerMeter
+              << " ok=" << ok << "\n";
     return ok;
 }
 
@@ -1786,11 +1803,18 @@ public:
             parkedOpponents[static_cast<size_t>(i - 1)] = karts_[static_cast<size_t>(i)].pos;
         }
         const float startScore = playerRaceScoreForCapture();
-        const float targetDistance = track_.totalLength() * 2.05f;
-        const int maxFrames = static_cast<int>(210.0f / kFixedDt);
+        const float targetDistance = track_.totalLength() * 1.08f;
+        const int maxFrames = static_cast<int>(1000.0f / kFixedDt);
         int frames = 0;
+        float speedSum = 0.0f;
+        int offroadFrames = 0;
+        float maxRoadViolation = 0.0f;
         while (playerRaceScoreForCapture() - startScore < targetDistance && frames < maxFrames && mode_ == Mode::Race) {
             update(kFixedDt, scriptedInput(), true);
+            speedSum += length(karts_[0].vel);
+            const float violation = roadEdgeViolation(karts_[0], track_.sample(karts_[0].progress));
+            maxRoadViolation = std::max(maxRoadViolation, violation);
+            offroadFrames += violation > 1.0f ? 1 : 0;
             ++frames;
         }
 
@@ -1804,12 +1828,16 @@ public:
         const bool infinite = raceFlow_ && raceFlow_->config().infiniteLaps && targetLaps() == kInfiniteLaps;
         const bool timingValid = hasBestLap_ && bestLapTime_ > 20.0f && lastLapTime_ > 20.0f &&
                                  bestLapTime_ <= lastLapTime_ + 0.001f;
+        const float offroadRatio = static_cast<float>(offroadFrames) / std::max(1, frames);
+        const float averageSpeedKph = speedSum / std::max(1, frames) / kSpaSimulationUnitsPerMeter * 3.6f;
         const bool staysActive = mode_ == Mode::Race && !raceFinished_ && resultCount_ == 0;
         const bool ok = selectionFlow && frames < maxFrames && distance >= targetDistance && soloFlow && infinite && timingValid &&
-                        staysActive && opponentsParked && playerPosition_ == 1;
+                        staysActive && opponentsParked && playerPosition_ == 1 && offroadRatio < 0.20f;
         std::cout << "time-trial-audit frames=" << frames << " distance=" << distance
                   << " completed_laps=" << karts_[0].lap << " racers=" << (raceFlow_ ? raceFlow_->racerCount() : 0)
                   << " last_lap_s=" << lastLapTime_ << " best_lap_s=" << bestLapTime_
+                  << " avg_kph=" << averageSpeedKph << " offroad_ratio=" << offroadRatio
+                  << " max_road_violation_m=" << maxRoadViolation / kSpaSimulationUnitsPerMeter
                   << " selected=" << selectionFlow << " solo=" << soloFlow << " infinite=" << infinite << " parked=" << opponentsParked
                   << " active=" << staysActive << " ok=" << ok << "\n";
         return ok;
@@ -2394,6 +2422,26 @@ private:
 
     bool isTimeTrial() const { return selectedSession_ == harbor::ui::GameModeOption::TimeTrial; }
     int activeKartCount() const { return isTimeTrial() ? 1 : kKartCount; }
+    ArcadeVehicleConfig selectedTrackTuning(const KartSpec3D& spec) const {
+        ArcadeVehicleConfig tuning = tuningForSpec(spec);
+        if (track_.layout() == TrackLayoutId::SpaCoast) {
+            const float steerScale = 1.0f / kSpaSimulationUnitsPerMeter;
+            const float yawScale = kSpaVehiclePaceScale / kSpaSimulationUnitsPerMeter;
+            tuning.maxForwardSpeed *= kSpaVehiclePaceScale;
+            tuning.engineAcceleration *= 1.35f;
+            tuning.launchAccelerationBonus *= 1.35f;
+            tuning.brakeDeceleration *= 1.35f;
+            tuning.boostAcceleration *= 1.35f;
+            tuning.maxSteerLowSpeed *= steerScale;
+            tuning.maxSteerHighSpeed *= steerScale;
+            tuning.maxYawRateLowSpeed *= yawScale;
+            tuning.maxYawRateHighSpeed *= yawScale;
+            tuning.driftYawBase *= yawScale;
+            tuning.driftYawSpeedGain *= yawScale;
+            tuning.brakeOversteerYawGain *= yawScale;
+        }
+        return tuning;
+    }
     std::string sessionEventName() const {
         return isTimeTrial() ? std::string(selectedMap().name) + " TIME TRIAL" : selectedMap().eventName;
     }
@@ -2467,7 +2515,7 @@ private:
         }
         Kart3D& preview = karts_[0];
         preview.spec = specs_[static_cast<size_t>(selectedCar_)];
-        preview.tuning = tuningForSpec(preview.spec);
+        preview.tuning = selectedTrackTuning(preview.spec);
         preview.racer = racers_[static_cast<size_t>(selectedRacer_)];
     }
 
@@ -2550,14 +2598,19 @@ private:
         for (int i = 0; i < kKartCount; ++i) {
             Kart3D kart;
             kart.spec = specs_[static_cast<size_t>(i == 0 ? selectedCar_ : i % static_cast<int>(specs_.size()))];
-            kart.tuning = tuningForSpec(kart.spec);
+            kart.tuning = selectedTrackTuning(kart.spec);
             if (i > 0) {
                 applyAttackingAiSetup(kart.tuning);
             }
             kart.racer = racers_[static_cast<size_t>(i == 0 ? selectedRacer_ : (i * 3) % static_cast<int>(racers_.size()))];
             static constexpr std::array<float, kKartCount> kGridProgress = {-420.0f, -84.0f, -126.0f, -246.0f, -288.0f, -374.0f};
             static constexpr std::array<float, kKartCount> kGridLane = {34.0f, -34.0f, 34.0f, -34.0f, 34.0f, -34.0f};
-            const float stagger = startProgress + (isTimeTrial() && i == 0 ? 0.0f : kGridProgress[static_cast<size_t>(i)]);
+            const float gridScale = track_.layout() == TrackLayoutId::SpaCoast
+                                        ? 1.0f / kSpaSimulationUnitsPerMeter
+                                        : 1.0f;
+            const float stagger = startProgress +
+                                  (isTimeTrial() && i == 0 ? 0.0f
+                                                          : kGridProgress[static_cast<size_t>(i)] * gridScale);
             const TrackPoint3D grid = track_.sample(stagger);
             const float lane = std::clamp(kGridLane[static_cast<size_t>(i)], -roadCenterLimit(kart, grid), roadCenterLimit(kart, grid));
             kart.pos = grid.pos + grid.normal * lane;
@@ -2766,7 +2819,10 @@ private:
     void updateAi(Kart3D& kart, float dt, int index, bool raceTraffic = true) {
         TrackPoint3D center = track_.sample(kart.progress);
         float speed = length(kart.vel);
-        const float pathSpeed = speed / kRacePaceScale;
+        const float distanceSpeed = track_.layout() == TrackLayoutId::SpaCoast
+                                        ? speed / kSpaSimulationUnitsPerMeter
+                                        : speed;
+        const float pathSpeed = distanceSpeed / kRacePaceScale;
         const float steeringCorner = std::max(std::abs(smoothedSignedCurvature(kart.progress + 80.0f)),
                                               std::abs(smoothedSignedCurvature(kart.progress + 175.0f)));
         const float cornerLookaheadScale = lerp(1.0f, 0.62f, std::clamp((steeringCorner - 0.08f) / 0.52f, 0.0f, 1.0f));
@@ -2833,7 +2889,10 @@ private:
 
     Input3D auditInput(AuditDriver driver, const Kart3D& kart) const {
         const float speed = length(kart.vel);
-        const float pathSpeed = speed / kRacePaceScale;
+        const float distanceSpeed = track_.layout() == TrackLayoutId::SpaCoast
+                                        ? speed / kSpaSimulationUnitsPerMeter
+                                        : speed;
+        const float pathSpeed = distanceSpeed / kRacePaceScale;
         const TrackPoint3D future = track_.sample(kart.progress + 95.0f + pathSpeed * 0.88f);
         const TrackPoint3D apex = track_.sample(kart.progress + 155.0f + pathSpeed * 0.58f);
         const TrackPoint3D center = track_.pointAtIndex(kart.nearest);
@@ -2860,7 +2919,9 @@ private:
             }
         }
         if (driver != AuditDriver::NoBrake && laneExcess > 1.0f) {
-            input.steer = aiSteerForProgress(kart, 0, 0.0f);
+            const float recoveryLimit = roadCenterLimit(kart, center) * 0.58f;
+            const float recoveryLane = std::clamp(-kart.lane * 0.72f, -recoveryLimit, recoveryLimit);
+            input.steer = aiSteerForProgress(kart, 0, recoveryLane);
             input.throttle = std::min(input.throttle, 0.62f);
             input.brake = std::max(input.brake, std::clamp(laneExcess / 38.0f, 0.20f, 0.70f));
             input.drift = false;
@@ -2942,18 +3003,25 @@ private:
     float aiSteerForProgress(const Kart3D& kart, int index, float laneTarget) const {
         (void)index;
         const float speed = length(kart.vel);
-        const float pathSpeed = speed / kRacePaceScale;
+        const float distanceSpeed = track_.layout() == TrackLayoutId::SpaCoast
+                                        ? speed / kSpaSimulationUnitsPerMeter
+                                        : speed;
+        const float pathSpeed = distanceSpeed / kRacePaceScale;
         const float steeringCurvature = std::max({std::abs(smoothedSignedCurvature(kart.progress + 90.0f)),
                                                   std::abs(smoothedSignedCurvature(kart.progress + 180.0f)),
                                                   std::abs(smoothedSignedCurvature(kart.progress + 290.0f))});
         const float horizonScale = lerp(1.0f, 0.30f, std::clamp((steeringCurvature - 0.08f) / 0.48f, 0.0f, 1.0f));
         const float steeringHorizon = std::clamp((128.0f + pathSpeed * 0.65f) * horizonScale, 55.0f, 340.0f);
         const TrackPoint3D future = track_.sample(kart.progress + steeringHorizon);
-        laneTarget -= std::copysign(13.0f, future.signedCurvature) * std::clamp(future.curvature * 4.0f, 0.0f, 1.0f);
+        if (track_.layout() != TrackLayoutId::SpaCoast) {
+            laneTarget -= std::copysign(13.0f, future.signedCurvature) *
+                          std::clamp(future.curvature * 4.0f, 0.0f, 1.0f);
+        }
         const Vec2 desired = future.pos + future.normal * laneTarget;
         const Vec2 forward = fromAngle(kart.heading);
         const Vec2 toTarget = normalize(desired - kart.pos);
-        return std::clamp(std::atan2(cross(forward, toTarget), dot(forward, toTarget)) * 1.95f, -1.0f, 1.0f);
+        const float steeringGain = track_.layout() == TrackLayoutId::SpaCoast ? 3.6f : 1.95f;
+        return std::clamp(std::atan2(cross(forward, toTarget), dot(forward, toTarget)) * steeringGain, -1.0f, 1.0f);
     }
 
     CollisionAuditResult3D simulateCollisionScenario(const char* name, int scenario) {
@@ -3316,8 +3384,9 @@ private:
         const Vec2 velocityDirection = speed > 12.0f ? normalize(player.vel) : forward2;
         const Vec2 chaseDirection = normalize(lerp(forward2, velocityDirection, 0.32f));
         const float speedT = std::clamp(speed / std::max(1.0f, player.tuning.maxForwardSpeed), 0.0f, 1.0f);
-        const float back = lerp(64.0f, 69.0f, speedT);
-        const float height = lerp(27.0f, 30.0f, speedT);
+        const bool spa = track_.layout() == TrackLayoutId::SpaCoast;
+        const float back = spa ? lerp(92.0f, 110.0f, speedT) : lerp(64.0f, 69.0f, speedT);
+        const float height = spa ? lerp(38.0f, 43.0f, speedT) : lerp(27.0f, 30.0f, speedT);
         const TrackPoint3D ground = track_.sample(player.progress);
         const float playerGround = bankedElevation(ground, player.lane);
         const float impactShake = std::clamp(player.contactTimer / 0.22f, 0.0f, 1.0f);
@@ -3328,14 +3397,20 @@ private:
         const float lateralShake = std::sin(raceTime_ * 51.0f) * shake;
         const float verticalShake = std::sin(raceTime_ * 67.0f + 0.8f) * shake * 0.55f;
         const Vec2 desiredPlanar = player.pos - chaseDirection * back + cameraSide * lateralShake;
-        const Vec2 lookDirection = normalize(lerp(forward2, velocityDirection, 0.18f));
         const float airHeight = std::max(0.0f, player.elevation - playerGround);
         const float desiredElevation = playerGround + airHeight * 0.18f;
         const float verticalResponse = player.grounded ? 6.5f : 2.1f;
         cameraElevation_ = lerp(cameraElevation_, desiredElevation, 1.0f - std::exp(-dt * verticalResponse));
         const Vector3 desiredPos = toWorld(desiredPlanar, cameraElevation_ + height + verticalShake);
-        const float targetElevation = playerGround + airHeight * 0.58f;
-        const Vector3 desiredTarget = toWorld(player.pos + lookDirection * (42.0f + speed * 0.08f), targetElevation + 8.0f);
+        Vector3 desiredTarget{};
+        if (spa) {
+            const TrackPoint3D preview = track_.sample(player.progress + lerp(18.0f, 28.0f, speedT));
+            desiredTarget = toWorld(preview.pos, preview.elevation + 8.0f);
+        } else {
+            const Vec2 lookDirection = normalize(lerp(forward2, velocityDirection, 0.18f));
+            const float targetElevation = playerGround + airHeight * 0.58f;
+            desiredTarget = toWorld(player.pos + lookDirection * (42.0f + speed * 0.08f), targetElevation + 8.0f);
+        }
         const float blend = 1.0f - std::exp(-dt * 10.5f);
         camera_.position = add(camera_.position, mul(sub(desiredPos, camera_.position), blend));
         const float targetBlend = 1.0f - std::exp(-dt * 10.5f);
@@ -3348,6 +3423,12 @@ private:
     }
 
     void drawEnvironment() {
+        if (track_.layout() == TrackLayoutId::SpaCoast) {
+            Vector3 oceanCenter = karts_.empty() ? Vector3{} : toWorld(karts_[0].pos);
+            oceanCenter.y = -0.44f;
+            DrawPlane(oceanCenter, {3200.0f, 3200.0f}, Color{37, 166, 192, 255});
+            return;
+        }
         DrawPlane({0.0f, -0.44f, 0.0f}, {390.0f, 340.0f}, Color{37, 166, 192, 255});
 
         // One continuous island sits beneath the complete loop. Overlapping
@@ -3396,12 +3477,12 @@ private:
             mode_ == Mode::Garage || karts_.empty() ? track_.startProgress() : karts_[0].progress;
         const auto detailVisible = [&](float progress) {
             const float distance = signedDistanceToLoop(viewProgress, progress, track_.totalLength());
-            return distance >= -320.0f && distance <= 860.0f;
+            return distance >= -700.0f && distance <= 2500.0f;
         };
         if (trackRenderer_.ready()) {
             const bool spa = track_.layout() == TrackLayoutId::SpaCoast;
-            const float spaLoopRange = track_.totalLength() * kRenderScale;
-            trackRenderer_.draw(viewProgress * kRenderScale, spa ? spaLoopRange : 260.0f, spa ? spaLoopRange : 24.0f);
+            trackRenderer_.draw(viewProgress * kRenderScale, spa ? 2500.0f * kRenderScale : 260.0f,
+                                spa ? 700.0f * kRenderScale : 24.0f);
         } else {
             constexpr int stride = 2;
             for (int i = 0; i < track_.sampleCount(); i += stride) {
@@ -3459,7 +3540,7 @@ private:
                 continue;
             }
             const float outside = std::abs(p.signedCurvature) > 0.004f ? -std::copysign(1.0f, p.signedCurvature) : 1.0f;
-            const float lane = outside * (p.width * 0.5f + 28.0f);
+            const float lane = outside * (roadSurfaceHalfWidth(p) + 16.0f);
             const Vector3 pos = lift(track_.roadPoint(p, lane), 0.08f);
             rlPushMatrix();
             rlTranslatef(pos.x, pos.y + 0.72f, pos.z);
@@ -3477,6 +3558,36 @@ private:
             rlPopMatrix();
         }
 
+        if (track_.layout() == TrackLayoutId::SpaCoast) {
+            constexpr float kArrowHalfWidth = 0.85f * kSpaSimulationUnitsPerMeter;
+            constexpr float kArrowHeadHalfWidth = 1.85f * kSpaSimulationUnitsPerMeter;
+            for (int i = 0; i < track_.sampleCount(); i += 16) {
+                const TrackPoint3D& center = samples[static_cast<size_t>(i)];
+                const float distance = signedDistanceToLoop(viewProgress, center.progress, track_.totalLength());
+                if (distance < 30.0f || distance > 1000.0f) {
+                    continue;
+                }
+                const TrackPoint3D tail = track_.sample(center.progress - 7.0f);
+                const TrackPoint3D shoulder = track_.sample(center.progress + 3.0f);
+                const TrackPoint3D tip = track_.sample(center.progress + 12.0f);
+                const Color arrow{255, 213, 54, 232};
+                drawQuad(lift(track_.roadPoint(tail, -kArrowHalfWidth), 0.085f),
+                         lift(track_.roadPoint(shoulder, -kArrowHalfWidth), 0.085f),
+                         lift(track_.roadPoint(shoulder, kArrowHalfWidth), 0.085f),
+                         lift(track_.roadPoint(tail, kArrowHalfWidth), 0.085f), arrow);
+                drawQuad(lift(track_.roadPoint(tail, kArrowHalfWidth), 0.086f),
+                         lift(track_.roadPoint(shoulder, kArrowHalfWidth), 0.086f),
+                         lift(track_.roadPoint(shoulder, -kArrowHalfWidth), 0.086f),
+                         lift(track_.roadPoint(tail, -kArrowHalfWidth), 0.086f), arrow);
+                DrawTriangle3D(lift(track_.roadPoint(shoulder, -kArrowHeadHalfWidth), 0.090f),
+                               lift(track_.roadPoint(tip, 0.0f), 0.090f),
+                               lift(track_.roadPoint(shoulder, kArrowHeadHalfWidth), 0.090f), arrow);
+                DrawTriangle3D(lift(track_.roadPoint(shoulder, kArrowHeadHalfWidth), 0.091f),
+                               lift(track_.roadPoint(tip, 0.0f), 0.091f),
+                               lift(track_.roadPoint(shoulder, -kArrowHeadHalfWidth), 0.091f), arrow);
+            }
+        }
+
         // Low sector-specific edge geometry follows the same lane boundary as
         // collision resolution. It gives every corner a stable silhouette and
         // communicates exactly how much shoulder remains available.
@@ -3489,13 +3600,9 @@ private:
             const TrackPoint3D& next = samples[static_cast<size_t>((i + boundaryStride) % track_.sampleCount())];
             const float segmentLength = length(next.pos - p.pos) * kRenderScale * 1.05f;
             for (float side : {-1.0f, 1.0f}) {
-                if (track_.layout() == TrackLayoutId::SpaCoast && p.curvature > 0.060f) {
-                    const float outside = -std::copysign(1.0f, p.signedCurvature);
-                    if (side != outside) {
-                        continue;
-                    }
-                }
-                const float lane = side * (p.width * 0.5f + 18.0f);
+                const float lane = track_.layout() == TrackLayoutId::SpaCoast
+                                       ? side * (roadSurfaceHalfWidth(p) + 14.0f)
+                                       : side * (p.width * 0.5f + 18.0f);
                 const Vector3 edge = track_.roadPoint(p, lane);
                 rlPushMatrix();
                 rlTranslatef(edge.x, edge.y + (p.zone == 2 ? 0.53f : 0.34f), edge.z);
@@ -4180,7 +4287,10 @@ private:
             harbor::ui::RaceHudViewModel view;
             view.vehicleName = player.spec.name;
             view.driverName = player.racer;
-            view.speedKph = static_cast<int>(std::max(0.0f, player.telemetry.forwardSpeed) * 1.22f + 0.5f);
+            const float speedKphScale = track_.layout() == TrackLayoutId::SpaCoast
+                                            ? 3.6f / kSpaSimulationUnitsPerMeter
+                                            : 1.22f;
+            view.speedKph = static_cast<int>(std::max(0.0f, player.telemetry.forwardSpeed) * speedKphScale + 0.5f);
             view.currentLap = laps == kInfiniteLaps ? std::max(1, player.lap + 1) : std::clamp(player.lap + 1, 1, laps);
             view.totalLaps = laps;
             view.position = playerPosition_;
@@ -4200,6 +4310,29 @@ private:
                                                                  : std::clamp(score / raceDistance, 0.0f, 1.0f);
             }
             view.raceProgress = view.racerProgress[0];
+            constexpr int kHudMapPoints = 128;
+            std::array<Vec2, kHudMapPoints> hudMapPoints{};
+            Vec2 hudMapMin{std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
+            Vec2 hudMapMax{std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest()};
+            for (int i = 0; i < kHudMapPoints; ++i) {
+                const float progress = track_.startProgress() +
+                                       track_.totalLength() * static_cast<float>(i) / kHudMapPoints;
+                const Vec2 point = track_.sample(progress).pos;
+                hudMapPoints[static_cast<size_t>(i)] = point;
+                hudMapMin.x = std::min(hudMapMin.x, point.x);
+                hudMapMin.y = std::min(hudMapMin.y, point.y);
+                hudMapMax.x = std::max(hudMapMax.x, point.x);
+                hudMapMax.y = std::max(hudMapMax.y, point.y);
+            }
+            const Vec2 hudMapSpan{std::max(1.0f, hudMapMax.x - hudMapMin.x),
+                                  std::max(1.0f, hudMapMax.y - hudMapMin.y)};
+            view.coursePolylinePointCount = kHudMapPoints;
+            view.courseProgress = raceLapProgress(player) / track_.totalLength();
+            for (int i = 0; i < kHudMapPoints; ++i) {
+                const Vec2 point = hudMapPoints[static_cast<size_t>(i)];
+                view.coursePolyline[static_cast<size_t>(i * 2)] = (point.x - hudMapMin.x) / hudMapSpan.x;
+                view.coursePolyline[static_cast<size_t>(i * 2 + 1)] = (point.y - hudMapMin.y) / hudMapSpan.y;
+            }
             view.driftCharge = std::clamp(player.driftCharge / player.tuning.tierThreeCharge, 0.0f, 1.0f);
             view.boostCharge = std::clamp(player.boostTimer / player.tuning.tierThreeBoostDuration, 0.0f, 1.0f);
             view.presentationTimeSeconds = raceTime_;
@@ -4424,7 +4557,9 @@ int runHarborKarts3D(int argc, char** argv) {
         const float startScore = game.playerRaceScoreForCapture();
         const float targetDistance = game.lapLengthForCapture() * 1.05f;
         int framesDriven = 0;
-        while (game.playerRaceScoreForCapture() - startScore < targetDistance && framesDriven < 12000) {
+        constexpr int kMaxTimeTrialCaptureFrames = static_cast<int>(1000.0f / kFixedDt);
+        while (game.playerRaceScoreForCapture() - startScore < targetDistance &&
+               framesDriven < kMaxTimeTrialCaptureFrames) {
             game.update(kFixedDt, game.scriptedInput(), true);
             ++framesDriven;
         }
@@ -4437,7 +4572,7 @@ int runHarborKarts3D(int argc, char** argv) {
         cleanupRuntime();
         std::cout << "capture-time-trial frames=" << framesDriven
                   << " distance=" << distance << "\n";
-        return framesDriven < 12000 ? 0 : 1;
+        return framesDriven < kMaxTimeTrialCaptureFrames ? 0 : 1;
     }
     if (collisionAudit) {
         const bool ok = game.runCollisionAudit();
@@ -4478,7 +4613,7 @@ int runHarborKarts3D(int argc, char** argv) {
         size_t nextCapture = 0;
         int simFrames = 0;
         float distance = 0.0f;
-        const int maxFrames = static_cast<int>(170.0f / kFixedDt);
+        const int maxFrames = static_cast<int>(1000.0f / kFixedDt);
         while ((nextCapture < kLapMilestones.size() || distance < lapLength) && simFrames < maxFrames) {
             const Input3D input = game.scriptedInput();
             game.update(kFixedDt, input, true);

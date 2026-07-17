@@ -37,6 +37,9 @@ struct RaceHudViewModel {
     std::array<float, kMaxHudRacers> racerProgress{};
     int racerProgressCount = 0;
     int playerProgressIndex = 0;
+    std::array<float, kMaxCoursePolylinePoints * 2> coursePolyline{};
+    int coursePolylinePointCount = 0;
+    float courseProgress = 0.0f;
     float driftCharge = 0.0f;
     float boostCharge = 0.0f;
     float presentationTimeSeconds = 0.0f;

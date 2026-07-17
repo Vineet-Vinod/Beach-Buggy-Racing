@@ -389,6 +389,60 @@ void drawRaceAlert(const RaceHudViewModel& viewModel, const Metrics& m) {
                      30.0f * m.scale, viewModel.finished ? kSun : kPaper);
 }
 
+void drawRouteMap(const RaceHudViewModel& viewModel, const Metrics& m) {
+    const int count = std::clamp(viewModel.coursePolylinePointCount, 0, kMaxCoursePolylinePoints);
+    if (count < 3) {
+        return;
+    }
+
+    const float width = 205.0f * m.scale;
+    const float height = 154.0f * m.scale;
+    const Rectangle panel{m.margin, m.height - m.margin - height, width, height};
+    DrawRectangleRec(panel, Fade(kInk, 0.82f));
+    DrawRectangleRec({panel.x, panel.y, 5.0f * m.scale, panel.height}, kAqua);
+    drawText("ROUTE", {panel.x + 15.0f * m.scale, panel.y + 10.0f * m.scale}, 12.0f * m.scale, kPaperMuted);
+
+    const Rectangle mapBounds{panel.x + 18.0f * m.scale, panel.y + 29.0f * m.scale,
+                              panel.width - 34.0f * m.scale, panel.height - 42.0f * m.scale};
+    std::array<Vector2, kMaxCoursePolylinePoints> points{};
+    for (int index = 0; index < count; ++index) {
+        const float x = clamp01(viewModel.coursePolyline[static_cast<size_t>(index) * 2]);
+        const float y = clamp01(viewModel.coursePolyline[static_cast<size_t>(index) * 2 + 1]);
+        points[static_cast<size_t>(index)] = {mapBounds.x + x * mapBounds.width,
+                                              mapBounds.y + (1.0f - y) * mapBounds.height};
+    }
+
+    for (int index = 0; index < count; ++index) {
+        DrawLineEx(points[static_cast<size_t>(index)], points[static_cast<size_t>((index + 1) % count)],
+                   3.0f * m.scale, Fade(kPaperMuted, 0.58f));
+    }
+
+    const float progress = clamp01(viewModel.courseProgress);
+    const int playerIndex = std::clamp(static_cast<int>(progress * static_cast<float>(count)), 0, count - 1);
+    const int previewSegments = std::max(4, count / 8);
+    for (int offset = 0; offset < previewSegments; ++offset) {
+        const int from = (playerIndex + offset) % count;
+        const int to = (from + 1) % count;
+        DrawLineEx(points[static_cast<size_t>(from)], points[static_cast<size_t>(to)],
+                   5.0f * m.scale, offset < 2 ? kSun : kAqua);
+    }
+
+    const Vector2 player = points[static_cast<size_t>(playerIndex)];
+    const Vector2 next = points[static_cast<size_t>((playerIndex + 1) % count)];
+    const Vector2 delta{next.x - player.x, next.y - player.y};
+    const float magnitude = std::max(0.001f, std::sqrt(delta.x * delta.x + delta.y * delta.y));
+    const Vector2 direction{delta.x / magnitude, delta.y / magnitude};
+    const Vector2 side{-direction.y, direction.x};
+    const float markerSize = 8.0f * m.scale;
+    DrawTriangle({player.x + direction.x * markerSize, player.y + direction.y * markerSize},
+                 {player.x - direction.x * markerSize * 0.55f + side.x * markerSize * 0.62f,
+                  player.y - direction.y * markerSize * 0.55f + side.y * markerSize * 0.62f},
+                 {player.x - direction.x * markerSize * 0.55f - side.x * markerSize * 0.62f,
+                  player.y - direction.y * markerSize * 0.55f - side.y * markerSize * 0.62f},
+                 kSun);
+    DrawCircleLines(static_cast<int>(player.x), static_cast<int>(player.y), 10.0f * m.scale, kPaper);
+}
+
 }  // namespace
 
 bool InitializeUiFont(const char* fontPath, int baseSize) {
@@ -425,6 +479,7 @@ void DrawRaceHud(const RaceHudViewModel& viewModel) {
         drawRaceProgress(viewModel, m);
     }
     drawLapPanel(viewModel, m);
+    drawRouteMap(viewModel, m);
     drawRaceAlert(viewModel, m);
     if (!viewModel.controllerConnected) {
         drawConnectionBanner(m);

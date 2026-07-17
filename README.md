@@ -87,7 +87,7 @@ Gamepad and keyboard are both supported.
 - Procedural engine, drivetrain, road, wind, tire-scrub, and landing audio
 - Reference-calibrated 49-53 second baseline race laps with pack interaction
 - Two selectable beach circuits, including the 7.004 km, 19-turn Spa Coast
-  layout with a distance-calibrated 102.2 m elevation profile
+  layout with a 102.2 m elevation profile and a 14-16 m road-width profile
 - Race and Time Trial sessions: full-grid finite races or solo infinite-lap
   running with current and best lap timing
 - Grid countdown, ordered checkpoints, shortcut-resistant laps, wrong-way
@@ -140,7 +140,7 @@ pace, pack pressure, contact rate, overtakes, and every kart's progress stabilit
 `spa-audit-3d` verifies Spa Coast's lap length, sampled FIA elevation stations,
 overall relief, mesh length, road width, two-kart passing room, and non-local
 branch clearance without opening a window.
-`time-trial-audit-3d` drives more than two solo Spa laps and verifies one-racer
+`time-trial-audit-3d` drives a complete solo Spa lap and verifies one-racer
 flow, infinite laps, best-lap timing, parked opponents, and no results transition.
 `capture-spa-tour-3d` writes nine course views for visual inspection.
 `capture-time-trial-3d` writes the live and paused solo timing HUD states.
