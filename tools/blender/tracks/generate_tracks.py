@@ -148,9 +148,9 @@ PALETTES = {
     "hillside": {"sand": (0.64, 0.42, 0.16, 1), "grass": (0.08, 0.31, 0.15, 1), "roof": (0.82, 0.38, 0.045, 1)},
 }
 
-ASPHALT_COLOR = (0.22, 0.235, 0.245, 1)
-ASPHALT_MIN_LUMINANCE = 0.20
-ASPHALT_MAX_LUMINANCE = 0.30
+ASPHALT_COLOR = (0.35, 0.365, 0.38, 1)
+ASPHALT_MIN_LUMINANCE = 0.32
+ASPHALT_MAX_LUMINANCE = 0.42
 
 
 def reset_scene() -> None:
