@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "asset": "sunskipper",
+  "units": "meters",
+  "axes_blender": {
+    "right": "+X",
+    "front": "-Y",
+    "up": "+Z"
+  },
+  "measured_bounds_blender": {
+    "min": [
+      -0.9208,
+      -1.81,
+      0.02
+    ],
+    "max": [
+      0.9208,
+      1.92,
+      1.2881
+    ],
+    "dimensions": [
+      1.8417,
+      3.73,
+      1.2681
+    ]
+  },
+  "runtime_budget": {
+    "mesh_objects": 48,
+    "vertices": 6444,
+    "triangles": 12716
+  },
+  "verification": {
+    "status": "passed",
+    "required_nodes_present": true,
+    "named_actions_present": [
+      "accelerate",
+      "brake",
+      "idle",
+      "turn_left",
+      "turn_right"
+    ],
+    "action_channel_counts": {
+      "accelerate": 27,
+      "brake": 27,
+      "idle": 27,
+      "turn_left": 27,
+      "turn_right": 27
+    },
+    "skin_count": 1,
+    "exported_meshes": 48,
+    "dimension_error_percent": {
+      "width_x": 3.47,
+      "length_y": 0.27,
+      "height_z": 0.93
+    },
+    "dimension_tolerance_percent": 8.0
+  },
+  "required_nodes": [
+    "car_root",
+    "body",
+    "wheel_FL",
+    "wheel_FR",
+    "wheel_RL",
+    "wheel_RR",
+    "steering",
+    "brake_lights",
+    "driver_mount",
+    "vehicle_rig",
+    "seat_anchor"
+  ],
+  "source": "sunskipper.blend",
+  "export": "sunskipper.glb",
+  "preview": "sunskipper_preview.png",
+  "type": "vehicle",
+  "display_name": "Sunskipper GT",
+  "family": "compact roadster",
+  "target_dimensions_m": {
+    "width_x": 1.78,
+    "length_y": 3.72,
+    "height_z": 1.28
+  },
+  "animation_clips": {
+    "accelerate": [
+      1,
+      24
+    ],
+    "turn_left": [
+      30,
+      50
+    ],
+    "turn_right": [
+      30,
+      50
+    ],
+    "brake": [
+      60,
+      72
+    ],
+    "idle": [
+      80,
+      108
+    ]
+  },
+  "mounts": {
+    "driver_object": "driver_mount",
+    "driver_bone": "seat_anchor",
+    "gltf_local_y_up_z_forward_m": [
+      0.0,
+      1.0,
+      -0.1
+    ]
+  }
+}
