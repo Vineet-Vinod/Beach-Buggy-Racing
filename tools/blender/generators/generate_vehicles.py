@@ -1,4 +1,4 @@
-"""Generate four original arcade racing vehicle families."""
+"""Generate four original arcade-realistic open-wheel formula cars."""
 
 from __future__ import annotations
 
@@ -8,40 +8,51 @@ from pathlib import Path
 
 import bpy
 
-from asset_helpers import (add_wheel, bar, build_rigid_rig,
-                           create_rig_action, cube, cylinder, empty,
-                           export_asset, material, reset_scene, sphere, torus,
-                           asset_objects)
+from asset_helpers import (ASSET_PROP, add_wheel, asset_objects, bar,
+                           build_rigid_rig, create_rig_action, cube, cylinder,
+                           empty, export_asset, material, reset_scene, sphere,
+                           torus)
 
 
+# Dimensions are Blender X width, Y length and Z height in metres. Each car is
+# a separate original design, while the hard points stay close enough that the
+# runtime can share camera, collision and driver placement contracts.
 VEHICLES = {
     "tidebreaker": {
-        "display_name": "Tidebreaker XR",
-        "family": "open beach buggy",
-        "dimensions_target_m": [1.92, 4.02, 1.62],
-        "paint": (0.04, 0.58, 0.70, 1),
-        "accent": (1.00, 0.32, 0.08, 1),
+        "display_name": "Tidebreaker FX",
+        "family": "high-downforce formula",
+        "dimensions_target_m": [2.03, 4.92, 1.09],
+        "paint": (0.025, 0.52, 0.68, 1),
+        "accent": (1.00, 0.25, 0.035, 1),
+        "detail": (0.72, 0.91, 0.95, 1),
+        "aero": "high_downforce",
     },
     "sunskipper": {
-        "display_name": "Sunskipper GT",
-        "family": "compact roadster",
-        "dimensions_target_m": [1.78, 3.72, 1.28],
-        "paint": (0.96, 0.67, 0.05, 1),
-        "accent": (0.12, 0.32, 0.68, 1),
+        "display_name": "Sunskipper F1",
+        "family": "low-drag formula",
+        "dimensions_target_m": [2.03, 4.92, 1.05],
+        "paint": (0.97, 0.62, 0.025, 1),
+        "accent": (0.035, 0.16, 0.42, 1),
+        "detail": (0.96, 0.91, 0.72, 1),
+        "aero": "low_drag",
     },
     "reefrunner": {
-        "display_name": "Reefrunner R4",
-        "family": "rally hatch",
-        "dimensions_target_m": [1.84, 3.94, 1.52],
-        "paint": (0.80, 0.08, 0.12, 1),
+        "display_name": "Reefrunner FA",
+        "family": "agile formula",
+        "dimensions_target_m": [2.03, 4.92, 1.13],
+        "paint": (0.72, 0.025, 0.045, 1),
         "accent": (0.94, 0.94, 0.88, 1),
+        "detail": (0.035, 0.055, 0.075, 1),
+        "aero": "agile",
     },
     "boardwalk": {
-        "display_name": "Boardwalk Bruiser",
-        "family": "surf utility coupe",
-        "dimensions_target_m": [1.96, 4.18, 1.56],
-        "paint": (0.18, 0.62, 0.26, 1),
-        "accent": (0.94, 0.46, 0.10, 1),
+        "display_name": "Boardwalk Formula",
+        "family": "retro-modern formula",
+        "dimensions_target_m": [2.05, 4.92, 1.08],
+        "paint": (0.055, 0.48, 0.20, 1),
+        "accent": (0.98, 0.38, 0.035, 1),
+        "detail": (0.92, 0.78, 0.18, 1),
+        "aero": "retro",
     },
 }
 
@@ -53,18 +64,221 @@ REQUIRED = ["car_root", "body", "wheel_FL", "wheel_FR", "wheel_RL",
 def common_materials(spec):
     slug = spec["display_name"].split()[0].lower()
     return {
-        "paint": material(f"{slug}_paint", spec["paint"], metallic=0.22, roughness=0.28),
-        "accent": material(f"{slug}_accent", spec["accent"], metallic=0.08, roughness=0.32),
-        "dark": material(f"{slug}_dark", (0.018, 0.024, 0.028, 1), metallic=0.2, roughness=0.38),
-        "rubber": material(f"{slug}_rubber", (0.009, 0.011, 0.012, 1), roughness=0.78),
-        "metal": material(f"{slug}_metal", (0.34, 0.39, 0.42, 1), metallic=0.82, roughness=0.21),
-        "glass": material(f"{slug}_glass", (0.035, 0.15, 0.22, 0.78), metallic=0.05, roughness=0.12),
-        "light": material(f"{slug}_lamp", (0.8, 0.9, 1, 1), roughness=0.14,
-                          emission=(0.7, 0.88, 1), emission_strength=4.0),
-        "brake": material(f"{slug}_brake", (0.52, 0.006, 0.004, 1), roughness=0.2,
-                          emission=(1, 0.005, 0.002), emission_strength=5.0),
-        "tan": material(f"{slug}_tan", (0.48, 0.23, 0.08, 1), roughness=0.54),
+        "paint": material(f"{slug}_paint", spec["paint"], metallic=0.25,
+                          roughness=0.25),
+        "accent": material(f"{slug}_accent", spec["accent"], metallic=0.12,
+                           roughness=0.30),
+        "detail": material(f"{slug}_detail", spec["detail"], metallic=0.18,
+                           roughness=0.26),
+        "carbon": material(f"{slug}_carbon", (0.012, 0.016, 0.019, 1),
+                           metallic=0.38, roughness=0.28),
+        "rubber": material(f"{slug}_rubber", (0.006, 0.007, 0.008, 1),
+                           roughness=0.82),
+        "metal": material(f"{slug}_metal", (0.29, 0.33, 0.36, 1),
+                          metallic=0.86, roughness=0.19),
+        "cockpit": material(f"{slug}_cockpit", (0.014, 0.020, 0.025, 1),
+                            roughness=0.58),
+        "brake": material(f"{slug}_rain_light", (0.52, 0.002, 0.003, 1),
+                          roughness=0.18, emission=(1, 0.002, 0.001),
+                          emission_strength=7.0),
     }
+
+
+def tapered_box(name, y_front, y_rear, width_front, width_rear, z_bottom,
+                z_top, mat, owner, bevel=0.025):
+    """Create a low-poly tapered volume with clean quad topology."""
+    vertices = [
+        (-width_front / 2, y_front, z_bottom),
+        (width_front / 2, y_front, z_bottom),
+        (width_front / 2, y_front, z_top),
+        (-width_front / 2, y_front, z_top),
+        (-width_rear / 2, y_rear, z_bottom),
+        (width_rear / 2, y_rear, z_bottom),
+        (width_rear / 2, y_rear, z_top),
+        (-width_rear / 2, y_rear, z_top),
+    ]
+    faces = [(0, 1, 2, 3), (4, 7, 6, 5), (0, 4, 5, 1),
+             (3, 2, 6, 7), (0, 3, 7, 4), (1, 5, 6, 2)]
+    mesh = bpy.data.meshes.new(f"{name}_mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.materials.append(mat)
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.parent = owner
+    obj[ASSET_PROP] = True
+    if bevel:
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        modifier = obj.modifiers.new("aero_edge", "BEVEL")
+        modifier.width = bevel
+        modifier.segments = 2
+        bpy.ops.object.modifier_apply(modifier=modifier.name)
+        obj.select_set(False)
+    return obj
+
+
+def vertical_fin(name, points, thickness, mat, owner):
+    """Extrude a triangular profile across X for fins and wing endplates."""
+    vertices = []
+    for x in (-thickness / 2, thickness / 2):
+        vertices.extend((x, y, z) for y, z in points)
+    faces = [(0, 1, 2), (3, 5, 4), (0, 3, 4, 1),
+             (1, 4, 5, 2), (2, 5, 3, 0)]
+    mesh = bpy.data.meshes.new(f"{name}_mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.materials.append(mat)
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.parent = owner
+    obj[ASSET_PROP] = True
+    return obj
+
+
+def add_suspension(body, positions, mats):
+    """Expose double wishbones and push rods at all four corners."""
+    for corner, (x, y, z) in positions.items():
+        side = math.copysign(1.0, x)
+        axle = "front" if "F" in corner else "rear"
+        chassis_y = y + (0.22 if axle == "front" else -0.20)
+        for layer, hub_z, chassis_z in (("lower", z - 0.12, 0.24),
+                                       ("upper", z + 0.13, 0.48)):
+            for offset in (-0.24, 0.24):
+                bar(f"{corner}_{layer}_{offset:+}",
+                    (side * 0.28, chassis_y + offset, chassis_z),
+                    (x - side * 0.08, y, hub_z), 0.018,
+                    mats["carbon"], body)
+        bar(f"{corner}_pushrod", (side * 0.22, chassis_y, 0.60),
+            (x - side * 0.08, y, z + 0.10), 0.014, mats["metal"], body)
+
+
+def add_wings(body, style, mats):
+    front_span = {"high_downforce": 2.00, "low_drag": 1.96,
+                  "agile": 2.01, "retro": 2.02}[style]
+    rear_span = {"high_downforce": 1.50, "low_drag": 1.38,
+                 "agile": 1.46, "retro": 1.52}[style]
+    rear_height = {"high_downforce": 0.93, "low_drag": 0.88,
+                   "agile": 0.97, "retro": 0.92}[style]
+
+    # Front wing planes sit above a 90 mm ground clearance and remain clearly
+    # separate from the exposed front tires.
+    cube("front_wing_main", (0, -2.38, 0.145),
+         (front_span, 0.35, 0.065), mats["carbon"], body, 0.015)
+    cube("front_wing_color_plane", (0, -2.22, 0.225),
+         (front_span - 0.18, 0.17, 0.052), mats["accent"], body, 0.012)
+    if style in ("high_downforce", "agile"):
+        cube("front_wing_upper_flap", (0, -2.14, 0.292),
+             (front_span - 0.36, 0.12, 0.045), mats["paint"], body, 0.01)
+    for side in (-1, 1):
+        cube(f"front_endplate_{side:+}",
+             (side * (front_span / 2 - 0.022), -2.31, 0.235),
+             (0.044, 0.46, 0.33), mats["detail"], body, 0.012)
+        bar(f"front_wing_stay_{side:+}",
+            (side * 0.11, -2.10, 0.34),
+            (side * 0.32, -2.28, 0.19), 0.018, mats["carbon"], body)
+
+    cube("rear_wing_lower", (0, 2.10, rear_height - 0.13),
+         (rear_span - 0.08, 0.25, 0.075), mats["accent"], body, 0.016)
+    cube("rear_wing_main", (0, 2.18, rear_height),
+         (rear_span, 0.31, 0.105), mats["carbon"], body, 0.018)
+    if style != "low_drag":
+        cube("rear_wing_flap", (0, 2.06, rear_height + 0.085),
+             (rear_span - 0.10, 0.14, 0.050), mats["paint"], body, 0.012)
+    for side in (-1, 1):
+        cube(f"rear_endplate_{side:+}",
+             (side * (rear_span / 2 - 0.022), 2.13, rear_height - 0.11),
+             (0.044, 0.46, 0.52), mats["detail"], body, 0.012)
+        bar(f"rear_wing_mount_{side:+}",
+            (side * 0.22, 1.70, 0.38),
+            (side * 0.22, 2.08, rear_height - 0.12),
+            0.025, mats["carbon"], body)
+
+
+def add_formula_body(body, style, mats):
+    # Flat floor and plank establish a readable ground reference without
+    # visually enclosing the wheels.
+    tapered_box("floor", -1.88, 1.87, 0.54, 0.82, 0.105, 0.19,
+                mats["carbon"], body, 0.018)
+    cube("center_plank", (0, 0.02, 0.088), (0.18, 3.55, 0.036),
+         mats["detail"], body, 0.008)
+    tapered_box("needle_nose", -2.29, -0.42, 0.15, 0.50, 0.21, 0.53,
+                mats["paint"], body, 0.035)
+    tapered_box("monocoque", -0.58, 1.28, 0.53, 0.72, 0.20, 0.66,
+                mats["paint"], body, 0.055)
+
+    # The black cavity and raised rails leave the driver visibly exposed.
+    cube("cockpit_cavity", (0, 0.12, 0.69), (0.43, 1.10, 0.18),
+         mats["cockpit"], body, 0.10)
+    for side in (-1, 1):
+        tapered_box(f"cockpit_rail_{side:+}", -0.50, 0.73,
+                    0.10, 0.16, 0.58, 0.79, mats["paint"], body, 0.025).location.x = side * 0.29
+
+    sidepod_width = {"high_downforce": 1.37, "low_drag": 1.26,
+                     "agile": 1.32, "retro": 1.42}[style]
+    for side in (-1, 1):
+        pod = tapered_box(f"sidepod_{side:+}", -0.48, 1.22,
+                          0.37, 0.53, 0.22, 0.57, mats["paint"], body, 0.045)
+        pod.location.x = side * (sidepod_width / 2 - 0.23)
+        cube(f"sidepod_inlet_{side:+}",
+             (side * (sidepod_width / 2 - 0.22), -0.49, 0.45),
+             (0.34, 0.055, 0.23), mats["carbon"], body, 0.018)
+        cube(f"sidepod_stripe_{side:+}",
+             (side * (sidepod_width / 2 + 0.003), 0.22, 0.56),
+             (0.055, 1.25, 0.065), mats["accent"], body, 0.012)
+
+    tapered_box("engine_cover", 0.46, 1.72, 0.54, 0.26, 0.42, 0.82,
+                mats["paint"], body, 0.04)
+    cube("airbox", (0, 0.52, 0.86), (0.30, 0.30, 0.27),
+         mats["carbon"], body, 0.07)
+    vertical_fin("engine_shark_fin", ((0.62, 0.76), (1.66, 0.52),
+                                      (1.22, 0.84)), 0.055,
+                 mats["accent"], body)
+
+    # Halo: central pillar, two forward arms and the rear cockpit hoop.
+    bar("halo_pillar", (0, -0.38, 0.68), (0, -0.34, 1.00),
+        0.035, mats["metal"], body)
+    for side in (-1, 1):
+        bar(f"halo_forward_{side:+}", (0, -0.34, 1.00),
+            (side * 0.28, 0.25, 0.91), 0.035, mats["metal"], body)
+        bar(f"halo_rear_{side:+}", (side * 0.28, 0.25, 0.91),
+            (side * 0.25, 0.58, 0.80), 0.035, mats["metal"], body)
+        bar(f"mirror_stalk_{side:+}", (side * 0.29, -0.12, 0.74),
+            (side * 0.53, -0.25, 0.80), 0.014, mats["carbon"], body)
+        sphere(f"mirror_{side:+}", (side * 0.55, -0.26, 0.81),
+               (0.12, 0.055, 0.065), mats["accent"], body, 16, 10)
+
+    # Ventral diffuser strakes communicate formula-car ground effect from the
+    # rear three-quarter game camera.
+    tapered_box("rear_diffuser", 1.48, 2.22, 0.70, 1.30, 0.10, 0.25,
+                mats["carbon"], body, 0.012)
+    for x in (-0.48, -0.24, 0.0, 0.24, 0.48):
+        cube(f"diffuser_strake_{x:+}", (x, 1.90, 0.24),
+             (0.025, 0.61, 0.26), mats["carbon"], body, 0.005)
+
+    if style == "high_downforce":
+        for side in (-1, 1):
+            cube(f"sidepod_vane_{side:+}", (side * 0.71, -0.34, 0.32),
+                 (0.035, 0.42, 0.34), mats["accent"], body, 0.008)
+            cube(f"floor_fence_{side:+}", (side * 0.62, 0.72, 0.22),
+                 (0.030, 0.78, 0.18), mats["detail"], body, 0.006)
+    elif style == "low_drag":
+        vertical_fin("long_shark_fin", ((0.35, 0.78), (1.68, 0.54),
+                                        (1.20, 0.97)), 0.04,
+                     mats["detail"], body)
+        cube("nose_center_stripe", (0, -1.40, 0.52),
+             (0.09, 1.45, 0.035), mats["accent"], body, 0.008)
+    elif style == "agile":
+        for side in (-1, 1):
+            cube(f"nose_canard_{side:+}", (side * 0.34, -1.69, 0.39),
+                 (0.43, 0.16, 0.035), mats["detail"], body, 0.008)
+            cube(f"halo_flash_{side:+}", (side * 0.29, 0.22, 0.88),
+                 (0.035, 0.44, 0.065), mats["accent"], body, 0.008)
+    else:
+        cube("retro_nose_band", (0, -1.55, 0.49),
+             (0.32, 0.19, 0.08), mats["detail"], body, 0.012)
+        for side in (-1, 1):
+            torus(f"sidepod_pinstripe_{side:+}",
+                  (side * 0.69, 0.18, 0.43), 0.13, 0.018,
+                  mats["detail"], body, rotation=(math.pi / 2, 0, 0))
 
 
 def build_vehicle(slug: str):
@@ -74,105 +288,61 @@ def build_vehicle(slug: str):
     root = empty("car_root")
     root["asset_id"] = f"formula_buggy.vehicle.{slug}"
     root["units"] = "meters"
+    root["vehicle_class"] = "formula"
     body = empty("body", owner=root)
-    steering = empty("steering", (0, -0.30, 1.00), root)
+    steering = empty("steering", (0, -0.28, 0.77), root)
     brakes = empty("brake_lights", owner=root)
-    # This Blender-space anchor becomes approximately (0, 1.0, -0.1) after
-    # glTF's Z-up/-Y-front to Y-up/+Z-front axis conversion.
-    driver_mount = empty("driver_mount", (0, 0.10, 1.00), root)
+    # This becomes approximately (0, 0.74, -0.12) in raylib's Y-up space.
+    driver_mount = empty("driver_mount", (0, 0.12, 0.74), root)
 
-    if slug == "tidebreaker":
-        wheel_radius, wheel_width = 0.42, 0.28
-        cube("floorpan", (0, 0.10, 0.50), (1.48, 2.58, 0.28), mats["paint"], body, 0.16)
-        cube("nose", (0, -1.43, 0.66), (1.46, 0.76, 0.48), mats["paint"], body, 0.17)
-        cube("front_grille", (0, -1.825, 0.63), (0.64, 0.035, 0.17), mats["dark"], body, 0.025)
-        cube("rear_deck", (0, 1.33, 0.68), (1.42, 0.72, 0.55), mats["accent"], body, 0.13)
-        cube("front_bash", (0, -1.91, 0.46), (1.42, 0.16, 0.16), mats["metal"], body, 0.05)
-        cube("rear_bash", (0, 1.96, 0.49), (1.34, 0.14, 0.14), mats["metal"], body, 0.045)
-        for x in (-0.68, 0.68):
-            bar(f"roll_side_{x:+}", (x, 0.72, 0.58), (x, 0.34, 1.55), 0.055, mats["metal"], body)
-            bar(f"roll_back_{x:+}", (x, 0.34, 1.55), (x, 1.00, 1.02), 0.055, mats["metal"], body)
-        bar("roll_cross", (-0.68, 0.34, 1.55), (0.68, 0.34, 1.55), 0.055, mats["metal"], body)
-        cube("seat_L", (-0.36, 0.35, 0.82), (0.52, 0.64, 0.65), mats["dark"], body, 0.12)
-        cube("seat_R", (0.36, 0.35, 0.82), (0.52, 0.64, 0.65), mats["dark"], body, 0.12)
-        for x in (-0.48, 0.48):
-            sphere(f"headlamp_{x:+}", (x, -1.78, 0.79), (0.18, 0.12, 0.18), mats["light"], body)
-        positions = {"wheel_FL": (-0.82, -1.20, 0.46), "wheel_FR": (0.82, -1.20, 0.46),
-                     "wheel_RL": (-0.82, 1.17, 0.46), "wheel_RR": (0.82, 1.17, 0.46)}
-    elif slug == "sunskipper":
-        wheel_radius, wheel_width = 0.36, 0.22
-        cube("lower_body", (0, 0.03, 0.48), (1.62, 3.18, 0.48), mats["paint"], body, 0.19)
-        cube("sculpted_hood", (0, -1.30, 0.70), (1.44, 1.02, 0.34), mats["paint"], body, 0.15)
-        cube("front_grille", (0, -1.575, 0.46), (0.70, 0.035, 0.14), mats["dark"], body, 0.025)
-        cube("hood_accent", (0, -1.31, 0.875), (0.25, 0.82, 0.025), mats["accent"], body, 0.01)
-        cube("rear_haunch", (0, 1.05, 0.70), (1.56, 0.92, 0.38), mats["paint"], body, 0.16)
-        cube("cockpit", (0, 0.18, 0.90), (1.16, 1.18, 0.42), mats["dark"], body, 0.15)
-        cube("windscreen", (0, -0.35, 1.10), (1.05, 0.08, 0.38), mats["glass"], body, 0.035).rotation_euler.x = math.radians(-18)
-        cube("rear_spoiler", (0, 1.65, 1.01), (1.40, 0.25, 0.10), mats["accent"], body, 0.04)
-        cube("rear_diffuser", (0, 1.85, 0.35), (1.34, 0.14, 0.12), mats["dark"], body, 0.035)
-        for x in (-0.54, 0.54):
-            bar(f"spoiler_post_{x:+}", (x, 1.52, 0.76), (x, 1.62, 0.98), 0.035, mats["dark"], body)
-            sphere(f"headlamp_{x:+}", (x, -1.72, 0.65), (0.22, 0.08, 0.11), mats["light"], body)
-        positions = {"wheel_FL": (-0.77, -1.14, 0.38), "wheel_FR": (0.77, -1.14, 0.38),
-                     "wheel_RL": (-0.77, 1.15, 0.38), "wheel_RR": (0.77, 1.15, 0.38)}
-    elif slug == "reefrunner":
-        wheel_radius, wheel_width = 0.38, 0.24
-        cube("lower_body", (0, 0.05, 0.56), (1.66, 3.28, 0.56), mats["paint"], body, 0.16)
-        cube("hood", (0, -1.30, 0.84), (1.50, 0.90, 0.34), mats["paint"], body, 0.12)
-        cube("front_grille", (0, -1.605, 0.61), (0.76, 0.035, 0.19), mats["dark"], body, 0.025)
-        cube("cabin", (0, 0.28, 1.06), (1.44, 1.72, 0.88), mats["paint"], body, 0.17)
-        cube("windscreen", (0, -0.61, 1.22), (1.24, 0.08, 0.54), mats["glass"], body, 0.03).rotation_euler.x = math.radians(-12)
-        cube("roof_rack", (0, 0.31, 1.53), (1.34, 1.30, 0.07), mats["dark"], body, 0.02)
-        for x in (-0.48, 0, 0.48):
-            sphere(f"rally_lamp_{x:+}", (x, -1.68, 0.83), (0.15, 0.09, 0.15), mats["light"], body)
-        cube("front_skid", (0, -1.86, 0.43), (1.26, 0.20, 0.12), mats["metal"], body, 0.04)
-        cube("rear_skid", (0, 1.91, 0.43), (1.28, 0.14, 0.12), mats["metal"], body, 0.035)
-        cube("stripe", (0, -0.12, 1.52), (0.34, 1.72, 0.035), mats["accent"], body, 0.01)
-        positions = {"wheel_FL": (-0.80, -1.18, 0.41), "wheel_FR": (0.80, -1.18, 0.41),
-                     "wheel_RL": (-0.80, 1.20, 0.41), "wheel_RR": (0.80, 1.20, 0.41)}
-    else:
-        wheel_radius, wheel_width = 0.40, 0.27
-        cube("lower_body", (0, 0.08, 0.56), (1.72, 3.76, 0.60), mats["paint"], body, 0.17)
-        cube("power_hood", (0, -1.38, 0.88), (1.54, 0.90, 0.42), mats["paint"], body, 0.12)
-        cube("front_grille", (0, -1.835, 0.61), (0.74, 0.035, 0.17), mats["dark"], body, 0.025)
-        cube("rear_bumper", (0, 2.10, 0.47), (1.48, 0.18, 0.15), mats["dark"], body, 0.045)
-        cube("cab", (0, 0.20, 1.10), (1.54, 1.50, 0.88), mats["paint"], body, 0.15)
-        cube("windscreen", (0, -0.58, 1.27), (1.31, 0.09, 0.53), mats["glass"], body, 0.03).rotation_euler.x = math.radians(-9)
-        for x in (-0.875, 0.875):
-            cube(f"wood_panel_{x:+}", (x, 0.38, 0.71), (0.035, 1.68, 0.30), mats["tan"], body, 0.012)
-        # A short original foam surf board makes the silhouette instantly readable.
-        board = cube("roof_board", (0, 0.24, 1.61), (0.55, 2.10, 0.10), mats["accent"], body, 0.05)
-        board.rotation_euler.z = math.radians(4)
-        for y in (-0.36, 0.66):
-            bar(f"rack_{y:+}", (-0.76, y, 1.50), (0.76, y, 1.50), 0.035, mats["dark"], body)
-        for x in (-0.52, 0.52):
-            sphere(f"headlamp_{x:+}", (x, -1.84, 0.83), (0.19, 0.10, 0.15), mats["light"], body)
-        positions = {"wheel_FL": (-0.84, -1.22, 0.43), "wheel_FR": (0.84, -1.22, 0.43),
-                     "wheel_RL": (-0.84, 1.26, 0.43), "wheel_RR": (0.84, 1.26, 0.43)}
+    style = spec["aero"]
+    add_formula_body(body, style, mats)
+    add_wings(body, style, mats)
 
+    front_y = -1.60 if style != "low_drag" else -1.63
+    rear_y = 1.57 if style != "retro" else 1.59
+    front_x = 0.805 if style != "agile" else 0.815
+    rear_x = 0.775 if style != "retro" else 0.785
+    front_radius, rear_radius = 0.355, 0.365
+    positions = {
+        "wheel_FL": (-front_x, front_y, front_radius),
+        "wheel_FR": (front_x, front_y, front_radius),
+        "wheel_RL": (-rear_x, rear_y, rear_radius),
+        "wheel_RR": (rear_x, rear_y, rear_radius),
+    }
     wheels = {}
     for name, pos in positions.items():
-        pivot, tire = add_wheel(name, pos, wheel_radius, wheel_width, root,
-                                mats["rubber"], mats["metal"])
+        rear = name in ("wheel_RL", "wheel_RR")
+        width = 0.38 if rear else 0.30
+        radius = rear_radius if rear else front_radius
+        pivot, _ = add_wheel(name, pos, radius, width, root,
+                             mats["rubber"], mats["metal"])
         wheels[name] = pivot
-    # Steering wheel belongs to the steering pivot and turns with the front axle.
-    torus("steering_wheel", (0, 0, 0), 0.18, 0.025, mats["dark"], steering,
-          rotation=(math.radians(68), 0, 0))
-    for x in (-0.48, 0.48):
-        cube(f"brake_{x:+}", (x, 1.76 if slug != "tidebreaker" else 1.70, 0.72),
-             (0.27, 0.07, 0.14), mats["brake"], brakes, 0.025)
+        side = math.copysign(1.0, pos[0])
+        cylinder(f"{name}_center_lock", (side * width * 0.55, 0, 0),
+                 radius * 0.12, width * 0.08, mats["accent"], pivot,
+                 rotation=(0, math.pi / 2, 0), vertices=16, bevel=0.008)
+    add_suspension(body, positions, mats)
+
+    torus("steering_wheel", (0, 0, 0), 0.145, 0.022,
+          mats["carbon"], steering, rotation=(math.radians(68), 0, 0))
+    cube("steering_display", (0, -0.015, -0.005), (0.16, 0.045, 0.10),
+         mats["detail"], steering, 0.018)
+    cube("rear_rain_light", (0, 2.225, 0.42), (0.16, 0.045, 0.09),
+         mats["brake"], brakes, 0.012)
 
     bone_specs = {
         "rig_root": {"head": (0, 0, 0), "tail": (0, 0, 0.25)},
-        "body_anim": {"head": (0, 0, 0.55), "tail": (0, 0, 0.9), "parent": "rig_root"},
+        "body_anim": {"head": (0, 0, 0.45), "tail": (0, 0, 0.78),
+                      "parent": "rig_root"},
         "wheel_FL_anim": {"head": positions["wheel_FL"], "parent": "rig_root"},
         "wheel_FR_anim": {"head": positions["wheel_FR"], "parent": "rig_root"},
         "wheel_RL_anim": {"head": positions["wheel_RL"], "parent": "rig_root"},
         "wheel_RR_anim": {"head": positions["wheel_RR"], "parent": "rig_root"},
         "steering_anim": {"head": tuple(steering.location), "parent": "body_anim"},
-        "brake_lights_anim": {"head": (0, 1.70, 0.72), "parent": "body_anim"},
-        "seat_anchor": {"head": (0, 0.10, 1.00), "tail": (0, -0.10, 1.00),
-                        "parent": "body_anim"},
+        "brake_lights_anim": {"head": (0, 2.225, 0.42), "parent": "body_anim"},
+        "seat_anchor": {"head": (0, 0.12, 0.74),
+                        "tail": (0, -0.08, 0.74), "parent": "body_anim"},
     }
 
     def group_for_object(obj):
@@ -197,31 +367,36 @@ def build_vehicle(slug: str):
                           group_for_object)
     wheel_channels = [
         {"bone": f"{name}_anim", "index": 0,
-         "keys": [(1, 0), (24, -math.tau * 2.5)]}
+         "keys": [(1, 0), (24, -math.tau * 3.5)]}
         for name in ("wheel_FL", "wheel_FR", "wheel_RL", "wheel_RR")
     ]
-    create_rig_action(rig, "accelerate", (1, 24), wheel_channels)
+    create_rig_action(rig, "accelerate", (1, 24), wheel_channels + [
+        {"bone": "body_anim", "path": "location", "index": 2,
+         "keys": [(1, 0), (8, -0.010), (16, 0.006), (24, 0)]},
+    ])
     create_rig_action(rig, "brake", (60, 72), [
         {"bone": "body_anim", "index": 0,
-         "keys": [(60, 0), (66, math.radians(-3.5)), (72, 0)]},
+         "keys": [(60, 0), (66, math.radians(-2.2)), (72, 0)]},
         {"bone": "brake_lights_anim", "path": "scale", "index": 0,
-         "keys": [(60, 1), (64, 1.18), (69, 1.18), (72, 1)]},
+         "keys": [(60, 1), (63, 1.28), (69, 1.28), (72, 1)]},
     ])
     for clip, sign in (("turn_left", 1), ("turn_right", -1)):
         create_rig_action(rig, clip, (30, 50), [
             {"bone": "wheel_FL_anim", "index": 2,
-             "keys": [(30, 0), (40, sign * math.radians(24)), (50, 0)]},
+             "keys": [(30, 0), (40, sign * math.radians(18)), (50, 0)]},
             {"bone": "wheel_FR_anim", "index": 2,
-             "keys": [(30, 0), (40, sign * math.radians(24)), (50, 0)]},
+             "keys": [(30, 0), (40, sign * math.radians(18)), (50, 0)]},
             {"bone": "steering_anim", "index": 1,
-             "keys": [(30, 0), (40, sign * math.radians(52)), (50, 0)]},
+             "keys": [(30, 0), (40, sign * math.radians(48)), (50, 0)]},
+            {"bone": "body_anim", "index": 1,
+             "keys": [(30, 0), (40, sign * math.radians(1.2)), (50, 0)]},
         ])
     create_rig_action(rig, "idle", (80, 108), [
         {"bone": "body_anim", "path": "location", "index": 2,
-         "keys": [(80, 0), (94, 0.012), (108, 0)]},
+         "keys": [(80, 0), (94, 0.005), (108, 0)]},
     ])
 
-    return spec
+    return spec, positions
 
 
 def main():
@@ -232,22 +407,32 @@ def main():
     args = parser.parse_args()
     targets = VEHICLES if args.asset == "all" else [args.asset]
     for slug in targets:
-        spec = build_vehicle(slug)
+        spec, positions = build_vehicle(slug)
+        wheelbase = abs(positions["wheel_RL"][1] - positions["wheel_FL"][1])
         metadata = {
             "type": "vehicle",
             "display_name": spec["display_name"],
             "family": spec["family"],
+            "vehicle_class": "formula",
             "target_dimensions_m": {"width_x": spec["dimensions_target_m"][0],
                                     "length_y": spec["dimensions_target_m"][1],
                                     "height_z": spec["dimensions_target_m"][2]},
+            "hard_points_m": {
+                "wheelbase": round(wheelbase, 3),
+                "front_track_centers": round(abs(positions["wheel_FL"][0]) * 2, 3),
+                "rear_track_centers": round(abs(positions["wheel_RL"][0]) * 2, 3),
+                "ground_clearance": 0.07,
+                "tire_contact_z": 0.0,
+                "seat_anchor_blender": [0.0, 0.12, 0.74],
+            },
             "animation_clips": {"accelerate": [1, 24], "turn_left": [30, 50],
                                 "turn_right": [30, 50], "brake": [60, 72],
                                 "idle": [80, 108]},
             "mounts": {"driver_object": "driver_mount", "driver_bone": "seat_anchor",
-                       "gltf_local_y_up_z_forward_m": [0.0, 1.0, -0.1]},
+                       "gltf_local_y_up_z_forward_m": [0.0, 0.74, -0.12]},
         }
         export_asset(args.output_root / slug, slug, metadata, REQUIRED,
-                     (5.4, -6.8, 3.4), (0, 0, 0.70))
+                     (6.7, -7.9, 3.7), (0, 0, 0.58))
 
 
 if __name__ == "__main__":

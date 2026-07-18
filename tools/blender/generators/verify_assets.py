@@ -14,7 +14,7 @@ GAMEPLAY_CLIPS = {"idle", "accelerate", "brake", "turn_left", "turn_right"}
 ASSETS = {
     "vehicles": {
         "joint_count": 9,
-        "triangle_limit": 15_000,
+        "triangle_limit": 30_000,
         "slugs": ("tidebreaker", "sunskipper", "reefrunner", "boardwalk"),
     },
     "drivers": {
