@@ -523,9 +523,11 @@ def make_curbs(samples, half_widths, materials, parent, curb_width=0.85):
     return mesh_object("track_curbs", verts, faces, materials, indices, parent)
 
 
-def make_embankment(samples, half_widths, material, parent, detail_scale=1.0):
+def make_embankment(samples, half_widths, material, parent, detail_scale=1.0,
+                    skip_indices=None):
     """Create sloped terrain shoulders from the road grade to the island datum."""
     verts, faces = [], []
+    skip_indices = set(skip_indices or ())
     count = len(samples)
     for side in (-1, 1):
         side_start = len(verts)
@@ -540,10 +542,68 @@ def make_embankment(samples, half_widths, material, parent, detail_scale=1.0):
             verts.extend([(point[0]+nx*inner, point[1]+ny*inner, inner_z),
                           (point[0]+nx*outer, point[1]+ny*outer, -0.20*detail_scale)])
         for i in range(count):
+            if i in skip_indices or (i+1) % count in skip_indices:
+                continue
             base = side_start+i*2
             next_base = side_start+((i+1) % count)*2
             faces.append((base,next_base,next_base+1,base+1))
     return mesh_object("track_embankment", verts, faces, [material], parent=parent)
+
+
+def find_crossover(samples):
+    """Find the closest pair of course stations separated by at least 1/8 lap."""
+    count = len(samples)
+    best = (float("inf"), None, None)
+    for first in range(count):
+        for second in range(first + 1, count):
+            separation = min(second-first, count-(second-first))
+            if separation < count//8:
+                continue
+            distance = math.hypot(samples[first][0]-samples[second][0],
+                                  samples[first][1]-samples[second][1])
+            if distance < best[0]:
+                best = (distance, first, second)
+    if best[1] is None:
+        raise ValueError("closed course has no non-adjacent crossover candidate")
+    lower, upper = sorted((best[1], best[2]), key=lambda index: samples[index][2])
+    return {"planar_distance": best[0], "lower_station": lower, "upper_station": upper}
+
+
+def make_bridge_structure(samples, half_widths, crossing, material, parent,
+                          surface_offset, detail_scale):
+    """Build Suzuka's elevated crossover as an open bridge deck and side fascia."""
+    upper = crossing["upper_station"]
+    count = len(samples)
+    half_span = 14
+    stations = [(upper + offset) % count for offset in range(-half_span, half_span+1)]
+    vertices, faces = [], []
+    slab_depth = 0.62 * detail_scale
+    for index in stations:
+        point, _, normal = track_frame(samples, index)
+        width = half_widths[index] + 1.35 * detail_scale
+        for side in (-1, 1):
+            vertices.extend(((point[0] + normal[0]*side*width,
+                              point[1] + normal[1]*side*width,
+                              point[2] + surface_offset - slab_depth),
+                             (point[0] + normal[0]*side*width,
+                              point[1] + normal[1]*side*width,
+                              point[2] + surface_offset)))
+    # Each station contributes lower/upper fascia vertices for right then left.
+    for local in range(len(stations)-1):
+        base, nxt = local*4, (local+1)*4
+        faces.extend(((base, nxt, nxt+1, base+1),
+                      (base+2, base+3, nxt+3, nxt+2),
+                      (base, base+2, nxt+2, nxt),
+                      (base+1, nxt+1, nxt+3, base+3)))
+    obj = mesh_object("suzuka_bridge_structure", vertices, faces, [material], parent=parent)
+    lower = crossing["lower_station"]
+    clearance = ((samples[upper][2] + surface_offset - slab_depth) -
+                 (samples[lower][2] + surface_offset))
+    obj["upper_station"] = upper
+    obj["lower_station"] = lower
+    obj["clearance_asset_units"] = clearance
+    obj["open_underpass"] = True
+    return obj, clearance, stations
 
 
 def add_box_geometry(verts, faces, center, size):
@@ -782,6 +842,7 @@ def make_world(slug, spec):
     span_x, span_y = max_x-min_x, max_y-min_y
     cx, cy = (min_x+max_x)*0.5, (min_y+max_y)*0.5
     margin = max(180.0, min(span_x, span_y) * 0.12)
+    crossing = find_crossover(center) if slug == "suzuka" else None
 
     materials = {
         "asphalt": mat("asphalt", ASPHALT_COLOR, 0.87),
@@ -810,6 +871,7 @@ def make_world(slug, spec):
         "pit_wall": mat("pit_building_wall", (0.68, 0.70, 0.68, 1), 0.78),
         "pit_roof": mat("pit_building_roof", (0.12, 0.15, 0.16, 1), 0.48, 0.35),
         "tree_leaf": mat("tree_canopy", (0.035, 0.23, 0.075, 1), 0.90),
+        "bridge": mat("bridge_concrete", (0.42, 0.44, 0.43, 1), 0.82),
     }
 
     root = empty("map_root")
@@ -838,7 +900,12 @@ def make_world(slug, spec):
     ocean_inner = [(x,y,-5.0*detail_scale) for x,y,_ in island]
     planar_ring("ocean", ocean, ocean_inner, materials["water"], terrain)
 
-    make_embankment(center, half_widths, materials["grass"], terrain, detail_scale)
+    bridge_skip = set()
+    if crossing:
+        upper = crossing["upper_station"]
+        bridge_skip = {(upper+offset) % SAMPLES for offset in range(-15,16)}
+    make_embankment(center, half_widths, materials["grass"], terrain, detail_scale,
+                    bridge_skip)
     make_strip("track_runoff", center, [w+4.0*detail_scale for w in half_widths], 0.00, materials["shoulder"], circuit)
     make_strip("track_surface", center, half_widths, surface_offset, materials["asphalt"], circuit)
     make_curbs(center, half_widths, [materials["red"], materials["white"]], circuit,
@@ -849,6 +916,12 @@ def make_world(slug, spec):
         center, half_widths,
         [materials["barrier_white"], materials["barrier_red"], materials["fence"]],
         circuit, detail_scale)
+    bridge_clearance = None
+    bridge_stations = []
+    if crossing:
+        _, bridge_clearance, bridge_stations = make_bridge_structure(
+            center, half_widths, crossing, materials["bridge"], circuit,
+            surface_offset, detail_scale)
 
     # Every prop base samples the same sloped shoulder function as track_embankment.
     palms, trees, rocks, infrastructure, grounded_instances = [], [], [], [], []
@@ -954,6 +1027,12 @@ def make_world(slug, spec):
                                     "embankment_outer": -0.20*detail_scale},
         "grounded_instances": grounded_instances,
         "barrier_grounding": barrier_grounding,
+        "bridge": ({"lower_station": crossing["lower_station"],
+                    "upper_station": crossing["upper_station"],
+                    "planar_separation_asset_units": round(crossing["planar_distance"], 6),
+                    "clearance_asset_units": round(bridge_clearance, 6),
+                    "embankment_open_stations": bridge_stations}
+                   if crossing else None),
     }
 
 
@@ -1051,6 +1130,15 @@ def export_track(slug, spec, output_root):
         "marshal_roof": "marshal_roof", "pit_wall": "pit_building_wall",
         "pit_roof": "pit_building_roof",
     }
+    required_nodes = ["map_root", "circuit_root", "terrain_root", "scenery_root",
+                      "track_surface", "track_runoff", "track_limit_lines", "track_curbs",
+                      "track_embankment", "continuous_safety_barriers", "continuous_catch_fence",
+                      "sand_island", "ocean", "palm_groves", "park_trees", "coastal_rocks",
+                      "formula_grandstands", "grandstand_spectators", "marshal_posts", "pit_buildings",
+                      "start_gantry", "start_finish_line"]
+    if info["bridge"]:
+        material_roles["bridge"] = "bridge_concrete"
+        required_nodes.append("suzuka_bridge_structure")
     metadata = {
         "schema_version": 1,
         "asset": slug,
@@ -1131,13 +1219,9 @@ def export_track(slug, spec, output_root):
             "barrier_samples": len(info["barrier_grounding"]),
             "barrier_max_authored_error": 0.0,
         },
+        "bridge_contract": info["bridge"],
         "required_materials": sorted(material_roles.values()),
-        "required_nodes": ["map_root", "circuit_root", "terrain_root", "scenery_root",
-                           "track_surface", "track_runoff", "track_limit_lines", "track_curbs",
-                           "track_embankment", "continuous_safety_barriers", "continuous_catch_fence",
-                           "sand_island", "ocean", "palm_groves", "park_trees", "coastal_rocks",
-                           "formula_grandstands", "grandstand_spectators", "marshal_posts", "pit_buildings",
-                           "start_gantry", "start_finish_line"],
+        "required_nodes": required_nodes,
         "source": blend.name,
         "export": glb.name,
         "preview": preview.name,

@@ -15,7 +15,7 @@ import bpy
 
 from generate_tracks import (ASPHALT_MAX_LUMINANCE, ASPHALT_MIN_LUMINANCE, SAMPLES,
                              TRACKS as TRACK_SPECS, cpp_pairs, dense_closed,
-                             length_closed, loop_pose, pair_digest,
+                             find_crossover, length_closed, loop_pose, pair_digest,
                              resample_closed, sample_stations,
                              shoulder_ground_z, spa_road_width, sunset_elevation, sunset_road_width,
                              transform_bounds_blender_to_gltf)
@@ -214,6 +214,36 @@ def verify(root: Path, slug: str):
         max_prop_ground_error = max(max_prop_ground_error, min(candidate_errors))
     if max_prop_ground_error > tolerance:
         raise ValueError(f"{slug}: scenery floats by {max_prop_ground_error:.6f}")
+
+    bridge_meta = meta["bridge_contract"]
+    forbidden_landforms = [name for name in scene_names
+                           if "mountain" in name.lower() or "tunnel" in name.lower()]
+    if forbidden_landforms:
+        raise ValueError(f"{slug}: circuit world contains obstructive landforms {forbidden_landforms}")
+    if slug == "suzuka":
+        if not bridge_meta:
+            raise ValueError("suzuka: missing bridge contract")
+        crossing = find_crossover(expected)
+        if crossing["planar_distance"] > 3.0:
+            raise ValueError(f"suzuka: crossover centerlines miss by {crossing['planar_distance']:.3f}m")
+        for key in ("lower_station", "upper_station"):
+            if bridge_meta[key] != crossing[key]:
+                raise ValueError(f"suzuka: stale bridge {key}")
+        bridge = bpy.data.objects["suzuka_bridge_structure"]
+        upper, lower = crossing["upper_station"], crossing["lower_station"]
+        actual_clearance = ((expected[upper][2] + surface_offset - 0.62*detail_scale) -
+                            (expected[lower][2] + surface_offset))
+        if actual_clearance < 5.5*detail_scale:
+            raise ValueError(f"suzuka: bridge clearance is only {actual_clearance:.3f}")
+        if abs(actual_clearance-bridge_meta["clearance_asset_units"]) > tolerance:
+            raise ValueError("suzuka: bridge clearance metadata is stale")
+        if not bridge.get("open_underpass") or abs(bridge["clearance_asset_units"]-actual_clearance) > tolerance:
+            raise ValueError("suzuka: bridge object contract is stale")
+        bridge_station_set = set(bridge_meta["embankment_open_stations"])
+        if len(bridge_station_set) != 29 or upper not in bridge_station_set:
+            raise ValueError("suzuka: bridge embankment opening changed")
+    elif bridge_meta is not None or "suzuka_bridge_structure" in scene_names:
+        raise ValueError(f"{slug}: only Suzuka may contain a crossover bridge")
     width_meta = meta["road_width_asset_units"]
     if abs(width_meta["min"]-min(expected_widths)) > 0.002 or abs(width_meta["max"]-max(expected_widths)) > 0.002:
         raise ValueError(f"{slug}: road width metadata is stale")
