@@ -141,6 +141,10 @@ PALETTES = {
     "hillside": {"sand": (0.64, 0.42, 0.16, 1), "grass": (0.08, 0.31, 0.15, 1), "roof": (0.82, 0.38, 0.045, 1)},
 }
 
+ASPHALT_COLOR = (0.22, 0.235, 0.245, 1)
+ASPHALT_MIN_LUMINANCE = 0.20
+ASPHALT_MAX_LUMINANCE = 0.30
+
 
 def reset_scene() -> None:
     bpy.ops.object.select_all(action="SELECT")
@@ -373,6 +377,108 @@ def make_strip(name, samples, half_widths, z_offset, material, parent):
     return mesh_object(name, verts, faces, [material], parent=parent)
 
 
+def track_frame(samples, index):
+    """Return the center point, unit tangent, and left normal at a sample."""
+    count = len(samples)
+    point = samples[index % count]
+    prev = samples[(index - 1) % count]
+    nxt = samples[(index + 1) % count]
+    dx, dy = nxt[0] - prev[0], nxt[1] - prev[1]
+    inv = 1.0 / max(0.001, math.hypot(dx, dy))
+    tangent = (dx * inv, dy * inv)
+    return point, tangent, (-tangent[1], tangent[0])
+
+
+def shoulder_ground_z(point_z, half_width, lateral_distance, detail_scale):
+    """Match make_embankment's shoulder grade at a lateral track offset."""
+    inner_distance = half_width + 4.0 * detail_scale
+    outer_distance = half_width + 30.0 * detail_scale
+    inner_z = max(-0.15 * detail_scale, point_z - 0.35 * detail_scale)
+    outer_z = -0.20 * detail_scale
+    blend = max(0.0, min(1.0, (lateral_distance - inner_distance) /
+                              max(0.001, outer_distance - inner_distance)))
+    return inner_z + (outer_z - inner_z) * blend
+
+
+def make_track_limits(samples, half_widths, material, parent, detail_scale, surface_offset):
+    """Author continuous white edge lines inside both circuit boundaries."""
+    vertices, faces = [], []
+    line_width = 0.18 * detail_scale
+    count = len(samples)
+    for side in (-1, 1):
+        side_start = len(vertices)
+        for index, point in enumerate(samples):
+            _, _, normal = track_frame(samples, index)
+            outer = side * (half_widths[index] - 0.08 * detail_scale)
+            inner = side * (half_widths[index] - line_width)
+            vertices.extend(((point[0] + normal[0] * outer,
+                              point[1] + normal[1] * outer,
+                              point[2] + surface_offset + 0.025 * detail_scale),
+                             (point[0] + normal[0] * inner,
+                              point[1] + normal[1] * inner,
+                              point[2] + surface_offset + 0.025 * detail_scale)))
+        for index in range(count):
+            base = side_start + index * 2
+            next_base = side_start + ((index + 1) % count) * 2
+            faces.append((base, next_base, next_base + 1, base + 1))
+    return mesh_object("track_limit_lines", vertices, faces, [material], parent=parent)
+
+
+def make_safety_barriers(samples, half_widths, materials, parent, detail_scale):
+    """Build continuous concrete barriers and catch fencing around both sides."""
+    wall_vertices, wall_faces, wall_indices = [], [], []
+    fence_vertices, fence_faces = [], []
+    wall_offset = 6.0 * detail_scale
+    wall_height = 1.15 * detail_scale
+    wall_thickness = 0.34 * detail_scale
+    fence_height = 2.70 * detail_scale
+    count = len(samples)
+    grounding = []
+    for side in (-1, 1):
+        wall_side_start = len(wall_vertices)
+        fence_side_start = len(fence_vertices)
+        for index, point in enumerate(samples):
+            _, _, normal = track_frame(samples, index)
+            lateral = half_widths[index] + wall_offset
+            base_z = shoulder_ground_z(point[2], half_widths[index], lateral, detail_scale)
+            grounding.append((side, index, round(base_z, 6)))
+            outer = side * (lateral + wall_thickness * 0.5)
+            inner = side * (lateral - wall_thickness * 0.5)
+            wall_vertices.extend(((point[0] + normal[0] * inner,
+                                   point[1] + normal[1] * inner, base_z),
+                                  (point[0] + normal[0] * outer,
+                                   point[1] + normal[1] * outer, base_z),
+                                  (point[0] + normal[0] * inner,
+                                   point[1] + normal[1] * inner, base_z + wall_height),
+                                  (point[0] + normal[0] * outer,
+                                   point[1] + normal[1] * outer, base_z + wall_height)))
+            fence_lateral = side * (lateral + wall_thickness * 0.5)
+            fence_vertices.extend(((point[0] + normal[0] * fence_lateral,
+                                    point[1] + normal[1] * fence_lateral,
+                                    base_z + wall_height),
+                                   (point[0] + normal[0] * fence_lateral,
+                                    point[1] + normal[1] * fence_lateral,
+                                    base_z + wall_height + fence_height)))
+        for index in range(count):
+            base = wall_side_start + index * 4
+            nxt = wall_side_start + ((index + 1) % count) * 4
+            wall_faces.extend(((base, nxt, nxt + 2, base + 2),
+                               (base + 1, base + 3, nxt + 3, nxt + 1),
+                               (base + 2, nxt + 2, nxt + 3, base + 3)))
+            wall_indices.extend((((index // 12) + (1 if side > 0 else 0)) % 2,) * 3)
+            fence_base = fence_side_start + index * 2
+            fence_next = fence_side_start + ((index + 1) % count) * 2
+            fence_faces.append((fence_base, fence_next, fence_next + 1, fence_base + 1))
+    wall = mesh_object("continuous_safety_barriers", wall_vertices, wall_faces,
+                       materials[:2], wall_indices, parent)
+    fence = mesh_object("continuous_catch_fence", fence_vertices, fence_faces,
+                        [materials[2]], parent=parent)
+    wall["sample_count_per_side"] = count
+    wall["grounding_contract"] = "shoulder_grade"
+    fence["sample_count_per_side"] = count
+    return wall, fence, grounding
+
+
 def make_curbs(samples, half_widths, materials, parent, curb_width=0.85):
     verts, faces, indices = [], [], []
     count = len(samples)
@@ -426,6 +532,22 @@ def add_box_geometry(verts, faces, center, size):
     faces.extend([(base+0,base+1,base+3,base+2), (base+4,base+6,base+7,base+5),
                   (base+0,base+4,base+5,base+1), (base+2,base+3,base+7,base+6),
                   (base+0,base+2,base+6,base+4), (base+1,base+5,base+7,base+3)])
+
+
+def add_oriented_box_geometry(verts, faces, center, size, tangent, normal):
+    """Append a box whose local X/Y axes follow a course tangent/normal."""
+    x, y, z = center
+    sx, sy, sz = (value * 0.5 for value in size)
+    base = len(verts)
+    for dz in (-1, 1):
+        for dy in (-1, 1):
+            for dx in (-1, 1):
+                verts.append((x + tangent[0] * dx * sx + normal[0] * dy * sy,
+                              y + tangent[1] * dx * sx + normal[1] * dy * sy,
+                              z + dz * sz))
+    faces.extend(((base+0,base+1,base+3,base+2), (base+4,base+6,base+7,base+5),
+                  (base+0,base+4,base+5,base+1), (base+2,base+3,base+7,base+6),
+                  (base+0,base+2,base+6,base+4), (base+1,base+5,base+7,base+3)))
 
 
 def combined_palms(locations, mats, parent):
@@ -484,6 +606,120 @@ def combined_rocks(locations, materials, parent):
     return mesh_object("coastal_rocks", verts, faces, materials, parent=parent)
 
 
+def combined_formula_infrastructure(placements, materials, parent, detail_scale):
+    """Create grounded grandstands, spectators, pit buildings and marshal posts."""
+    stand_verts, stand_faces, stand_indices = [], [], []
+    crowd_verts, crowd_faces, crowd_indices = [], [], []
+    marshal_verts, marshal_faces, marshal_indices = [], [], []
+    pit_verts, pit_faces, pit_indices = [], [], []
+    for placement in placements:
+        x, y, z = placement["position"]
+        tangent, normal = placement["tangent"], placement["normal"]
+        kind = placement["kind"]
+        if kind == "grandstand":
+            length = 30.0 * detail_scale
+            depth = 8.0 * detail_scale
+            for tier in range(4):
+                old = len(stand_faces)
+                tier_depth = depth / 4.0
+                center = (x + normal[0] * (tier - 1.5) * tier_depth,
+                          y + normal[1] * (tier - 1.5) * tier_depth,
+                          z + (tier + 0.5) * 0.85 * detail_scale)
+                add_oriented_box_geometry(stand_verts, stand_faces, center,
+                                          (length, tier_depth, 0.85 * detail_scale),
+                                          tangent, normal)
+                stand_indices.extend([0] * (len(stand_faces) - old))
+                for seat in range(12):
+                    crowd_x = x + tangent[0] * ((seat - 5.5) * length / 13.0)
+                    crowd_y = y + tangent[1] * ((seat - 5.5) * length / 13.0)
+                    crowd_x += normal[0] * (tier - 1.5) * tier_depth
+                    crowd_y += normal[1] * (tier - 1.5) * tier_depth
+                    old = len(crowd_faces)
+                    add_oriented_box_geometry(crowd_verts, crowd_faces,
+                                              (crowd_x, crowd_y,
+                                               z + (tier + 1.0) * 0.85 * detail_scale +
+                                               0.55 * detail_scale),
+                                              (0.52 * detail_scale, 0.52 * detail_scale,
+                                               1.10 * detail_scale), tangent, normal)
+                    crowd_indices.extend([(seat + tier) % 4] * (len(crowd_faces) - old))
+            old = len(stand_faces)
+            add_oriented_box_geometry(stand_verts, stand_faces,
+                                      (x, y, z + 5.0 * detail_scale),
+                                      (length + 2.0 * detail_scale, depth + detail_scale,
+                                       0.35 * detail_scale), tangent, normal)
+            stand_indices.extend([1] * (len(stand_faces) - old))
+        elif kind == "marshal":
+            old = len(marshal_faces)
+            add_oriented_box_geometry(marshal_verts, marshal_faces,
+                                      (x, y, z + 1.25 * detail_scale),
+                                      (3.2 * detail_scale, 2.4 * detail_scale,
+                                       2.5 * detail_scale), tangent, normal)
+            marshal_indices.extend([0] * (len(marshal_faces) - old))
+            old = len(marshal_faces)
+            add_oriented_box_geometry(marshal_verts, marshal_faces,
+                                      (x, y, z + 2.70 * detail_scale),
+                                      (3.8 * detail_scale, 2.8 * detail_scale,
+                                       0.40 * detail_scale), tangent, normal)
+            marshal_indices.extend([1] * (len(marshal_faces) - old))
+        elif kind == "pit":
+            old = len(pit_faces)
+            add_oriented_box_geometry(pit_verts, pit_faces,
+                                      (x, y, z + 3.0 * detail_scale),
+                                      (42.0 * detail_scale, 9.0 * detail_scale,
+                                       6.0 * detail_scale), tangent, normal)
+            pit_indices.extend([0] * (len(pit_faces) - old))
+            old = len(pit_faces)
+            add_oriented_box_geometry(pit_verts, pit_faces,
+                                      (x, y, z + 6.35 * detail_scale),
+                                      (44.0 * detail_scale, 10.0 * detail_scale,
+                                       0.70 * detail_scale), tangent, normal)
+            pit_indices.extend([1] * (len(pit_faces) - old))
+    objects = {
+        "grandstands": mesh_object("formula_grandstands", stand_verts, stand_faces,
+                                    materials["stands"], stand_indices, parent),
+        "spectators": mesh_object("grandstand_spectators", crowd_verts, crowd_faces,
+                                   materials["crowd"], crowd_indices, parent),
+        "marshal_posts": mesh_object("marshal_posts", marshal_verts, marshal_faces,
+                                      materials["marshal"], marshal_indices, parent),
+        "pit_buildings": mesh_object("pit_buildings", pit_verts, pit_faces,
+                                      materials["pit"], pit_indices, parent),
+    }
+    for obj in objects.values():
+        obj["grounding_contract"] = "shoulder_grade"
+    return objects
+
+
+def combined_park_trees(locations, materials, parent):
+    verts, faces, indices = [], [], []
+    sides = 7
+    for x, y, z, scale in locations:
+        base = len(verts)
+        trunk_height = 4.0 * scale
+        for level, radius in ((0, 0.35 * scale), (1, 0.24 * scale)):
+            for index in range(sides):
+                angle = math.tau * index / sides
+                verts.append((x + math.cos(angle) * radius,
+                              y + math.sin(angle) * radius,
+                              z + level * trunk_height))
+        for index in range(sides):
+            faces.append((base + index, base + (index + 1) % sides,
+                          base + sides + (index + 1) % sides, base + sides + index))
+            indices.append(0)
+        crown = len(verts)
+        verts.extend(((x, y, z + trunk_height + 4.0 * scale),
+                      (x - 2.8 * scale, y - 2.4 * scale, z + trunk_height),
+                      (x + 2.8 * scale, y - 2.4 * scale, z + trunk_height),
+                      (x + 2.8 * scale, y + 2.4 * scale, z + trunk_height),
+                      (x - 2.8 * scale, y + 2.4 * scale, z + trunk_height)))
+        faces.extend(((crown, crown+1, crown+2), (crown, crown+2, crown+3),
+                      (crown, crown+3, crown+4), (crown, crown+4, crown+1),
+                      (crown+1, crown+4, crown+3, crown+2)))
+        indices.extend([1] * 5)
+    obj = mesh_object("park_trees", verts, faces, materials, indices, parent)
+    obj["grounding_contract"] = "shoulder_grade"
+    return obj
+
+
 def make_world(slug, spec):
     reset_scene()
     rng = random.Random(7901 + list(TRACKS).index(slug) * 101)
@@ -525,8 +761,8 @@ def make_world(slug, spec):
     margin = max(180.0, min(span_x, span_y) * 0.12)
 
     materials = {
-        "asphalt": mat("asphalt", (0.055, 0.062, 0.067, 1), 0.87),
-        "shoulder": mat("runoff", (0.18, 0.22, 0.20, 1), 0.92),
+        "asphalt": mat("asphalt", ASPHALT_COLOR, 0.87),
+        "shoulder": mat("runoff", (0.30, 0.33, 0.31, 1), 0.92),
         "red": mat("curb_red", (0.72, 0.035, 0.025, 1), 0.60),
         "white": mat("curb_white", (0.90, 0.88, 0.78, 1), 0.65),
         "sand": mat("beach_sand", palette["sand"], 0.96),
@@ -534,12 +770,23 @@ def make_world(slug, spec):
         "water": mat("ocean_water", (0.018, 0.22, 0.34, 1), 0.20, 0.12),
         "trunk": mat("palm_trunk", (0.30, 0.13, 0.045, 1), 0.90),
         "leaf": mat("palm_fronds", (0.025, 0.29, 0.10, 1), 0.88),
-        "wall_a": mat("house_coral", (0.83, 0.35, 0.19, 1), 0.82),
-        "wall_b": mat("house_sun", (0.89, 0.68, 0.28, 1), 0.82),
-        "roof": mat("house_roof", palette["roof"], 0.72),
         "rock": mat("coastal_stone", (0.25, 0.27, 0.25, 1), 0.96),
         "gantry": mat("gantry_metal", (0.06, 0.10, 0.12, 1), 0.35, 0.72),
         "banner": mat("start_banner", (0.94, 0.35, 0.025, 1), 0.45),
+        "barrier_white": mat("barrier_white", (0.78, 0.80, 0.78, 1), 0.72),
+        "barrier_red": mat("barrier_red", (0.62, 0.035, 0.025, 1), 0.68),
+        "fence": mat("catch_fence", (0.17, 0.21, 0.23, 1), 0.38, 0.55),
+        "stand": mat("grandstand_concrete", (0.30, 0.32, 0.32, 1), 0.86),
+        "canopy": mat("grandstand_canopy", (0.82, 0.84, 0.80, 1), 0.62),
+        "crowd_red": mat("spectator_red", (0.72, 0.04, 0.03, 1), 0.76),
+        "crowd_blue": mat("spectator_blue", (0.04, 0.24, 0.62, 1), 0.76),
+        "crowd_yellow": mat("spectator_yellow", (0.90, 0.58, 0.025, 1), 0.76),
+        "crowd_white": mat("spectator_white", (0.86, 0.86, 0.81, 1), 0.76),
+        "marshal_orange": mat("marshal_orange", (0.95, 0.23, 0.015, 1), 0.70),
+        "marshal_roof": mat("marshal_roof", (0.12, 0.14, 0.15, 1), 0.55),
+        "pit_wall": mat("pit_building_wall", (0.68, 0.70, 0.68, 1), 0.78),
+        "pit_roof": mat("pit_building_roof", (0.12, 0.15, 0.16, 1), 0.48, 0.35),
+        "tree_leaf": mat("tree_canopy", (0.035, 0.23, 0.075, 1), 0.90),
     }
 
     root = empty("map_root")
@@ -573,30 +820,63 @@ def make_world(slug, spec):
     make_strip("track_surface", center, half_widths, surface_offset, materials["asphalt"], circuit)
     make_curbs(center, half_widths, [materials["red"], materials["white"]], circuit,
                0.85*detail_scale)
+    make_track_limits(center, half_widths, materials["white"], circuit, detail_scale,
+                      surface_offset)
+    _, _, barrier_grounding = make_safety_barriers(
+        center, half_widths,
+        [materials["barrier_white"], materials["barrier_red"], materials["fence"]],
+        circuit, detail_scale)
 
-    # Place scenery well outside the road ribbon at evenly distributed course stations.
-    palms, houses, rocks = [], [], []
-    for index in range(30):
-        i = int((index + 0.37) * SAMPLES / 30) % SAMPLES
-        p, prev, nxt = center[i], center[(i-1)%SAMPLES], center[(i+1)%SAMPLES]
-        dx, dy = nxt[0]-prev[0], nxt[1]-prev[1]
-        inv = 1.0/max(0.001, math.hypot(dx,dy))
-        nx, ny = -dy*inv, dx*inv
+    # Every prop base samples the same sloped shoulder function as track_embankment.
+    palms, trees, rocks, infrastructure, grounded_instances = [], [], [], [], []
+    for index in range(36):
+        i = int((index + 0.37) * SAMPLES / 36) % SAMPLES
+        p, tangent, normal = track_frame(center, i)
         side = -1 if index % 2 else 1
-        setback = half_widths[i] + (14 + rng.uniform(0, 10))*detail_scale
-        palms.append((p[0]+nx*side*setback, p[1]+ny*side*setback, max(0.2,p[2]),
-                      rng.uniform(0.8,1.4)*detail_scale))
-        if index % 5 == 1:
-            houses.append((p[0]+nx*side*(setback+5*detail_scale),
-                           p[1]+ny*side*(setback+5*detail_scale), max(0.2,p[2]),
-                           rng.uniform(1.0,1.55)*detail_scale))
-        if index % 4 == 2:
-            rocks.append((p[0]-nx*side*(setback+4*detail_scale),
-                          p[1]-ny*side*(setback+4*detail_scale), max(0.1,p[2]),
-                          rng.uniform(0.9,1.7)*detail_scale))
+        lateral = half_widths[i] + (13.0 + rng.uniform(0, 11))*detail_scale
+        base_z = shoulder_ground_z(p[2], half_widths[i], lateral, detail_scale)
+        position = (p[0] + normal[0]*side*lateral,
+                    p[1] + normal[1]*side*lateral, base_z)
+        grounded_instances.append({"kind": "vegetation", "station": i, "side": side,
+                                   "lateral": round(lateral, 6), "base_z": round(base_z, 6)})
+        if index % 3 == 0:
+            palms.append((*position, rng.uniform(0.8,1.25)*detail_scale))
+        else:
+            trees.append((*position, rng.uniform(0.85,1.35)*detail_scale))
+        if index % 7 == 3:
+            rocks.append((*position, rng.uniform(0.7,1.25)*detail_scale))
+
+    infrastructure_schedule = {
+        "grandstand": (0.08, 0.24, 0.43, 0.62, 0.82),
+        "marshal": (0.03, 0.14, 0.31, 0.49, 0.70, 0.91),
+        "pit": (0.965,),
+    }
+    for kind, phases in infrastructure_schedule.items():
+        for ordinal, phase in enumerate(phases):
+            i = int(phase * SAMPLES) % SAMPLES
+            p, tangent, normal = track_frame(center, i)
+            side = -1 if (ordinal + (0 if kind == "pit" else 1)) % 2 else 1
+            extra = {"grandstand": 16.0, "marshal": 10.0, "pit": 13.0}[kind]
+            lateral = half_widths[i] + extra * detail_scale
+            base_z = shoulder_ground_z(p[2], half_widths[i], lateral, detail_scale)
+            position = (p[0] + normal[0]*side*lateral,
+                        p[1] + normal[1]*side*lateral, base_z)
+            infrastructure.append({"kind": kind, "position": position,
+                                   "tangent": tangent, "normal": normal})
+            grounded_instances.append({"kind": kind, "station": i, "side": side,
+                                       "lateral": round(lateral, 6),
+                                       "base_z": round(base_z, 6)})
     combined_palms(palms, [materials["trunk"], materials["leaf"]], scenery)
-    combined_houses(houses, [materials["wall_a"], materials["wall_b"], materials["roof"]], scenery)
+    combined_park_trees(trees, [materials["trunk"], materials["tree_leaf"]], scenery)
     combined_rocks(rocks, [materials["rock"]], scenery)
+    combined_formula_infrastructure(
+        infrastructure,
+        {"stands": [materials["stand"], materials["canopy"]],
+         "crowd": [materials["crowd_red"], materials["crowd_blue"],
+                   materials["crowd_yellow"], materials["crowd_white"]],
+         "marshal": [materials["marshal_orange"], materials["marshal_roof"]],
+         "pit": [materials["pit_wall"], materials["pit_roof"]]},
+        scenery, detail_scale)
 
     # Start/finish stripe and a 20 m-wide gantry aligned to the opening centerline tangent.
     start_phase = spec["start_phase"]
@@ -649,6 +929,8 @@ def make_world(slug, spec):
                                     "sand": sand_z,
                                     "vegetation": -0.40*detail_scale,
                                     "embankment_outer": -0.20*detail_scale},
+        "grounded_instances": grounded_instances,
+        "barrier_grounding": barrier_grounding,
     }
 
 
@@ -736,9 +1018,15 @@ def export_track(slug, spec, output_root):
         "curb_secondary": "curb_white", "sand": "beach_sand",
         "vegetation": "island_vegetation", "ocean": "ocean_water",
         "palm_trunk": "palm_trunk", "palm_fronds": "palm_fronds",
-        "house_primary": "house_coral", "house_secondary": "house_sun",
-        "house_roof": "house_roof", "rocks": "coastal_stone",
+        "tree_canopy": "tree_canopy", "rocks": "coastal_stone",
         "gantry": "gantry_metal", "start_banner": "start_banner",
+        "barrier_primary": "barrier_white", "barrier_secondary": "barrier_red",
+        "catch_fence": "catch_fence", "grandstand": "grandstand_concrete",
+        "grandstand_canopy": "grandstand_canopy", "spectator_red": "spectator_red",
+        "spectator_blue": "spectator_blue", "spectator_yellow": "spectator_yellow",
+        "spectator_white": "spectator_white", "marshal_post": "marshal_orange",
+        "marshal_roof": "marshal_roof", "pit_wall": "pit_building_wall",
+        "pit_roof": "pit_building_roof",
     }
     metadata = {
         "schema_version": 1,
@@ -793,7 +1081,9 @@ def export_track(slug, spec, output_root):
             "mapping": "cppWorld = gltfPosition * recommended_glb_uniform_scale",
             "road_surface_offset_above_centerline_asset_units": info["surface_offset"],
             "opaque_layer_elevations_asset_units": info["opaque_layer_elevations"],
-            "visual_replacement_scope": ["road", "runoff", "curbs", "terrain", "ocean", "props", "start_gantry"],
+            "visual_replacement_scope": ["road", "runoff", "track_limits", "curbs", "barriers",
+                                         "fencing", "terrain", "ocean", "grandstands", "spectators",
+                                         "marshal_posts", "pit_buildings", "props", "start_gantry"],
             "authoritative_runtime_system": "Track3D remains authoritative for physics, progress, elevation and width",
             "start": {"phase": info["start_phase"],
                       "position_blender": start_b, "forward_blender": forward_b,
@@ -801,10 +1091,29 @@ def export_track(slug, spec, output_root):
                       "forward_gltf_raylib": [round(v,8) for v in forward_gltf]},
         },
         "material_roles": material_roles,
+        "presentation_contract": {
+            "asphalt_base_color_rgba": list(ASPHALT_COLOR),
+            "asphalt_relative_luminance": round(0.2126*ASPHALT_COLOR[0] +
+                                                  0.7152*ASPHALT_COLOR[1] +
+                                                  0.0722*ASPHALT_COLOR[2], 6),
+            "asphalt_luminance_range": [ASPHALT_MIN_LUMINANCE, ASPHALT_MAX_LUMINANCE],
+            "barriers_continuous": True,
+            "barrier_samples_per_side": SAMPLES,
+            "opaque_materials_only": True,
+        },
+        "grounding_contract": {
+            "terrain_function": "shoulder_ground_z",
+            "tolerance_asset_units": 0.002,
+            "instances": info["grounded_instances"],
+            "barrier_samples": len(info["barrier_grounding"]),
+            "barrier_max_authored_error": 0.0,
+        },
         "required_materials": sorted(material_roles.values()),
         "required_nodes": ["map_root", "circuit_root", "terrain_root", "scenery_root",
-                           "track_surface", "track_runoff", "track_curbs", "track_embankment", "sand_island",
-                           "ocean", "palm_groves", "coastal_houses", "coastal_rocks",
+                           "track_surface", "track_runoff", "track_limit_lines", "track_curbs",
+                           "track_embankment", "continuous_safety_barriers", "continuous_catch_fence",
+                           "sand_island", "ocean", "palm_groves", "park_trees", "coastal_rocks",
+                           "formula_grandstands", "grandstand_spectators", "marshal_posts", "pit_buildings",
                            "start_gantry", "start_finish_line"],
         "source": blend.name,
         "export": glb.name,

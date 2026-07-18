@@ -13,10 +13,11 @@ sys.dont_write_bytecode = True
 
 import bpy
 
-from generate_tracks import (SAMPLES, TRACKS as TRACK_SPECS, cpp_pairs, dense_closed,
+from generate_tracks import (ASPHALT_MAX_LUMINANCE, ASPHALT_MIN_LUMINANCE, SAMPLES,
+                             TRACKS as TRACK_SPECS, cpp_pairs, dense_closed,
                              length_closed, loop_pose, pair_digest,
                              resample_closed, sample_stations,
-                             spa_road_width, sunset_elevation, sunset_road_width,
+                             shoulder_ground_z, spa_road_width, sunset_elevation, sunset_road_width,
                              transform_bounds_blender_to_gltf)
 
 
@@ -89,7 +90,7 @@ def verify(root: Path, slug: str):
     if length_error > 2.0:
         raise ValueError(f"{slug}: planar length error {length_error:.3f}m")
     geometry = meta["runtime_geometry"]
-    if not (8 <= geometry["mesh_objects"] <= 20 and geometry["vertices"] < 30000 and geometry["materials"] >= 10):
+    if not (16 <= geometry["mesh_objects"] <= 30 and geometry["vertices"] < 60000 and geometry["materials"] >= 24):
         raise ValueError(f"{slug}: unexpected geometry budget {geometry}")
     if paths["_preview.png"].stat().st_size < 20000:
         raise ValueError(f"{slug}: preview appears blank or trivial")
@@ -136,6 +137,80 @@ def verify(root: Path, slug: str):
         raise ValueError(f"{slug}: road centerline/catalog error {max_error:.6f}")
     if max_width_error > 0.002:
         raise ValueError(f"{slug}: road width/catalog error {max_width_error:.6f}")
+
+    presentation = meta["presentation_contract"]
+    asphalt = bpy.data.materials["asphalt"]
+    asphalt_color = tuple(asphalt.diffuse_color)
+    luminance = 0.2126*asphalt_color[0] + 0.7152*asphalt_color[1] + 0.0722*asphalt_color[2]
+    if not ASPHALT_MIN_LUMINANCE <= luminance <= ASPHALT_MAX_LUMINANCE:
+        raise ValueError(f"{slug}: asphalt luminance {luminance:.4f} is not readable")
+    if abs(luminance-presentation["asphalt_relative_luminance"]) > 0.002:
+        raise ValueError(f"{slug}: asphalt luminance metadata is stale")
+    gltf_asphalt = next(material for material in gltf["materials"] if material.get("name") == "asphalt")
+    gltf_color = gltf_asphalt["pbrMetallicRoughness"]["baseColorFactor"]
+    if max(abs(gltf_color[index]-asphalt_color[index]) for index in range(4)) > 0.002:
+        raise ValueError(f"{slug}: GLB asphalt color differs from BLEND")
+
+    barrier = bpy.data.objects["continuous_safety_barriers"]
+    fence = bpy.data.objects["continuous_catch_fence"]
+    limits = bpy.data.objects["track_limit_lines"]
+    if (len(barrier.data.vertices), len(barrier.data.polygons)) != (SAMPLES*8, SAMPLES*6):
+        raise ValueError(f"{slug}: continuous barrier topology changed")
+    if (len(fence.data.vertices), len(fence.data.polygons)) != (SAMPLES*4, SAMPLES*2):
+        raise ValueError(f"{slug}: continuous fence topology changed")
+    if (len(limits.data.vertices), len(limits.data.polygons)) != (SAMPLES*4, SAMPLES*2):
+        raise ValueError(f"{slug}: track-limit line topology changed")
+    if not presentation["barriers_continuous"] or presentation["barrier_samples_per_side"] != SAMPLES:
+        raise ValueError(f"{slug}: barrier continuity metadata is stale")
+
+    detail_scale = 12.0 if slug == "sunset_cove" else 1.0
+    grounding = meta["grounding_contract"]
+    tolerance = grounding["tolerance_asset_units"]
+    if grounding["barrier_samples"] != SAMPLES*2:
+        raise ValueError(f"{slug}: barrier grounding sample count changed")
+    max_barrier_ground_error = 0.0
+    for side_index, side in enumerate((-1, 1)):
+        side_start = side_index * SAMPLES * 4
+        for index, point in enumerate(expected):
+            lateral = expected_widths[index]*0.5 + 6.0*detail_scale
+            wanted_z = shoulder_ground_z(point[2], expected_widths[index]*0.5,
+                                         lateral, detail_scale)
+            actual_z = barrier.data.vertices[side_start + index*4].co.z
+            max_barrier_ground_error = max(max_barrier_ground_error, abs(actual_z-wanted_z))
+    if max_barrier_ground_error > tolerance:
+        raise ValueError(f"{slug}: safety barrier floats by {max_barrier_ground_error:.6f}")
+
+    object_groups = {
+        "vegetation": ("palm_groves", "park_trees", "coastal_rocks"),
+        "grandstand": ("formula_grandstands",),
+        "marshal": ("marshal_posts",),
+        "pit": ("pit_buildings",),
+    }
+    max_prop_ground_error = 0.0
+    for instance in grounding["instances"]:
+        index = instance["station"]
+        point = expected[index]
+        half_width = expected_widths[index]*0.5
+        lateral = instance["lateral"]
+        expected_z = shoulder_ground_z(point[2], half_width, lateral, detail_scale)
+        if abs(expected_z-instance["base_z"]) > tolerance:
+            raise ValueError(f"{slug}: stale grounded {instance['kind']} metadata at station {index}")
+        _, tangent = loop_pose(expected, index/SAMPLES)
+        normal = (-tangent[1], tangent[0])
+        side = instance["side"]
+        expected_x = point[0] + normal[0]*side*lateral
+        expected_y = point[1] + normal[1]*side*lateral
+        candidate_errors = []
+        search_radius = 4.0*detail_scale if instance["kind"] == "vegetation" else 25.0*detail_scale
+        for object_name in object_groups[instance["kind"]]:
+            for vertex in bpy.data.objects[object_name].data.vertices:
+                if math.hypot(vertex.co.x-expected_x, vertex.co.y-expected_y) <= search_radius:
+                    candidate_errors.append(abs(vertex.co.z-expected_z))
+        if not candidate_errors:
+            raise ValueError(f"{slug}: no grounded geometry near {instance['kind']} station {index}")
+        max_prop_ground_error = max(max_prop_ground_error, min(candidate_errors))
+    if max_prop_ground_error > tolerance:
+        raise ValueError(f"{slug}: scenery floats by {max_prop_ground_error:.6f}")
     width_meta = meta["road_width_asset_units"]
     if abs(width_meta["min"]-min(expected_widths)) > 0.002 or abs(width_meta["max"]-max(expected_widths)) > 0.002:
         raise ValueError(f"{slug}: road width metadata is stale")
@@ -175,6 +250,8 @@ def verify(root: Path, slug: str):
           f"surface={meta['measured_surface_centerline_asset_units']:7.1f} "
           f"meshes={geometry['mesh_objects']:2} verts={geometry['vertices']:5} "
           f"materials={geometry['materials']:2} align_error={max_error:.6f} width_error={max_width_error:.6f} "
+          f"ground_error={max(max_barrier_ground_error,max_prop_ground_error):.6f} "
+          f"tarmac_luma={luminance:.3f} "
           f"preview={paths['_preview.png'].stat().st_size//1024:4}KiB")
 
 

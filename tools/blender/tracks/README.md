@@ -12,8 +12,16 @@ uv run python tools/blender/tracks/verify_tracks.py --track all
 ```
 
 Each output directory contains the editable `.blend`, runtime `.glb`, rendered
-preview PNG, and JSON integration metadata. The GLB uses combined palm, house,
-and rock meshes to keep the runtime draw-call count bounded.
+preview PNG, and JSON integration metadata. Worlds use readable medium-gray
+tarmac, continuous track-limit lines, curbs, two-sided safety barriers and
+catch fencing. Grounded combined meshes provide grandstands and spectators,
+pit facilities, marshal posts, park trees, palms and rocks while keeping the
+runtime draw-call count bounded.
+
+`verify_tracks.py` treats those presentation details as runtime contracts. It
+checks opaque material parity between BLEND and GLB, asphalt luminance,
+continuous barrier/fence/track-limit topology, local shoulder grounding for
+every scenery placement, and the exact catalog alignment used by physics.
 
 ## Runtime alignment contract
 
