@@ -47,10 +47,10 @@
   },
   "runtime_geometry": {
     "centerline_samples": 1024,
-    "mesh_objects": 12,
-    "vertices": 13823,
-    "triangles": 13478,
-    "materials": 15
+    "mesh_objects": 19,
+    "vertices": 31995,
+    "triangles": 37086,
+    "materials": 26
   },
   "measured_bounds_blender": {
     "min": [
@@ -61,12 +61,12 @@
     "max": [
       2511.229,
       1299.764,
-      155.597
+      148.744
     ],
     "dimensions": [
       4985.244,
       2594.834,
-      215.597
+      208.744
     ]
   },
   "measured_bounds_gltf_y_up": {
@@ -77,12 +77,12 @@
     ],
     "max": [
       2511.229,
-      155.597,
+      148.744,
       1295.07
     ],
     "dimensions": [
       4985.244,
-      215.597,
+      208.744,
       2594.834
     ]
   },
@@ -94,12 +94,12 @@
     ],
     "max": [
       213.454,
-      13.226,
+      12.643,
       110.081
     ],
     "dimensions": [
       423.746,
-      18.326,
+      17.743,
       220.561
     ]
   },
@@ -157,9 +157,16 @@
     "visual_replacement_scope": [
       "road",
       "runoff",
+      "track_limits",
       "curbs",
+      "barriers",
+      "fencing",
       "terrain",
       "ocean",
+      "grandstands",
+      "spectators",
+      "marshal_posts",
+      "pit_buildings",
       "props",
       "start_gantry"
     ],
@@ -198,29 +205,411 @@
     "ocean": "ocean_water",
     "palm_trunk": "palm_trunk",
     "palm_fronds": "palm_fronds",
-    "house_primary": "house_coral",
-    "house_secondary": "house_sun",
-    "house_roof": "house_roof",
+    "tree_canopy": "tree_canopy",
     "rocks": "coastal_stone",
     "gantry": "gantry_metal",
-    "start_banner": "start_banner"
+    "start_banner": "start_banner",
+    "barrier_primary": "barrier_white",
+    "barrier_secondary": "barrier_red",
+    "catch_fence": "catch_fence",
+    "grandstand": "grandstand_concrete",
+    "grandstand_canopy": "grandstand_canopy",
+    "spectator_red": "spectator_red",
+    "spectator_blue": "spectator_blue",
+    "spectator_yellow": "spectator_yellow",
+    "spectator_white": "spectator_white",
+    "marshal_post": "marshal_orange",
+    "marshal_roof": "marshal_roof",
+    "pit_wall": "pit_building_wall",
+    "pit_roof": "pit_building_roof"
+  },
+  "presentation_contract": {
+    "asphalt_base_color_rgba": [
+      0.22,
+      0.235,
+      0.245,
+      1
+    ],
+    "asphalt_relative_luminance": 0.232533,
+    "asphalt_luminance_range": [
+      0.2,
+      0.3
+    ],
+    "barriers_continuous": true,
+    "barrier_samples_per_side": 1024,
+    "opaque_materials_only": true
+  },
+  "grounding_contract": {
+    "terrain_function": "shoulder_ground_z",
+    "tolerance_asset_units": 0.002,
+    "instances": [
+      {
+        "kind": "vegetation",
+        "station": 10,
+        "side": 1,
+        "lateral": 242.662763,
+        "base_z": -0.897652
+      },
+      {
+        "kind": "vegetation",
+        "station": 38,
+        "side": -1,
+        "lateral": 327.134246,
+        "base_z": -1.423662
+      },
+      {
+        "kind": "vegetation",
+        "station": 67,
+        "side": 1,
+        "lateral": 294.561922,
+        "base_z": -1.076782
+      },
+      {
+        "kind": "vegetation",
+        "station": 95,
+        "side": -1,
+        "lateral": 339.290096,
+        "base_z": -1.458904
+      },
+      {
+        "kind": "vegetation",
+        "station": 124,
+        "side": 1,
+        "lateral": 272.196953,
+        "base_z": -0.939115
+      },
+      {
+        "kind": "vegetation",
+        "station": 152,
+        "side": -1,
+        "lateral": 350.317871,
+        "base_z": 1.032231
+      },
+      {
+        "kind": "vegetation",
+        "station": 181,
+        "side": 1,
+        "lateral": 328.181926,
+        "base_z": -1.605812
+      },
+      {
+        "kind": "vegetation",
+        "station": 209,
+        "side": -1,
+        "lateral": 354.474958,
+        "base_z": -1.851561
+      },
+      {
+        "kind": "vegetation",
+        "station": 238,
+        "side": 1,
+        "lateral": 274.652631,
+        "base_z": -0.986724
+      },
+      {
+        "kind": "vegetation",
+        "station": 266,
+        "side": -1,
+        "lateral": 277.192615,
+        "base_z": -0.300593
+      },
+      {
+        "kind": "vegetation",
+        "station": 294,
+        "side": 1,
+        "lateral": 322.83419,
+        "base_z": -0.547295
+      },
+      {
+        "kind": "vegetation",
+        "station": 323,
+        "side": -1,
+        "lateral": 316.392571,
+        "base_z": 0.240896
+      },
+      {
+        "kind": "vegetation",
+        "station": 351,
+        "side": 1,
+        "lateral": 341.03909,
+        "base_z": 1.070596
+      },
+      {
+        "kind": "vegetation",
+        "station": 380,
+        "side": -1,
+        "lateral": 356.957136,
+        "base_z": 1.739083
+      },
+      {
+        "kind": "vegetation",
+        "station": 408,
+        "side": 1,
+        "lateral": 336.585697,
+        "base_z": 3.561689
+      },
+      {
+        "kind": "vegetation",
+        "station": 437,
+        "side": -1,
+        "lateral": 352.652204,
+        "base_z": 2.924875
+      },
+      {
+        "kind": "vegetation",
+        "station": 465,
+        "side": 1,
+        "lateral": 301.755247,
+        "base_z": 7.440143
+      },
+      {
+        "kind": "vegetation",
+        "station": 494,
+        "side": -1,
+        "lateral": 363.115306,
+        "base_z": 3.847081
+      },
+      {
+        "kind": "vegetation",
+        "station": 522,
+        "side": 1,
+        "lateral": 314.718991,
+        "base_z": 9.400852
+      },
+      {
+        "kind": "vegetation",
+        "station": 550,
+        "side": -1,
+        "lateral": 360.154288,
+        "base_z": 5.611722
+      },
+      {
+        "kind": "vegetation",
+        "station": 579,
+        "side": 1,
+        "lateral": 333.10764,
+        "base_z": 8.702774
+      },
+      {
+        "kind": "vegetation",
+        "station": 607,
+        "side": -1,
+        "lateral": 256.879987,
+        "base_z": 16.853857
+      },
+      {
+        "kind": "vegetation",
+        "station": 636,
+        "side": 1,
+        "lateral": 276.83905,
+        "base_z": 14.693919
+      },
+      {
+        "kind": "vegetation",
+        "station": 664,
+        "side": -1,
+        "lateral": 243.806378,
+        "base_z": 17.940306
+      },
+      {
+        "kind": "vegetation",
+        "station": 693,
+        "side": 1,
+        "lateral": 352.666049,
+        "base_z": 6.676171
+      },
+      {
+        "kind": "vegetation",
+        "station": 721,
+        "side": -1,
+        "lateral": 293.545372,
+        "base_z": 11.23847
+      },
+      {
+        "kind": "vegetation",
+        "station": 750,
+        "side": 1,
+        "lateral": 281.41663,
+        "base_z": 14.741815
+      },
+      {
+        "kind": "vegetation",
+        "station": 778,
+        "side": -1,
+        "lateral": 334.276386,
+        "base_z": 3.802172
+      },
+      {
+        "kind": "vegetation",
+        "station": 806,
+        "side": 1,
+        "lateral": 274.76308,
+        "base_z": 6.362148
+      },
+      {
+        "kind": "vegetation",
+        "station": 835,
+        "side": -1,
+        "lateral": 319.354005,
+        "base_z": 2.740036
+      },
+      {
+        "kind": "vegetation",
+        "station": 863,
+        "side": 1,
+        "lateral": 348.691565,
+        "base_z": 0.030778
+      },
+      {
+        "kind": "vegetation",
+        "station": 892,
+        "side": -1,
+        "lateral": 366.527032,
+        "base_z": -1.479801
+      },
+      {
+        "kind": "vegetation",
+        "station": 920,
+        "side": 1,
+        "lateral": 318.013303,
+        "base_z": -1.328766
+      },
+      {
+        "kind": "vegetation",
+        "station": 949,
+        "side": -1,
+        "lateral": 351.750655,
+        "base_z": -1.673425
+      },
+      {
+        "kind": "vegetation",
+        "station": 977,
+        "side": 1,
+        "lateral": 344.382513,
+        "base_z": -1.694262
+      },
+      {
+        "kind": "vegetation",
+        "station": 1006,
+        "side": -1,
+        "lateral": 277.853273,
+        "base_z": -1.271209
+      },
+      {
+        "kind": "grandstand",
+        "station": 81,
+        "side": -1,
+        "lateral": 278.4,
+        "base_z": -0.920172
+      },
+      {
+        "kind": "grandstand",
+        "station": 245,
+        "side": 1,
+        "lateral": 278.4,
+        "base_z": -0.851554
+      },
+      {
+        "kind": "grandstand",
+        "station": 440,
+        "side": -1,
+        "lateral": 268.0,
+        "base_z": 8.467031
+      },
+      {
+        "kind": "grandstand",
+        "station": 634,
+        "side": 1,
+        "lateral": 272.212556,
+        "base_z": 15.185013
+      },
+      {
+        "kind": "grandstand",
+        "station": 839,
+        "side": -1,
+        "lateral": 272.8,
+        "base_z": 4.355092
+      },
+      {
+        "kind": "marshal",
+        "station": 30,
+        "side": -1,
+        "lateral": 206.4,
+        "base_z": -0.485751
+      },
+      {
+        "kind": "marshal",
+        "station": 143,
+        "side": 1,
+        "lateral": 206.4,
+        "base_z": 2.462791
+      },
+      {
+        "kind": "marshal",
+        "station": 317,
+        "side": -1,
+        "lateral": 199.062443,
+        "base_z": 2.25372
+      },
+      {
+        "kind": "marshal",
+        "station": 501,
+        "side": 1,
+        "lateral": 196.0,
+        "base_z": 18.90237
+      },
+      {
+        "kind": "marshal",
+        "station": 716,
+        "side": -1,
+        "lateral": 200.8,
+        "base_z": 20.469006
+      },
+      {
+        "kind": "marshal",
+        "station": 931,
+        "side": 1,
+        "lateral": 204.706408,
+        "base_z": -0.419335
+      },
+      {
+        "kind": "pit",
+        "station": 988,
+        "side": 1,
+        "lateral": 242.4,
+        "base_z": -1.025114
+      }
+    ],
+    "barrier_samples": 2048,
+    "barrier_max_authored_error": 0.0
   },
   "required_materials": [
     "asphalt",
+    "barrier_red",
+    "barrier_white",
     "beach_sand",
+    "catch_fence",
     "coastal_stone",
     "curb_red",
     "curb_white",
     "gantry_metal",
-    "house_coral",
-    "house_roof",
-    "house_sun",
+    "grandstand_canopy",
+    "grandstand_concrete",
     "island_vegetation",
+    "marshal_orange",
+    "marshal_roof",
     "ocean_water",
     "palm_fronds",
     "palm_trunk",
+    "pit_building_roof",
+    "pit_building_wall",
     "runoff",
-    "start_banner"
+    "spectator_blue",
+    "spectator_red",
+    "spectator_white",
+    "spectator_yellow",
+    "start_banner",
+    "tree_canopy"
   ],
   "required_nodes": [
     "map_root",
@@ -229,13 +618,20 @@
     "scenery_root",
     "track_surface",
     "track_runoff",
+    "track_limit_lines",
     "track_curbs",
     "track_embankment",
+    "continuous_safety_barriers",
+    "continuous_catch_fence",
     "sand_island",
     "ocean",
     "palm_groves",
-    "coastal_houses",
+    "park_trees",
     "coastal_rocks",
+    "formula_grandstands",
+    "grandstand_spectators",
+    "marshal_posts",
+    "pit_buildings",
     "start_gantry",
     "start_finish_line"
   ],
