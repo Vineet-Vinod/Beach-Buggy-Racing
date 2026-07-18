@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "asset": "interlagos",
+  "type": "track_world",
+  "display_name": "Interlagos",
+  "venue": "Autodromo Jose Carlos Pace inspired coastal hillside",
+  "country": "Brazil",
+  "units": "meter",
+  "coordinate_unit": "meter",
+  "axes_blender": {
+    "right": "+X",
+    "front": "-Y",
+    "up": "+Z"
+  },
+  "target_lap_length": {
+    "value": 4309.0,
+    "unit": "meter"
+  },
+  "target_lap_length_m": 4309.0,
+  "measured_planar_centerline_asset_units": 4308.3486,
+  "measured_surface_centerline_asset_units": 4309.8237,
+  "turn_count": 15,
+  "clockwise": false,
+  "road_width_asset_units": {
+    "min": 9.501,
+    "max": 14.999,
+    "unit": "meter",
+    "profile": "kInterlagosWidth",
+    "formula": null
+  },
+  "road_width_cpp_world_units": {
+    "min": 13.729,
+    "max": 21.674
+  },
+  "source_centerline": {
+    "file": "src/track_catalog.cpp",
+    "symbol": "kInterlagosCenterline",
+    "control_points": 68,
+    "normalization_scale": 1.90719503,
+    "control_sha256": "e965de3fd682db3a5e6e26417e56f3535eb547531a5a895bd07362ac1d2f9d0d",
+    "elevation_symbol": "kInterlagosElevation",
+    "elevation_sha256": "b817feadfef3b1dc14c10e7d027b1ed0d3701d9ade58ea11fa8437870897e3a5",
+    "width_symbol": "kInterlagosWidth",
+    "width_sha256": "8455df0101222d3b7721f75577b64d37d7cc4d4cb8b176c2fabd0d65287a716a",
+    "catmull_rom_steps_per_control_segment": 32,
+    "closed_loop_arc_length_resampling": true
+  },
+  "runtime_geometry": {
+    "centerline_samples": 1024,
+    "mesh_objects": 12,
+    "vertices": 13823,
+    "triangles": 13478,
+    "materials": 15
+  },
+  "measured_bounds_blender": {
+    "min": [
+      -622.695,
+      -599.342,
+      -5.0
+    ],
+    "max": [
+      1036.614,
+      954.652,
+      52.185
+    ],
+    "dimensions": [
+      1659.309,
+      1553.994,
+      57.185
+    ]
+  },
+  "measured_bounds_gltf_y_up": {
+    "min": [
+      -622.695,
+      -5.0,
+      -954.652
+    ],
+    "max": [
+      1036.614,
+      52.185,
+      599.342
+    ],
+    "dimensions": [
+      1659.309,
+      57.185,
+      1553.994
+    ]
+  },
+  "expected_bounds_cpp_world": {
+    "min": [
+      -899.794,
+      -7.225,
+      -1379.472
+    ],
+    "max": [
+      1497.907,
+      75.407,
+      866.049
+    ],
+    "dimensions": [
+      2397.702,
+      82.632,
+      2245.521
+    ]
+  },
+  "runtime_alignment": {
+    "cpp_layout_id": "TrackLayoutId::Interlagos",
+    "asset_origin": "C++ catalog plan origin and zero-elevation datum; not the start line",
+    "blender_to_gltf_matrix_row_major": [
+      [
+        1,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        -1,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        1
+      ]
+    ],
+    "gltf_and_raylib_axes": {
+      "right": "+X",
+      "up": "+Y",
+      "course_plan_y": "+Z"
+    },
+    "cpp_simulation_units_per_asset_unit": 17.0,
+    "cpp_render_scale": 0.085,
+    "recommended_glb_uniform_scale": 1.445,
+    "recommended_world_position": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "recommended_yaw_degrees": 0.0,
+    "mapping": "cppWorld = gltfPosition * recommended_glb_uniform_scale",
+    "road_surface_offset_above_centerline_asset_units": 0.06,
+    "opaque_layer_elevations_asset_units": {
+      "ocean": -5.0,
+      "sand": -0.8,
+      "vegetation": -0.4,
+      "embankment_outer": -0.2
+    },
+    "visual_replacement_scope": [
+      "road",
+      "runoff",
+      "curbs",
+      "terrain",
+      "ocean",
+      "props",
+      "start_gantry"
+    ],
+    "authoritative_runtime_system": "Track3D remains authoritative for physics, progress, elevation and width",
+    "start": {
+      "phase": 0.0,
+      "position_blender": [
+        28.607925,
+        -123.967677,
+        38.0
+      ],
+      "forward_blender": [
+        -0.82940487,
+        0.55864798,
+        0.0
+      ],
+      "position_gltf_raylib": [
+        28.607925,
+        38.0,
+        123.967677
+      ],
+      "forward_gltf_raylib": [
+        -0.82940487,
+        0.0,
+        -0.55864798
+      ]
+    }
+  },
+  "material_roles": {
+    "road": "asphalt",
+    "runoff": "runoff",
+    "curb_primary": "curb_red",
+    "curb_secondary": "curb_white",
+    "sand": "beach_sand",
+    "vegetation": "island_vegetation",
+    "ocean": "ocean_water",
+    "palm_trunk": "palm_trunk",
+    "palm_fronds": "palm_fronds",
+    "house_primary": "house_coral",
+    "house_secondary": "house_sun",
+    "house_roof": "house_roof",
+    "rocks": "coastal_stone",
+    "gantry": "gantry_metal",
+    "start_banner": "start_banner"
+  },
+  "required_materials": [
+    "asphalt",
+    "beach_sand",
+    "coastal_stone",
+    "curb_red",
+    "curb_white",
+    "gantry_metal",
+    "house_coral",
+    "house_roof",
+    "house_sun",
+    "island_vegetation",
+    "ocean_water",
+    "palm_fronds",
+    "palm_trunk",
+    "runoff",
+    "start_banner"
+  ],
+  "required_nodes": [
+    "map_root",
+    "circuit_root",
+    "terrain_root",
+    "scenery_root",
+    "track_surface",
+    "track_runoff",
+    "track_curbs",
+    "track_embankment",
+    "sand_island",
+    "ocean",
+    "palm_groves",
+    "coastal_houses",
+    "coastal_rocks",
+    "start_gantry",
+    "start_finish_line"
+  ],
+  "source": "interlagos.blend",
+  "export": "interlagos.glb",
+  "preview": "interlagos_preview.png"
+}
