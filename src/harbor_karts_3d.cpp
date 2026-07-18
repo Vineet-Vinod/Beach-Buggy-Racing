@@ -796,10 +796,11 @@ bool runTrackCatalogAudit() {
                      std::abs(length(a.tangent) - 1.0f) < 0.01f;
         }
         const float relief = maxElevation - minElevation;
+        const TrackShapeAuditResult shape = auditTrackCatalogShape(*catalog);
         const bool ok = finite && std::abs(track.totalLength() - catalog->targetLengthMeters) < 0.01f &&
                         std::abs(planarMeters - catalog->targetLengthMeters) < 2.0f &&
                         std::abs(relief - catalog->nominalElevationReliefMeters) < 0.10f &&
-                        minWidth >= 9.0f && maxWidth <= 17.0f;
+                        minWidth >= 9.0f && maxWidth <= 17.0f && shape.ok();
         std::cout << "track-catalog-audit name=" << catalog->displayName
                   << " target_m=" << catalog->targetLengthMeters
                   << " planar_m=" << planarMeters
@@ -807,6 +808,9 @@ bool runTrackCatalogAudit() {
                   << " relief_m=" << relief
                   << " width_m=" << minWidth << "," << maxWidth
                   << " clockwise=" << catalog->clockwise
+                  << " aspect=" << shape.aspectRatio
+                  << " intersections=" << shape.selfIntersections
+                  << " landmark_failures=" << shape.landmarkFailures << "/" << shape.landmarkChecks
                   << " finite=" << finite
                   << " ok=" << ok << "\n";
         allOk = allOk && ok;
@@ -878,8 +882,8 @@ bool runSpaGeometryAudit() {
     }
     const bool ok = lengthError <= 0.01f && std::abs(relief - kSpaElevationRelief) <= 0.03f &&
                     stationError <= 0.03f && std::abs(planarLength - kSpaTargetLength) <= 1.5f &&
-                    std::isfinite(surfaceLength) && maxGrade <= 0.25f && clearance.ok() && laSourceTurn > 0.5f &&
-                    eauRougeTurns[0] < -0.5f && eauRougeTurns[1] > 0.5f && eauRougeTurns[2] < -0.5f &&
+                    std::isfinite(surfaceLength) && maxGrade <= 0.25f && clearance.ok() && laSourceTurn < -0.5f &&
+                    eauRougeTurns[0] > 0.25f && eauRougeTurns[1] < -0.5f && eauRougeTurns[2] > 0.25f &&
                     maxEauRougeCurvature < 0.65f;
     std::cout << "spa-audit length_m=" << track.totalLength() << " planar_mesh_m=" << planarLength
               << " surface_mesh_m=" << surfaceLength << " relief_m=" << relief

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <span>
 #include <string_view>
 
@@ -49,3 +50,32 @@ const TrackCatalogEntry* findTrackCatalogEntry(CatalogCircuitId id) noexcept;
 
 float sampleTrackElevationMeters(const TrackCatalogEntry& track, float distanceMeters) noexcept;
 float sampleTrackWidthMeters(const TrackCatalogEntry& track, float distanceMeters) noexcept;
+
+enum class TrackTurnDirection : int {
+    Right = -1,
+    Left = 1,
+};
+
+struct TrackTurnExpectation {
+    std::string_view landmark;
+    float lapFraction = 0.0f;
+    TrackTurnDirection direction = TrackTurnDirection::Right;
+};
+
+struct TrackShapeAuditResult {
+    float aspectRatio = 0.0f;
+    float signedArea = 0.0f;
+    int selfIntersections = 0;
+    std::size_t landmarkChecks = 0;
+    std::size_t landmarkFailures = 0;
+    bool aspectMatches = false;
+    bool directionMatches = false;
+    bool intersectionsMatch = false;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return aspectMatches && directionMatches && intersectionsMatch && landmarkFailures == 0;
+    }
+};
+
+std::span<const TrackTurnExpectation> trackTurnExpectations(CatalogCircuitId id) noexcept;
+TrackShapeAuditResult auditTrackCatalogShape(const TrackCatalogEntry& track) noexcept;
