@@ -86,14 +86,14 @@ struct ArcadeVehicleConfig {
     float maxYawRateHighSpeed = 1.50f;
 
     float brakeLoadResponse = 16.0f;
-    float brakeReleaseResponse = 2.4f;
+    float brakeReleaseResponse = 8.0f;
     float brakeOversteerMinSpeed = 32.0f;
-    float brakeOversteerSteerThreshold = 0.06f;
-    float brakeOversteerYawGain = 4.80f;
-    float brakeOversteerSlip = 0.42f;
-    float brakeRearGripScale = 0.22f;
-    float brakeSlipResponse = 18.0f;
-    float brakeSlipRecovery = 4.2f;
+    float brakeOversteerSteerThreshold = 0.18f;
+    float brakeOversteerYawGain = 1.35f;
+    float brakeOversteerSlip = 0.22f;
+    float brakeRearGripScale = 0.60f;
+    float brakeSlipResponse = 10.0f;
+    float brakeSlipRecovery = 12.0f;
     float driftBrakeDecelerationScale = 0.62f;
 
     float lateralGripAcceleration = 310.0f;

@@ -1,5 +1,6 @@
 #include "arcade_vehicle.hpp"
 
+#include <array>
 #include <algorithm>
 #include <cmath>
 
@@ -211,6 +212,7 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
         const float brakeSlideDirection = state.brakeSlip < 0.0f ? 1.0f : -1.0f;
         targetSlip = state.brakeSlip;
         targetYawRate += brakeSlideDirection * config.brakeOversteerYawGain * brakeSlide * brakeSpeed;
+        targetYawRate = std::clamp(targetYawRate, -yawLimit * 1.20f, yawLimit * 1.20f);
         lateralResponse = lerp(config.lateralGripResponse, config.driftLateralResponse, brakeSlide * 0.86f);
         const float rearGripFalloff = std::max(config.brakeRearGripScale, std::pow(1.0f - brakeSlide, 3.0f));
         lateralAccelerationLimit *= rearGripFalloff;
@@ -651,9 +653,23 @@ ArcadeVehicleAuditResult runArcadeVehicleUnitAudit() {
         stepArcadeVehicle(brakeTurn, config, recoverControl, road, kInternalStep);
     }
     result.brakeRecoverySlip = std::abs(brakeTurn.slipAngle);
-    check(result.brakeOversteerPeakYaw > 0.80f);
-    check(result.brakeOversteerPeakSlip > 0.22f && result.brakeOversteerPeakSlip < 0.62f);
-    check(result.brakeRecoverySlip < 0.10f);
+    check(result.brakeOversteerPeakYaw > 0.45f && result.brakeOversteerPeakYaw <= config.maxYawRateHighSpeed * 1.20f + 0.02f);
+    check(result.brakeOversteerPeakSlip > 0.02f && result.brakeOversteerPeakSlip < 0.18f);
+    check(result.brakeRecoverySlip < 0.06f);
+
+    std::array<float, 3> modulatedBrakeSpeeds{};
+    constexpr std::array<float, 3> kBrakeInputs = {0.25f, 0.60f, 1.0f};
+    for (size_t inputIndex = 0; inputIndex < kBrakeInputs.size(); ++inputIndex) {
+        ArcadeVehicleState modulatedBrake;
+        modulatedBrake.vel = {120.0f, 0.0f};
+        ArcadeVehicleControl modulatedControl;
+        modulatedControl.brake = kBrakeInputs[inputIndex];
+        for (int i = 0; i < 60; ++i) {
+            stepArcadeVehicle(modulatedBrake, config, modulatedControl, road, kInternalStep);
+        }
+        modulatedBrakeSpeeds[inputIndex] = std::max(0.0f, modulatedBrake.forwardSpeed);
+    }
+    check(modulatedBrakeSpeeds[0] > modulatedBrakeSpeeds[1] && modulatedBrakeSpeeds[1] > modulatedBrakeSpeeds[2]);
 
     ArcadeVehicleState brakeRelease;
     brakeRelease.vel = {90.0f, 0.0f};

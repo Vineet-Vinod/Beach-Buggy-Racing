@@ -419,14 +419,6 @@ void drawRouteMap(const RaceHudViewModel& viewModel, const Metrics& m) {
 
     const float progress = clamp01(viewModel.courseProgress);
     const int playerIndex = std::clamp(static_cast<int>(progress * static_cast<float>(count)), 0, count - 1);
-    const int previewSegments = std::max(4, count / 8);
-    for (int offset = 0; offset < previewSegments; ++offset) {
-        const int from = (playerIndex + offset) % count;
-        const int to = (from + 1) % count;
-        DrawLineEx(points[static_cast<size_t>(from)], points[static_cast<size_t>(to)],
-                   5.0f * m.scale, offset < 2 ? kSun : kAqua);
-    }
-
     const Vector2 player = points[static_cast<size_t>(playerIndex)];
     const Vector2 next = points[static_cast<size_t>((playerIndex + 1) % count)];
     const Vector2 delta{next.x - player.x, next.y - player.y};

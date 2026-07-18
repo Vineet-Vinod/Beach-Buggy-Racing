@@ -649,7 +649,7 @@ private:
             const TrackPoint3D tp = sample(p);
             props_.push_back({type, p, sideSign * (tp.width * 0.5f + extra), scale, color});
         };
-        addLandmark(0.105f, 1.0f, 92.0f, 1.70f, Prop3D::Type::Chevron, Color{238, 62, 54, 255});
+        addLandmark(0.105f, 1.0f, 92.0f, 1.70f, Prop3D::Type::Sail, Color{238, 62, 54, 255});
         addLandmark(0.205f, -1.0f, 160.0f, 2.15f, Prop3D::Type::Boat, Color{239, 191, 56, 255});
         addLandmark(0.325f, 1.0f, 142.0f, 2.20f, Prop3D::Type::Market, Color{239, 70, 91, 255});
         addLandmark(0.455f, -1.0f, 136.0f, 2.00f, Prop3D::Type::Crane, Color{236, 92, 51, 255});
@@ -891,6 +891,13 @@ void applyAttackingAiSetup(ArcadeVehicleConfig& tuning) {
     tuning.launchAccelerationBonus *= 1.07f;
     tuning.lateralGripAcceleration *= 1.08f;
     tuning.driftGripAcceleration *= 1.08f;
+    tuning.brakeReleaseResponse = 2.4f * kRacePaceScale;
+    tuning.brakeOversteerSteerThreshold = 0.06f;
+    tuning.brakeOversteerYawGain = 4.80f;
+    tuning.brakeOversteerSlip = 0.42f;
+    tuning.brakeRearGripScale = 0.22f;
+    tuning.brakeSlipResponse = 18.0f;
+    tuning.brakeSlipRecovery = 4.2f;
 }
 
 std::array<KartSpec3D, 8> makeKartSpecs() {
@@ -973,13 +980,12 @@ float triggerValue(int gamepad, int axis, bool& signedRange) {
     return normalizeRaylibTrigger(GetGamepadAxisMovement(gamepad, axis), signedRange);
 }
 
-float canonicalHardBrake(float leftTrigger, bool bHeld) {
-    constexpr float kPressedThreshold = 0.12f;
-    return (leftTrigger >= kPressedThreshold || bHeld) ? 1.0f : 0.0f;
+float canonicalBrake(float leftTrigger, bool bHeld) {
+    return bHeld ? 1.0f : std::clamp(leftTrigger, 0.0f, 1.0f);
 }
 
 Input3D canonicalPlayerInput(Input3D input) {
-    input.brake = canonicalHardBrake(input.brake, input.bHeld);
+    input.brake = canonicalBrake(input.brake, input.bHeld);
     return input;
 }
 
@@ -999,9 +1005,9 @@ bool controllerContractAudit() {
     for (size_t i = 0; i < bSequence.size(); ++i) {
         bReleaseClears = bReleaseClears && canonicalPlayerInput(bSequence[i]).brake == expectedBrake[i];
     }
-    return canonicalHardBrake(0.0f, false) == 0.0f && canonicalHardBrake(0.20f, false) == 1.0f &&
-           canonicalHardBrake(0.55f, false) == 1.0f && canonicalHardBrake(1.0f, false) == 1.0f &&
-           canonicalHardBrake(0.0f, true) == 1.0f && canonicalHardBrake(1.0f, true) == 1.0f && bReleaseClears &&
+    return canonicalBrake(0.0f, false) == 0.0f && std::abs(canonicalBrake(0.20f, false) - 0.20f) < 0.0001f &&
+           std::abs(canonicalBrake(0.55f, false) - 0.55f) < 0.0001f && canonicalBrake(1.0f, false) == 1.0f &&
+           canonicalBrake(0.0f, true) == 1.0f && canonicalBrake(1.0f, true) == 1.0f && bReleaseClears &&
            zeroReleased == 0.0f && zeroPressed == 1.0f && signedReleased == 0.0f && signedHalf > 0.45f &&
            signedHalf < 0.55f && signedPressed == 1.0f;
 }
@@ -1084,7 +1090,7 @@ public:
             mergeSdl(input);
         }
         applyKeyboardFallback(input, devKeyboard);
-        input.brake = canonicalHardBrake(input.brake, input.bHeld);
+        input.brake = canonicalBrake(input.brake, input.bHeld);
         return edgeFiltered(input);
     }
 
@@ -1287,7 +1293,6 @@ struct Kart3D : ArcadeVehicleState {
     float aiCommandSteer = 0.0f;
     float aiCommandTargetSpeed = 0.0f;
     float ghostTimer = 0.0f;
-    float stuckTimer = 0.0f;
     Vec2 previousRenderPos{};
     float previousRenderElevation = 0.0f;
     float previousRenderHeading = 0.0f;
@@ -1845,8 +1850,8 @@ public:
         drawSkyGradient();
         arcade_render::DirectionalLightFog lighting;
         lighting.cameraPosition = camera_.position;
-        lighting.fogStart = 74.0f;
-        lighting.fogEnd = 235.0f;
+        lighting.fogStart = track_.layout() == TrackLayoutId::SpaCoast ? 10000.0f : 74.0f;
+        lighting.fogEnd = track_.layout() == TrackLayoutId::SpaCoast ? 12000.0f : 235.0f;
         lighting.exposure = 0.80f;
         renderer_.setLighting(lighting);
         BeginMode3D(camera_);
@@ -2110,7 +2115,7 @@ public:
         const bool referencePace = measuredLapSeconds >= 47.0f && measuredLapSeconds <= 55.0f;
         const bool authoredJumps = drift.maxAirTime >= 0.55f && drift.maxAirTime <= 0.95f && drift.landings >= 2;
         const bool inputContract = controllerContractAudit();
-        const bool requiredDrifting = drift.brakeDriftFrames > 60 && drift.maxSlip > 0.16f;
+        const bool requiredDrifting = drift.brakeDriftFrames > 20 && drift.maxSlip > 0.14f && drift.maxSlip < 0.30f;
         const bool ok = controlledRoad && noBrakeConsequences && groundClear && stable && moving && authoredJumps && inputContract && requiredDrifting;
 
         auto print = [](const AuditResult3D& r) {
@@ -2425,21 +2430,53 @@ public:
         light.ghostTimer = 0.0f;
         heavy.ghostTimer = 0.0f;
         const bool jumpClears = !shouldTestKartContact(light, heavy);
+
+        track_.rebuild(TrackLayoutId::SpaCoast);
         Kart3D wallKart;
         wallKart.spec = specs_[0];
+        wallKart.tuning = selectedTrackTuning(wallKart.spec);
         const TrackPoint3D wallPoint = track_.sample(2600.0f);
         const float wallLimit = hardBoundaryLaneLimit(wallKart, wallPoint);
         wallKart.pos = wallPoint.pos + wallPoint.normal * (wallLimit + 6.0f);
-        wallKart.heading = angleOf(normalize(wallPoint.tangent + wallPoint.normal * 0.85f));
-        wallKart.vel = wallPoint.tangent * 92.0f + wallPoint.normal * 118.0f;
+        wallKart.heading = angleOf(normalize(wallPoint.tangent + wallPoint.normal * 0.25f));
+        wallKart.vel = wallPoint.tangent * 140.0f + wallPoint.normal * 35.0f;
+        wallKart.progress = wallPoint.progress;
+        wallKart.previousProgress = wallPoint.progress;
         wallKart.nearest = track_.nearestIndex(wallKart.pos);
         const float wallSpeedBefore = length(wallKart.vel);
+        const float wallHeadingBefore = wallKart.heading;
         constrainToTrack(wallKart);
         const float wallRetention = length(wallKart.vel) / wallSpeedBefore;
         const float wallForwardSpeed = dot(wallKart.vel, wallPoint.tangent);
-        const bool wallGlances = wallRetention > 0.68f && wallForwardSpeed > 82.0f && dot(wallKart.vel, wallPoint.normal) <= 0.0f;
+        const bool wallGlances = wallRetention > 0.82f && wallForwardSpeed > 118.0f &&
+                                 dot(wallKart.vel, wallPoint.normal) <= 0.0f &&
+                                 std::abs(wrapAngle(wallKart.heading - wallHeadingBefore)) < 0.001f;
+
+        Kart3D shoulderKart;
+        shoulderKart.spec = specs_[0];
+        shoulderKart.tuning = selectedTrackTuning(shoulderKart.spec);
+        shoulderKart.tuning.engineAcceleration = 0.0f;
+        shoulderKart.tuning.launchAccelerationBonus = 0.0f;
+        shoulderKart.tuning.gravity = 0.0f;
+        const TrackPoint3D shoulderPoint = track_.sample(3200.0f);
+        shoulderKart.progress = shoulderPoint.progress;
+        shoulderKart.previousProgress = shoulderPoint.progress;
+        shoulderKart.pos = shoulderPoint.pos + shoulderPoint.normal * (roadCenterLimit(shoulderKart, shoulderPoint) + 8.0f);
+        shoulderKart.heading = angleOf(shoulderPoint.tangent);
+        shoulderKart.elevation = bankedElevation(shoulderPoint, roadCenterLimit(shoulderKart, shoulderPoint) + 8.0f);
+        shoulderKart.grounded = true;
+        shoulderKart.nearest = track_.nearestIndex(shoulderKart.pos);
+        Input3D heldThrottle;
+        heldThrottle.throttle = 1.0f;
+        for (int frame = 0; frame < static_cast<int>(3.0f / kFixedDt); ++frame) {
+            integrateKart(shoulderKart, heldThrottle, kFixedDt);
+        }
+        const TrackPoint3D finalShoulderPoint = track_.sample(shoulderKart.progress);
+        const bool noAutomaticRecovery = roadEdgeViolation(shoulderKart, finalShoulderPoint) > 5.0f &&
+                                         shoulderKart.ghostTimer <= 0.001f;
         const bool rearPushes = rearEnd.strikerSpeedAfterContact > 100.0f && rearEnd.targetSpeedAfterContact > 48.0f;
-        const bool ok = rearOk && headOk && sideOk && massDistinct && roleSymmetric && jumpClears && wallGlances && rearPushes;
+        const bool ok = rearOk && headOk && sideOk && massDistinct && roleSymmetric && jumpClears && wallGlances &&
+                        noAutomaticRecovery && rearPushes;
 
         auto print = [](const CollisionAuditResult3D& r) {
             std::cout << r.name << "_max_overlap=" << r.maxOverlap << " " << r.name << "_overlap_frames=" << r.overlapFrames << " "
@@ -2453,7 +2490,8 @@ public:
                   << " role_symmetric=" << roleSymmetric << " jump_clears=" << jumpClears
                   << " rear_striker_speed=" << rearEnd.strikerSpeedAfterContact
                   << " rear_target_speed=" << rearEnd.targetSpeedAfterContact << " rear_pushes=" << rearPushes
-                  << " wall_retention=" << wallRetention << " wall_forward=" << wallForwardSpeed << " wall_glances=" << wallGlances << "\n";
+                  << " wall_retention=" << wallRetention << " wall_forward=" << wallForwardSpeed << " wall_glances=" << wallGlances
+                  << " no_automatic_recovery=" << noAutomaticRecovery << "\n";
         return ok;
     }
 
@@ -2588,7 +2626,10 @@ private:
             tuning.maxYawRateHighSpeed *= 0.22f;
             tuning.driftYawBase *= 0.56f;
             tuning.driftYawSpeedGain *= 0.56f;
-            tuning.brakeOversteerYawGain *= 0.52f;
+            tuning.brakeOversteerYawGain *= 0.42f;
+            tuning.brakeOversteerSlip *= 0.88f;
+            tuning.brakeRearGripScale = std::max(tuning.brakeRearGripScale, 0.62f);
+            tuning.brakeReleaseResponse *= 1.35f;
             tuning.steerResponse *= 1.20f;
             tuning.steerReturnResponse *= 1.12f;
         }
@@ -3304,25 +3345,6 @@ private:
         control.drift = input.drift;
         kart.telemetry = stepArcadeVehicle(kart, kart.tuning, control, surface, dt);
 
-        const bool stuckOffroad = length(kart.vel) < 14.0f && offroad > 6.0f && input.throttle > 0.55f;
-        kart.stuckTimer = stuckOffroad ? kart.stuckTimer + dt : 0.0f;
-        if (kart.stuckTimer > 2.2f) {
-            kart.pos = center.pos;
-            kart.heading = angleOf(center.tangent);
-            kart.vel = center.tangent * 32.0f;
-            kart.elevation = bankedElevation(center, 0.0f);
-            kart.verticalSpeed = 0.0f;
-            kart.airborneTime = 0.0f;
-            kart.landingImpulse = 0.0f;
-            kart.grounded = true;
-            kart.yawRate = 0.0f;
-            kart.drifting = false;
-            kart.driftPhase = ArcadeDriftPhase::Grip;
-            kart.driftCharge = 0.0f;
-            kart.ghostTimer = 1.0f;
-            kart.stuckTimer = 0.0f;
-        }
-
         emitFx(kart, center, offroad, dt);
         updateProgress(kart);
         constrainToTrack(kart);
@@ -3371,32 +3393,23 @@ private:
         }
         const float sign = lane > 0.0f ? 1.0f : -1.0f;
         const float excess = std::abs(lane) - driveableLimit;
-        const float separation = track_.layout() == TrackLayoutId::SpaCoast
-                                     ? 0.78f * kSpaSimulationUnitsPerMeter
-                                     : 0.35f;
+        const float separation = 0.06f * kSpaSimulationUnitsPerMeter;
         kart.pos -= center.normal * (sign * (excess + separation));
         const float normalVelocity = dot(kart.vel, center.normal);
         if (normalVelocity * sign > 0.0f) {
             const float incomingSpeed = length(kart.vel);
             const float alongVelocity = dot(kart.vel, center.tangent);
-            const float inwardSpeed = std::max(std::abs(normalVelocity) * 0.38f,
-                                               track_.layout() == TrackLayoutId::SpaCoast
-                                                   ? 0.80f * kSpaSimulationUnitsPerMeter
-                                                   : 2.0f);
-            kart.vel = center.tangent * (alongVelocity * 0.68f) - center.normal * (sign * inwardSpeed);
             const float incidence = std::clamp(std::abs(normalVelocity) / std::max(1.0f, incomingSpeed), 0.0f, 1.0f);
-            Vec2 travelTangent = center.tangent;
-            if (alongVelocity < 0.0f) {
-                travelTangent *= -1.0f;
-            }
-            kart.heading = angleOf(normalize(lerp(fromAngle(kart.heading), travelTangent, 0.06f + incidence * 0.08f)));
-            kart.yawRate *= 0.72f;
+            const float tangentRetention = lerp(0.91f, 0.76f, incidence);
+            const float restitution = lerp(0.20f, 0.27f, incidence);
+            kart.vel = center.tangent * (alongVelocity * tangentRetention) -
+                       center.normal * (sign * std::abs(normalVelocity) * restitution);
+            kart.yawRate *= lerp(0.92f, 0.84f, incidence);
             if (!kart.barrierContact) {
                 kart.contactTimer = std::max(kart.contactTimer, 0.18f);
             }
             kart.barrierContact = true;
         }
-        kart.drifting = false;
     }
 
     bool shouldTestKartContact(const Kart3D& a, const Kart3D& b) const {
@@ -3663,7 +3676,7 @@ private:
                 const Vector3 base = terrainSurfacePoint(track_, point, lane);
                 const Vector3 cameraDelta = sub(base, camera_.position);
                 const float distanceSq = cameraDelta.x * cameraDelta.x + cameraDelta.y * cameraDelta.y + cameraDelta.z * cameraDelta.z;
-                if (distanceSq > 355.0f * 355.0f) {
+                if (distanceSq > 900.0f * 900.0f) {
                     continue;
                 }
                 const Vector3 along{point.tangent.x, 0.0f, point.tangent.y};
@@ -3735,17 +3748,18 @@ private:
             if (track_.layout() == TrackLayoutId::SpaCoast) {
                 const Vector3 center = track_.roadPoint(track_.sample(progress), 0.0f);
                 const Vector3 offset = sub(center, camera_.position);
-                return offset.x * offset.x + offset.y * offset.y + offset.z * offset.z < 285.0f * 285.0f;
+                return offset.x * offset.x + offset.y * offset.y + offset.z * offset.z < 900.0f * 900.0f;
             }
             const float distance = signedDistanceToLoop(viewProgress, progress, track_.totalLength());
             return distance >= -700.0f && distance <= 2500.0f;
         };
         if (trackRenderer_.ready()) {
             const bool spa = track_.layout() == TrackLayoutId::SpaCoast;
+            const float spaCircuitRange = track_.totalLength() * kRenderScale;
             trackRenderer_.draw(viewProgress * kRenderScale,
-                                spa ? 180.0f * kRenderScale : 260.0f,
-                                spa ? 90.0f * kRenderScale : 24.0f,
-                                camera_.position, spa ? 285.0f : 0.0f);
+                                spa ? spaCircuitRange : 260.0f,
+                                spa ? spaCircuitRange : 24.0f,
+                                camera_.position, 0.0f);
         } else {
             constexpr int stride = 2;
             for (int i = 0; i < track_.sampleCount(); i += stride) {
@@ -3802,60 +3816,6 @@ private:
         if (useDetailShader) {
             BeginShaderMode(detailShader);
         }
-        for (int i = 0; i < track_.sampleCount(); i += 24) {
-            const TrackPoint3D& p = samples[static_cast<size_t>(i)];
-            if (!detailVisible(p.progress) || p.curvature < 0.028f) {
-                continue;
-            }
-            const float outside = std::abs(p.signedCurvature) > 0.004f ? -std::copysign(1.0f, p.signedCurvature) : 1.0f;
-            const float lane = outside * (roadSurfaceHalfWidth(p) + 16.0f);
-            const Vector3 pos = lift(track_.roadPoint(p, lane), 0.08f);
-            rlPushMatrix();
-            rlTranslatef(pos.x, pos.y + 0.72f, pos.z);
-            rlRotatef(90.0f - angleOf(p.tangent) * RAD2DEG, 0.0f, 1.0f, 0.0f);
-            DrawCubeV({0.0f, 0.0f, 0.0f}, {0.22f, 1.36f, 2.35f}, Color{30, 39, 43, 255});
-            DrawCubeV({0.0f, -1.15f, 0.0f}, {0.20f, 1.05f, 0.20f}, Color{225, 225, 208, 255});
-            const float arrowDirection = outside > 0.0f ? -1.0f : 1.0f;
-            for (float z : {-0.62f, 0.0f, 0.62f}) {
-                rlPushMatrix();
-                rlTranslatef(-0.13f, 0.13f, z + arrowDirection * 0.12f);
-                rlRotatef(arrowDirection * 42.0f, 1.0f, 0.0f, 0.0f);
-                DrawCubeV({0.0f, 0.0f, 0.0f}, {0.07f, 0.16f, 0.72f}, Color{255, 213, 54, 255});
-                rlPopMatrix();
-            }
-            rlPopMatrix();
-        }
-
-        if (track_.layout() == TrackLayoutId::SpaCoast) {
-            constexpr float kArrowHalfWidth = 0.85f * kSpaSimulationUnitsPerMeter;
-            constexpr float kArrowHeadHalfWidth = 1.85f * kSpaSimulationUnitsPerMeter;
-            for (int i = 0; i < track_.sampleCount(); i += 16) {
-                const TrackPoint3D& center = samples[static_cast<size_t>(i)];
-                const float distance = signedDistanceToLoop(viewProgress, center.progress, track_.totalLength());
-                if (distance < 30.0f || distance > 1000.0f) {
-                    continue;
-                }
-                const TrackPoint3D tail = track_.sample(center.progress - 7.0f);
-                const TrackPoint3D shoulder = track_.sample(center.progress + 3.0f);
-                const TrackPoint3D tip = track_.sample(center.progress + 12.0f);
-                const Color arrow{255, 213, 54, 232};
-                drawQuad(lift(track_.roadPoint(tail, -kArrowHalfWidth), 0.085f),
-                         lift(track_.roadPoint(shoulder, -kArrowHalfWidth), 0.085f),
-                         lift(track_.roadPoint(shoulder, kArrowHalfWidth), 0.085f),
-                         lift(track_.roadPoint(tail, kArrowHalfWidth), 0.085f), arrow);
-                drawQuad(lift(track_.roadPoint(tail, kArrowHalfWidth), 0.086f),
-                         lift(track_.roadPoint(shoulder, kArrowHalfWidth), 0.086f),
-                         lift(track_.roadPoint(shoulder, -kArrowHalfWidth), 0.086f),
-                         lift(track_.roadPoint(tail, -kArrowHalfWidth), 0.086f), arrow);
-                DrawTriangle3D(lift(track_.roadPoint(shoulder, -kArrowHeadHalfWidth), 0.090f),
-                               lift(track_.roadPoint(tip, 0.0f), 0.090f),
-                               lift(track_.roadPoint(shoulder, kArrowHeadHalfWidth), 0.090f), arrow);
-                DrawTriangle3D(lift(track_.roadPoint(shoulder, kArrowHeadHalfWidth), 0.091f),
-                               lift(track_.roadPoint(tip, 0.0f), 0.091f),
-                               lift(track_.roadPoint(shoulder, -kArrowHeadHalfWidth), 0.091f), arrow);
-            }
-        }
-
         // Low sector-specific edge geometry follows the same lane boundary as
         // collision resolution. It gives every corner a stable silhouette and
         // communicates exactly how much shoulder remains available.
@@ -4072,7 +4032,7 @@ private:
         const Vector3 propCenter = lift(terrainSurfacePoint(track_, point, prop.side), 2.2f * prop.scale);
         const Vector3 cameraToProp = sub(propCenter, camera_.position);
         const float cameraDistanceSq = cameraToProp.x * cameraToProp.x + cameraToProp.y * cameraToProp.y + cameraToProp.z * cameraToProp.z;
-        const float fadeSafeRange = 275.0f + prop.scale * 5.0f;
+        const float fadeSafeRange = (track_.layout() == TrackLayoutId::SpaCoast ? 900.0f : 275.0f) + prop.scale * 5.0f;
         return cameraDistanceSq <= fadeSafeRange * fadeSafeRange;
     }
 
