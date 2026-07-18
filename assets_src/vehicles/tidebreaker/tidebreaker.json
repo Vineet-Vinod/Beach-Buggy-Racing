@@ -9,25 +9,25 @@
   },
   "measured_bounds_blender": {
     "min": [
-      -1.0083,
-      -1.99,
-      0.04
+      -1.0111,
+      -2.555,
+      -0.0
     ],
     "max": [
-      1.0083,
-      2.03,
-      1.605
+      1.0111,
+      2.36,
+      1.08
     ],
     "dimensions": [
-      2.0167,
-      4.02,
-      1.565
+      2.0222,
+      4.915,
+      1.08
     ]
   },
   "runtime_budget": {
-    "mesh_objects": 50,
-    "vertices": 6636,
-    "triangles": 13092
+    "mesh_objects": 108,
+    "vertices": 11322,
+    "triangles": 22232
   },
   "verification": {
     "status": "passed",
@@ -47,11 +47,11 @@
       "turn_right": 27
     },
     "skin_count": 1,
-    "exported_meshes": 50,
+    "exported_meshes": 108,
     "dimension_error_percent": {
-      "width_x": 5.04,
-      "length_y": 0.0,
-      "height_z": 3.4
+      "width_x": 0.38,
+      "length_y": 0.1,
+      "height_z": 0.92
     },
     "dimension_tolerance_percent": 8.0
   },
@@ -72,12 +72,25 @@
   "export": "tidebreaker.glb",
   "preview": "tidebreaker_preview.png",
   "type": "vehicle",
-  "display_name": "Tidebreaker XR",
-  "family": "open beach buggy",
+  "display_name": "Tidebreaker FX",
+  "family": "high-downforce formula",
+  "vehicle_class": "formula",
   "target_dimensions_m": {
-    "width_x": 1.92,
-    "length_y": 4.02,
-    "height_z": 1.62
+    "width_x": 2.03,
+    "length_y": 4.92,
+    "height_z": 1.09
+  },
+  "hard_points_m": {
+    "wheelbase": 3.17,
+    "front_track_centers": 1.61,
+    "rear_track_centers": 1.55,
+    "ground_clearance": 0.07,
+    "tire_contact_z": 0.0,
+    "seat_anchor_blender": [
+      0.0,
+      0.12,
+      0.74
+    ]
   },
   "animation_clips": {
     "accelerate": [
@@ -106,8 +119,8 @@
     "driver_bone": "seat_anchor",
     "gltf_local_y_up_z_forward_m": [
       0.0,
-      1.0,
-      -0.1
+      0.74,
+      -0.12
     ]
   }
 }
