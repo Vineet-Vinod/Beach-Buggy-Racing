@@ -1,8 +1,7 @@
 # Formula Buggy
 
-Formula Buggy is an original Linux/C++ arcade kart racer aimed at a
-bright tropical beach-buggy feel without copying proprietary Beach Buggy
-Racing assets, names, tracks, or game data.
+Formula Buggy is an original Linux/C++ arcade formula racer that combines
+open-wheel cars and circuit driving with a bright tropical setting.
 
 The primary build is `harbor_karts_3d`: vendored SDL3 input plus vendored
 raylib on SDL/EGL/OpenGL ES 2. The game uses a fixed-step arcade vehicle model,
@@ -52,8 +51,7 @@ Gamepad and keyboard are both supported.
 
 - Left stick / D-pad or A/D / arrows: steer; change the highlighted menu choice
 - RT: accelerate
-- LT or B / Circle: identical hard brake and corner-entry slide; hold at low
-  speed to reverse
+- LT or B / Circle: brake for corner entry; hold at low speed to reverse
 - W / up and S / down: keyboard accelerate and brake
 - D-pad or arrows/WASD: navigate driver, car, map, lap, pause, and results screens
 - LB/RB or Q/E: previous/next choice on selection screens
@@ -65,31 +63,39 @@ Gamepad and keyboard are both supported.
 
 ## Current Gameplay
 
-- Six selectable circuits: the original Sunset Cove, retained Spa Coast, and
-  arcade-scale Suzuka, Silverstone, Monza, and Interlagos layouts
+- Six selectable circuits: the original Sunset Cove plus meter-scaled Spa,
+  Suzuka, Silverstone, Monza, and Interlagos layouts with audited turn order,
+  handedness, dimensions, and elevation
 - Staged driver, car, map, and 2/5/10/infinite-lap race selection
 - Formula Buggy startup screen, beach-themed selection flow, full race results, replay/home actions, and pause controls
 - 6-car racing pack with AI opponents
-- Four original Blender-authored cars: Tidebreaker XR, Sunskipper GT,
-  Reefrunner R4, and Boardwalk Bruiser
+- Four original Blender-authored open-wheel formula cars: Tidebreaker FX,
+  Sunskipper F1, Reefrunner FA, and Boardwalk Formula, each with front and rear
+  wings, exposed suspension and wheels, sidepods, an open cockpit, halo, and diffuser
 - Six original Blender-authored drivers: Imani Reef, Dax Calder, Marina Quill,
   Niko Brass, Sol Vega, and Bea Torque
 - No powerups and no character super powers
-- Blender-authored circuit worlds with roads, curbs, runoff, sandy terrain,
-  ocean, palms, coastal houses, rocks, and start gantries
+- Blender-authored circuit worlds with medium-gray tarmac, continuous track
+  limits, curbs, runoff, safety walls, catch fences, grounded grandstands and
+  spectators, pit buildings, trees, palms, rocks, sandy terrain, ocean, and start gantries
+- Suzuka's only centerline crossover is an open bridge with audited vertical
+  clearance; the other real circuits contain no false self-intersections
 - Meter-scaled GLB car and driver meshes with named `idle`, `accelerate`,
   `brake`, `turn_left`, and `turn_right` animation clips
 - Runtime dust, brake lights, ground shadows, soft particles, body pitch/roll,
   and airborne presentation; the procedural track, car, and driver renderers
   remain as fallbacks when an authored GLB cannot be loaded
-- Speed-reactive ground-referenced chase camera with slide framing, restrained
+- Speed-reactive ground-referenced chase camera with restrained
   pullback, smooth FOV, collision shake, and landing kick
-- Momentum-preserving arcade handling with bounded tire grip, speed-sensitive
-  steering, binary brake oversteer, forgiving shoulders, real gravity,
-  airborne control, landing compression, vehicle-specific collision strength,
-  and automatic stuck recovery
+- Momentum-preserving formula handling with a combined tire-grip budget,
+  speed-sensitive steering, aerodynamic downforce, brake/load transfer,
+  high-speed understeer, stable braking zones, powered corner exits, real
+  gravity, landing compression, collision response, and stuck recovery
+- Formula-aware AI that scans upcoming curvature, brakes before turn-in,
+  coasts at the tire limit, accelerates from the apex, and does not drift
 - Procedural engine, drivetrain, road, wind, tire-scrub, and landing audio
-- Reference-calibrated 49-53 second baseline race laps with pack interaction
+- Circuit-specific AI pace with deterministic braking, track-limit, and
+  progress-stability audits
 - Metric lap-length, elevation, road-width, and grade-separation contracts for
   Spa Coast, Suzuka, Silverstone, Monza, and Interlagos
 - Race and Time Trial sessions: full-grid finite races or solo infinite-lap
@@ -127,8 +133,8 @@ uv run --no-sync python tools/blender/tracks/generate_tracks.py --track all
 uv run --no-sync python tools/blender/tracks/verify_tracks.py --track all
 ```
 
-Vehicle exports range from 1.84-2.04 m wide, 3.73-4.13 m long, and
-1.27-1.63 m high. Seated driver exports stay near 0.64 m wide,
+Formula car exports are 2.02-2.04 m wide, 4.915 m long, and 1.03-1.12 m
+high, with 3.17-3.20 m wheelbases and tire contact at Z=0. Seated driver exports stay near 0.64 m wide,
 0.65 m deep, and 1.07-1.16 m high, and attach at the common seat anchor. The verifiers check dimensions,
 required nodes and materials, mesh budgets, previews, skins, and exactly one of
 each gameplay animation; the C++ loader independently enforces runtime bounds.
@@ -172,7 +178,7 @@ binary brake oversteer, surfaces, jumping, landing, and fixed-step consistency
 without opening a window. `--race-flow-audit` runs 20 checks for countdowns, checkpoints,
 wrong-way state, finish ordering, infinite races, and discontinuity handling.
 `--race-audit` runs a longer headless simulation and reports progress jumps,
-cave transitions, turn balance, no-brake corner speed, and off-road excursions.
+pack balance, contacts, track-limit excursions, and lap pace.
 `--capture-playtest` writes deterministic loading, selection, pause, result, and race frames to
 `build/playtest_frames` so visual and camera changes can be inspected without a
 working video device.
@@ -182,12 +188,12 @@ The smoke render verifies SDL startup and framebuffer presentation.
 `capture-playtest-3d` writes deterministic 3D frames to `build/playtest_frames`
 for visual inspection.
 `race-audit-3d` runs the 3D scripted player against live AI and validates lap
-pace, pack pressure, contact rate, overtakes, and every kart's progress stability.
+pace, pack pressure, contact rate, overtakes, and every car's progress stability.
 `spa-audit-3d` verifies Spa Coast's lap length, sampled FIA elevation stations,
 overall relief, mesh length, road width, two-kart passing room, and non-local
 branch clearance without opening a window.
-`track-catalog-audit-3d` verifies the lap length, elevation relief, road-width
-range, and grade separation of Suzuka, Silverstone, Monza, and Interlagos.
+`track-catalog-audit-3d` verifies lap length, travel direction, turn landmarks,
+elevation relief, road width, handedness, self-intersections, and Suzuka bridge separation.
 `--asset-audit` opens every production GLB through the C++ loader and requires
 all four cars, six drivers, and six tracks to pass dimension and animation
 contracts. `capture-map-gallery-3d` writes a selection-screen preview for every
@@ -197,7 +203,7 @@ flow, infinite laps, best-lap timing, parked opponents, and no results transitio
 `capture-spa-tour-3d` writes nine course views for visual inspection.
 `capture-time-trial-3d` writes the live and paused solo timing HUD states.
 `collision-audit-3d` runs deterministic rear-end, head-on, and side-swipe
-contact cases and fails if the kart bodies remain overlapped.
+contact cases and fails if the formula car bodies remain overlapped.
 `perf-audit-3d` records 3D frame timings and fails if p95 misses the 60fps
 budget.
 `--diagnose-controller` prints both raylib and direct SDL controller readings,
