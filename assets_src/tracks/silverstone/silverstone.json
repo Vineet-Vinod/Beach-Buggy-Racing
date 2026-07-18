@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "asset": "silverstone",
+  "type": "track_world",
+  "display_name": "Silverstone",
+  "venue": "Silverstone Circuit inspired coastal airfield",
+  "country": "United Kingdom",
+  "units": "meter",
+  "coordinate_unit": "meter",
+  "axes_blender": {
+    "right": "+X",
+    "front": "-Y",
+    "up": "+Z"
+  },
+  "target_lap_length": {
+    "value": 5891.0,
+    "unit": "meter"
+  },
+  "target_lap_length_m": 5891.0,
+  "measured_planar_centerline_asset_units": 5890.4714,
+  "measured_surface_centerline_asset_units": 5890.5454,
+  "turn_count": 18,
+  "clockwise": true,
+  "road_width_asset_units": {
+    "min": 12.001,
+    "max": 15.996,
+    "unit": "meter",
+    "profile": "kSilverstoneWidth",
+    "formula": null
+  },
+  "road_width_cpp_world_units": {
+    "min": 17.341,
+    "max": 23.114
+  },
+  "source_centerline": {
+    "file": "src/track_catalog.cpp",
+    "symbol": "kSilverstoneCenterline",
+    "control_points": 76,
+    "normalization_scale": 1.7915052,
+    "control_sha256": "2f48ceb5ce331acf7a9aae599c6cbf7ffef78b348a3c649f232a200d1716f27b",
+    "elevation_symbol": "kSilverstoneElevation",
+    "elevation_sha256": "41a5e62e3dd8f046aba82d40a5e10490de7ee8f71e4725d90c3d90268ff7b924",
+    "width_symbol": "kSilverstoneWidth",
+    "width_sha256": "e194c56e76f561c9eed45e101b8eeb4816608626e968ad7e050f488c8d59ee74",
+    "catmull_rom_steps_per_control_segment": 32,
+    "closed_loop_arc_length_resampling": true
+  },
+  "runtime_geometry": {
+    "centerline_samples": 1024,
+    "mesh_objects": 12,
+    "vertices": 13823,
+    "triangles": 13478,
+    "materials": 15
+  },
+  "measured_bounds_blender": {
+    "min": [
+      -725.185,
+      -937.889,
+      -5.0
+    ],
+    "max": [
+      1662.938,
+      1182.236,
+      19.461
+    ],
+    "dimensions": [
+      2388.124,
+      2120.124,
+      24.461
+    ]
+  },
+  "measured_bounds_gltf_y_up": {
+    "min": [
+      -725.185,
+      -5.0,
+      -1182.236
+    ],
+    "max": [
+      1662.938,
+      19.461,
+      937.889
+    ],
+    "dimensions": [
+      2388.123,
+      24.461,
+      2120.125
+    ]
+  },
+  "expected_bounds_cpp_world": {
+    "min": [
+      -1047.892,
+      -7.225,
+      -1708.331
+    ],
+    "max": [
+      2402.945,
+      28.121,
+      1355.25
+    ],
+    "dimensions": [
+      3450.838,
+      35.346,
+      3063.581
+    ]
+  },
+  "runtime_alignment": {
+    "cpp_layout_id": "TrackLayoutId::Silverstone",
+    "asset_origin": "C++ catalog plan origin and zero-elevation datum; not the start line",
+    "blender_to_gltf_matrix_row_major": [
+      [
+        1,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        -1,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        1
+      ]
+    ],
+    "gltf_and_raylib_axes": {
+      "right": "+X",
+      "up": "+Y",
+      "course_plan_y": "+Z"
+    },
+    "cpp_simulation_units_per_asset_unit": 17.0,
+    "cpp_render_scale": 0.085,
+    "recommended_glb_uniform_scale": 1.445,
+    "recommended_world_position": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "recommended_yaw_degrees": 0.0,
+    "mapping": "cppWorld = gltfPosition * recommended_glb_uniform_scale",
+    "road_surface_offset_above_centerline_asset_units": 0.06,
+    "opaque_layer_elevations_asset_units": {
+      "ocean": -5.0,
+      "sand": -0.8,
+      "vegetation": -0.4,
+      "embankment_outer": -0.2
+    },
+    "visual_replacement_scope": [
+      "road",
+      "runoff",
+      "curbs",
+      "terrain",
+      "ocean",
+      "props",
+      "start_gantry"
+    ],
+    "authoritative_runtime_system": "Track3D remains authoritative for physics, progress, elevation and width",
+    "start": {
+      "phase": 0.0,
+      "position_blender": [
+        313.513409,
+        770.347234,
+        4.2
+      ],
+      "forward_blender": [
+        -0.99975763,
+        -0.02201527,
+        0.0
+      ],
+      "position_gltf_raylib": [
+        313.513409,
+        4.2,
+        -770.347234
+      ],
+      "forward_gltf_raylib": [
+        -0.99975763,
+        0.0,
+        0.02201527
+      ]
+    }
+  },
+  "material_roles": {
+    "road": "asphalt",
+    "runoff": "runoff",
+    "curb_primary": "curb_red",
+    "curb_secondary": "curb_white",
+    "sand": "beach_sand",
+    "vegetation": "island_vegetation",
+    "ocean": "ocean_water",
+    "palm_trunk": "palm_trunk",
+    "palm_fronds": "palm_fronds",
+    "house_primary": "house_coral",
+    "house_secondary": "house_sun",
+    "house_roof": "house_roof",
+    "rocks": "coastal_stone",
+    "gantry": "gantry_metal",
+    "start_banner": "start_banner"
+  },
+  "required_materials": [
+    "asphalt",
+    "beach_sand",
+    "coastal_stone",
+    "curb_red",
+    "curb_white",
+    "gantry_metal",
+    "house_coral",
+    "house_roof",
+    "house_sun",
+    "island_vegetation",
+    "ocean_water",
+    "palm_fronds",
+    "palm_trunk",
+    "runoff",
+    "start_banner"
+  ],
+  "required_nodes": [
+    "map_root",
+    "circuit_root",
+    "terrain_root",
+    "scenery_root",
+    "track_surface",
+    "track_runoff",
+    "track_curbs",
+    "track_embankment",
+    "sand_island",
+    "ocean",
+    "palm_groves",
+    "coastal_houses",
+    "coastal_rocks",
+    "start_gantry",
+    "start_finish_line"
+  ],
+  "source": "silverstone.blend",
+  "export": "silverstone.glb",
+  "preview": "silverstone_preview.png"
+}
