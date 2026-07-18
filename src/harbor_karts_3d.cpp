@@ -10,6 +10,7 @@
 #include <limits>
 #include <memory>
 #include <random>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -19,6 +20,7 @@
 #include <SDL3/SDL.h>
 
 #include "arcade_audio.hpp"
+#include "agent_play_protocol.hpp"
 #include "arcade_hud.hpp"
 #include "arcade_race.hpp"
 #include "arcade_render.hpp"
@@ -2188,6 +2190,92 @@ public:
         mode_ = Mode::Garage;
         selectionStage_ = harbor::ui::SelectionStage::Map;
         updateGarageCamera(1.0f);
+    }
+
+    void resetAgentSession() {
+        selectedSession_ = harbor::ui::GameModeOption::Race;
+        selectedCar_ = 0;
+        selectedRacer_ = 0;
+        selectedMap_ = 0;
+        selectedLapOption_ = 0;
+        selectionStage_ = harbor::ui::SelectionStage::Mode;
+        pauseAction_ = harbor::ui::PauseAction::Resume;
+        resultsAction_ = harbor::ui::ResultsAction::Replay;
+        loadingTime_ = 0.0f;
+        presentationTime_ = 0.0f;
+        garageSpin_ = 0.0f;
+        mode_ = Mode::Loading;
+        activateSelectedMap();
+        resetRace();
+        syncGaragePreview();
+    }
+
+    std::string agentStateJson(std::uint64_t frame) const {
+        static constexpr std::array<std::string_view, 5> kModeNames = {
+            "loading", "garage", "race", "pause", "results"};
+        static constexpr std::array<std::string_view, 5> kStageNames = {
+            "mode", "driver", "car", "map", "laps"};
+        static constexpr std::array<std::string_view, 4> kPhaseNames = {
+            "grid", "countdown", "racing", "finished"};
+        const Kart3D& player = karts_[0];
+        const TrackPoint3D point = track_.sample(player.progress);
+        const float unitsPerMeter = isMetricCircuit(track_.layout()) ? kSpaSimulationUnitsPerMeter : 1.0f;
+        const float speedKphScale = isMetricCircuit(track_.layout()) ? 3.6f / kSpaSimulationUnitsPerMeter : 1.22f;
+        const float speedKph = std::max(0.0f, player.telemetry.forwardSpeed) * speedKphScale;
+        const float roadClearance = (roadCenterLimit(player, point) - std::abs(player.lane)) / unitsPerMeter;
+        const float barrierClearance = (hardBoundaryLaneLimit(player, point) - std::abs(player.lane)) / unitsPerMeter;
+        const float lapProgress = raceLapProgress(player) / std::max(track_.totalLength(), 1.0f);
+        const ArcadeRacePhase phase = raceFlow_ ? raceFlow_->phase() : ArcadeRacePhase::Grid;
+        const ArcadeRacerRaceState* raceState = raceFlow_ ? &raceFlow_->racer(0) : nullptr;
+
+        std::ostringstream out;
+        out.setf(std::ios::fixed);
+        out.precision(4);
+        out << "{\"frame\":" << frame << ",\"sim_time_s\":" << static_cast<double>(frame) * kFixedDt
+            << ",\"screen\":" << agent_play::jsonString(kModeNames[static_cast<size_t>(mode_)])
+            << ",\"selection_stage\":" << agent_play::jsonString(kStageNames[static_cast<size_t>(selectionStage_)])
+            << ",\"selected\":{\"session\":"
+            << agent_play::jsonString(selectedSession_ == harbor::ui::GameModeOption::Race ? "race" : "time_trial")
+            << ",\"driver\":" << agent_play::jsonString(racers_[static_cast<size_t>(selectedRacer_)])
+            << ",\"car\":" << agent_play::jsonString(specs_[static_cast<size_t>(selectedCar_)].name)
+            << ",\"map\":" << agent_play::jsonString(selectedMap().name)
+            << ",\"laps\":" << targetLaps() << "}"
+            << ",\"race\":{\"phase\":" << agent_play::jsonString(kPhaseNames[static_cast<size_t>(phase)])
+            << ",\"countdown_s\":" << (raceFlow_ ? raceFlow_->countdownRemainingSeconds() : 0.0f)
+            << ",\"time_s\":" << raceTime_ << ",\"lap\":" << std::max(0, player.lap + 1)
+            << ",\"lap_progress\":" << lapProgress << ",\"position\":" << playerPosition_
+            << ",\"racers\":" << activeKartCount() << ",\"finished\":" << (raceFinished_ ? "true" : "false")
+            << ",\"wrong_way\":" << (raceState && raceState->wrongWay ? "true" : "false") << "}"
+            << ",\"car\":{\"speed_kph\":" << speedKph
+            << ",\"speed_normalized\":" << player.telemetry.normalizedSpeed
+            << ",\"position_m\":[" << player.pos.x / unitsPerMeter << "," << player.pos.y / unitsPerMeter << "]"
+            << ",\"heading_rad\":" << player.heading << ",\"yaw_rate\":" << player.yawRate
+            << ",\"slip_angle_rad\":" << player.slipAngle << ",\"steer\":" << player.steerSmoothed
+            << ",\"engine_load\":" << player.engineLoad << ",\"brake_load\":" << player.brakeLoad
+            << ",\"lane_m\":" << player.lane / unitsPerMeter
+            << ",\"road_edge_clearance_m\":" << roadClearance
+            << ",\"barrier_clearance_m\":" << barrierClearance
+            << ",\"on_road\":" << (roadClearance >= 0.0f ? "true" : "false")
+            << ",\"barrier_contact\":" << (player.barrierContact ? "true" : "false")
+            << ",\"grounded\":" << (player.grounded ? "true" : "false")
+            << ",\"elevation_m\":" << player.elevation / unitsPerMeter << "}"
+            << ",\"nearby_cars\":[";
+        bool first = true;
+        for (int i = 1; i < activeKartCount(); ++i) {
+            const Kart3D& other = karts_[static_cast<size_t>(i)];
+            const float relativeProgress = signedDistanceToLoop(player.progress, other.progress, track_.totalLength()) / unitsPerMeter;
+            if (std::abs(relativeProgress) > 150.0f) {
+                continue;
+            }
+            if (!first) out << ',';
+            first = false;
+            out << "{\"driver\":" << agent_play::jsonString(other.racer)
+                << ",\"relative_progress_m\":" << relativeProgress
+                << ",\"lane_m\":" << other.lane / unitsPerMeter
+                << ",\"speed_kph\":" << std::max(0.0f, other.telemetry.forwardSpeed) * speedKphScale << '}';
+        }
+        out << "]}";
+        return out.str();
     }
 
     void showResultsCapture() {
@@ -5155,9 +5243,143 @@ private:
     bool hasBestLap_ = false;
 };
 
+Input3D toGameInput(const agent_play::Input& input) {
+    Input3D gameInput;
+    gameInput.steer = input.steer;
+    gameInput.throttle = input.throttle;
+    gameInput.brake = input.brake;
+    gameInput.a = input.confirm;
+    gameInput.b = input.cancel;
+    gameInput.start = input.pause;
+    gameInput.back = input.recover;
+    gameInput.left = input.left;
+    gameInput.right = input.right;
+    gameInput.up = input.up;
+    gameInput.down = input.down;
+    gameInput.pageLeft = input.pageLeft;
+    gameInput.pageRight = input.pageRight;
+    return gameInput;
+}
+
+void clearMomentaryAgentInput(Input3D& input) {
+    input.a = false;
+    input.b = false;
+    input.start = false;
+    input.back = false;
+    input.left = false;
+    input.right = false;
+    input.up = false;
+    input.down = false;
+    input.pageLeft = false;
+    input.pageRight = false;
+}
+
+std::string safeAgentFrameName(std::string_view requested, std::uint64_t frame) {
+    std::string name;
+    name.reserve(std::min<size_t>(requested.size(), 80));
+    for (const unsigned char ch : requested) {
+        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-') {
+            name.push_back(static_cast<char>(ch));
+        }
+    }
+    if (name.empty()) {
+        name = "frame_" + std::to_string(frame);
+    }
+    return name + ".png";
+}
+
+int runAgentPlaySession(Game3D& game, const std::filesystem::path& captureDirectory) {
+    std::error_code directoryError;
+    std::filesystem::create_directories(captureDirectory, directoryError);
+    if (directoryError) {
+        std::cout << "{\"ok\":false,\"error\":"
+                  << agent_play::jsonString("cannot create frame directory: " + directoryError.message()) << "}\n" << std::flush;
+        return 1;
+    }
+
+    std::uint64_t simulationFrame = 0;
+    std::cout << "{\"ok\":true,\"type\":\"ready\",\"protocol\":1,\"fixed_dt_s\":" << kFixedDt
+              << ",\"frame_directory\":" << agent_play::jsonString(std::filesystem::absolute(captureDirectory).string())
+              << ",\"state\":" << game.agentStateJson(simulationFrame) << "}\n" << std::flush;
+
+    std::string line;
+    while (std::getline(std::cin, line)) {
+        const agent_play::ParseResult parsed = agent_play::parseCommand(line);
+        if (!parsed.ok) {
+            std::cout << "{\"ok\":false,\"error\":" << agent_play::jsonString(parsed.error) << "}\n" << std::flush;
+            continue;
+        }
+        const agent_play::Command& command = parsed.command;
+        const std::string id = command.requestId >= 0 ? ",\"id\":" + std::to_string(command.requestId) : std::string{};
+        if (command.type == agent_play::CommandType::Quit) {
+            std::cout << "{\"ok\":true" << id << ",\"type\":\"bye\"}\n" << std::flush;
+            return 0;
+        }
+        if (command.type == agent_play::CommandType::Help) {
+            std::cout
+                << "{\"ok\":true" << id
+                << ",\"type\":\"help\",\"commands\":{"
+                   "\"state\":{},"
+                   "\"step\":{\"frames\":\"1..2400\",\"render\":\"bool\",\"name\":\"optional frame basename\","
+                   "\"input\":{\"steer\":\"-1..1\",\"throttle\":\"0..1\",\"brake\":\"0..1\","
+                   "\"confirm\":\"bool\",\"cancel\":\"bool\",\"pause\":\"bool\",\"recover\":\"bool\","
+                   "\"left\":\"bool\",\"right\":\"bool\",\"up\":\"bool\",\"down\":\"bool\","
+                   "\"page_left\":\"bool\",\"page_right\":\"bool\"}},"
+                   "\"frame\":{\"name\":\"optional frame basename\"},\"reset\":{},\"help\":{},\"quit\":{}},"
+                   "\"notes\":[\"Analog controls are held for every requested frame.\","
+                   "\"Digital controls fire on the first requested frame only.\","
+                   "\"recover resets the car during a race and acts as back in menus.\"]}\n"
+                << std::flush;
+            continue;
+        }
+        if (command.type == agent_play::CommandType::Reset) {
+            game.resetAgentSession();
+            simulationFrame = 0;
+        } else if (command.type == agent_play::CommandType::Step) {
+            Input3D input = toGameInput(command.input);
+            for (int i = 0; i < command.frames; ++i) {
+                game.update(kFixedDt, input, true);
+                ++simulationFrame;
+                clearMomentaryAgentInput(input);
+            }
+        }
+
+        std::string framePath;
+        if (command.type == agent_play::CommandType::Frame || command.render) {
+            const std::string fileName = safeAgentFrameName(command.frameName, simulationFrame);
+            const std::filesystem::path path = captureDirectory / fileName;
+            // raylib resolves screenshot names relative to the executable's
+            // storage directory and explicitly does not accept absolute paths.
+            std::error_code relativeError;
+            const std::filesystem::path raylibPath =
+                std::filesystem::relative(path, std::filesystem::path(GetApplicationDirectory()), relativeError);
+            if (relativeError || raylibPath.empty()) {
+                std::cout << "{\"ok\":false" << id << ",\"error\":"
+                          << agent_play::jsonString("cannot resolve frame path: " + relativeError.message()) << "}\n"
+                          << std::flush;
+                continue;
+            }
+            game.render(120.0f, true, raylibPath.string().c_str(), 1.0f);
+            framePath = std::filesystem::absolute(path).string();
+        }
+        std::cout << "{\"ok\":true" << id << ",\"type\":\"state\",\"state\":"
+                  << game.agentStateJson(simulationFrame);
+        if (!framePath.empty()) {
+            std::cout << ",\"frame_path\":" << agent_play::jsonString(framePath);
+        }
+        std::cout << "}\n" << std::flush;
+    }
+    return 0;
+}
+
 }  // namespace
 
 int runHarborKarts3D(int argc, char** argv) {
+    if (hasArg(argc, argv, "--agent-play-audit")) {
+        const bool ok = agent_play::runProtocolParserAudit();
+        std::cout << "agent-play-protocol-audit commands=6 bounds=valid escaping=valid ok=" << ok << "\n";
+        return ok ? 0 : 1;
+    }
     if (hasArg(argc, argv, "--track-catalog-audit")) {
         return runTrackCatalogAudit() ? 0 : 1;
     }
@@ -5206,7 +5428,8 @@ int runHarborKarts3D(int argc, char** argv) {
         return result.ok ? 0 : 1;
     }
     const bool assetAudit = hasArg(argc, argv, "--asset-audit");
-    const bool windowed = hasArg(argc, argv, "--windowed") || hasArg(argc, argv, "--smoke-render") || assetAudit ||
+    const bool agentPlay = hasArg(argc, argv, "--agent-play");
+    const bool windowed = agentPlay || hasArg(argc, argv, "--windowed") || hasArg(argc, argv, "--smoke-render") || assetAudit ||
                           hasArg(argc, argv, "--diagnose-controller") || hasArg(argc, argv, "--handling-audit") ||
                           hasArg(argc, argv, "--race-audit") || hasArg(argc, argv, "--ai-pace-audit") ||
                           hasArg(argc, argv, "--time-trial-audit") ||
@@ -5244,7 +5467,7 @@ int runHarborKarts3D(int argc, char** argv) {
 
     SetTraceLogLevel(LOG_ERROR);
     unsigned int configFlags = FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT;
-    if (!(assetAudit || smokeRender || capturePlaytest || captureDrivenLap || captureTimeTrial || captureSectionTour || perfAudit)) {
+    if (!(agentPlay || assetAudit || smokeRender || capturePlaytest || captureDrivenLap || captureTimeTrial || captureSectionTour || perfAudit)) {
         configFlags |= FLAG_VSYNC_HINT;
     }
     SetConfigFlags(configFlags);
@@ -5266,7 +5489,7 @@ int runHarborKarts3D(int argc, char** argv) {
     }
 
     ControllerReader controller(sdlInputReady);
-    const bool automatedRun = assetAudit || smokeRender || capturePlaytest || captureDrivenLap || captureTimeTrial || captureSectionTour || captureMapGallery || handlingAudit || raceAudit ||
+    const bool automatedRun = agentPlay || assetAudit || smokeRender || capturePlaytest || captureDrivenLap || captureTimeTrial || captureSectionTour || captureMapGallery || handlingAudit || raceAudit ||
                               aiPaceAudit || timeTrialAudit || collisionAudit || spaControlAudit || terrainAudit || perfAudit || diagnoseController;
     Game3D game(!automatedRun);
     bool runtimeCleaned = false;
@@ -5285,6 +5508,11 @@ int runHarborKarts3D(int argc, char** argv) {
     };
     if (capturePlaytest || captureDrivenLap || captureTimeTrial || captureSectionTour || captureMapGallery || perfAudit) {
         std::filesystem::create_directories(captureDir);
+    }
+    if (agentPlay) {
+        const int result = runAgentPlaySession(game, launchDir / "build" / "agent_play_frames");
+        cleanupRuntime();
+        return result;
     }
     if (assetAudit) {
         const arcade_render::AuthoredAssetAuditResult result = game.auditAuthoredAssets();

@@ -167,9 +167,21 @@ make capture-time-trial-3d
 make spa-perf-audit-3d
 make collision-audit-3d
 make perf-audit-3d
+make agent-play-audit-3d
 ./build/game/harbor_karts --smoke-render --dev-keyboard
 SDL_VIDEODRIVER=offscreen ./build/game/harbor_karts_3d --asset-audit
 ```
+
+Model-driven playtesting is available through the persistent JSONL harness:
+
+```sh
+make agent-play-3d
+```
+
+It accepts menu and driving inputs, advances deterministic fixed simulation
+frames, returns gameplay telemetry, and writes requested observations to
+`build/agent_play_frames`. See [the agent play protocol](docs/agent_play_protocol.md)
+for the command schema and recommended vision-agent loop.
 
 `--self-test` runs a deterministic physics/AI smoke test without SDL.
 `--audio-audit` runs nine hardware-independent DSP checks for engine load,

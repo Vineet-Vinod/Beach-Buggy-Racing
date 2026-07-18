@@ -35,6 +35,7 @@ target_include_directories(harbor_karts PRIVATE "${SDL3_INCLUDE_DIR}")
 target_link_libraries(harbor_karts PRIVATE "${SDL3_LIBRARY}" Threads::Threads dl m)
 
 add_executable(harbor_karts_3d
+    src/agent_play_protocol.cpp
     src/main3d.cpp
     src/arcade_audio.cpp
     src/arcade_hud.cpp
@@ -53,6 +54,7 @@ target_include_directories(harbor_karts_3d PRIVATE "${RAYLIB_INCLUDE_DIR}" "${SD
 target_link_libraries(harbor_karts_3d PRIVATE "${RAYLIB_LIBRARY}" "${SDL3_LIBRARY}" Threads::Threads dl m)
 
 if(BUILD_TESTING)
+    add_test(NAME agent_play_protocol_audit COMMAND harbor_karts_3d --agent-play-audit)
     add_test(NAME controller_input_audit COMMAND harbor_karts_3d --input-audit)
     add_test(NAME arcade_audio_audit COMMAND harbor_karts_3d --audio-audit)
     add_test(NAME arcade_vehicle_audit COMMAND harbor_karts_3d --vehicle-audit)
