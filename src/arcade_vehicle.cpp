@@ -195,7 +195,9 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
     float yawResponse = config.yawResponseGrip;
     float targetSlip = 0.0f;
     float lateralResponse = config.lateralGripResponse;
-    float lateralAccelerationLimit = config.lateralGripAcceleration * surface.grip;
+    const float downforceSpeed = std::clamp(normalizedSpeed, 0.0f, 1.25f);
+    const float downforceGrip = 1.0f + config.downforceGripGain * downforceSpeed * downforceSpeed;
+    float lateralAccelerationLimit = config.lateralGripAcceleration * surface.grip * downforceGrip;
 
     const float brakeFullSpeed = config.brakeOversteerFullSpeed > config.brakeOversteerMinSpeed
                                      ? config.brakeOversteerFullSpeed
@@ -257,6 +259,15 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
         yawResponse = config.yawResponseExit;
         lateralResponse = lerp(config.driftLateralResponse, config.lateralGripResponse, exitT);
         lateralAccelerationLimit = lerp(config.driftGripAcceleration, config.lateralGripAcceleration, exitT) * surface.grip;
+    }
+
+    if (state.grounded && state.driftPhase == ArcadeDriftPhase::Grip) {
+        const float brakeGripScale = std::sqrt(std::max(
+            0.30f, 1.0f - state.brakeLoad * state.brakeLoad * config.brakingLateralGripUsage));
+        lateralAccelerationLimit *= brakeGripScale;
+        const float tireYawLimit = lateralAccelerationLimit * config.tireLimitedYawScale /
+                                   std::max(12.0f, absForwardSpeed);
+        targetYawRate = std::clamp(targetYawRate, -tireYawLimit, tireYawLimit);
     }
 
     if (!state.grounded) {

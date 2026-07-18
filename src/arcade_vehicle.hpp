@@ -106,6 +106,9 @@ struct ArcadeVehicleConfig {
 
     float lateralGripAcceleration = 310.0f;
     float lateralGripResponse = 14.0f;
+    float downforceGripGain = 0.48f;
+    float tireLimitedYawScale = 0.92f;
+    float brakingLateralGripUsage = 0.58f;
     float driftGripAcceleration = 240.0f;
     float driftLateralResponse = 3.8f;
 

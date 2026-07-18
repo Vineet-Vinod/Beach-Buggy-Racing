@@ -88,10 +88,10 @@ constexpr std::array<const char*, 6> kDriverBackstories = {
 };
 
 constexpr std::array<const char*, 4> kCarBackstories = {
-    "An open-cockpit cove buggy with forgiving grip and long-travel suspension.",
-    "A roof-rack rally truck built to stay composed over rough sand and high curbs.",
-    "A compact coastal GT tuned for hard launches and fast direction changes.",
-    "A reinforced beach bruiser that trades agility for stability and strength.",
+    "A high-downforce formula car with a planted front wing and stable aero balance.",
+    "An agile formula chassis tuned for rapid direction changes and late apexes.",
+    "A low-drag formula car built to convert clean exits into straight-line speed.",
+    "A retro-modern formula design with progressive grip and a forgiving rear end.",
 };
 
 struct MapSpec3D {
@@ -973,55 +973,61 @@ ArcadeVehicleConfig tuningForSpec(const KartSpec3D& spec) {
     tuning.maxForwardSpeed = spec.maxSpeed * 1.64f * kRacePaceScale;
     tuning.engineAcceleration = spec.accel * 0.72f * kAccelerationScale;
     tuning.launchAccelerationBonus = spec.accel * 0.27f * kAccelerationScale;
-    tuning.brakeDeceleration = spec.brake * 1.52f * kAccelerationScale;
+    tuning.brakeDeceleration = spec.brake * 1.82f * kAccelerationScale;
     tuning.reverseAcceleration *= kAccelerationScale;
-    tuning.wheelbase = spec.length * 0.72f;
+    tuning.wheelbase = spec.length * 0.65f;
     tuning.wheelRadius = std::max(6.0f, spec.height * 0.52f);
-    tuning.lateralGripAcceleration *= spec.grip * kAccelerationScale;
+    tuning.lateralGripAcceleration *= spec.grip * 1.10f * kAccelerationScale;
     tuning.driftGripAcceleration *= spec.grip * 0.96f * kAccelerationScale;
-    tuning.driftYawBase *= spec.drift * kRacePaceScale;
-    tuning.driftYawSpeedGain *= spec.drift * kRacePaceScale;
-    tuning.maxYawRateLowSpeed *= kRacePaceScale;
-    tuning.maxYawRateHighSpeed *= kRacePaceScale;
+    tuning.maxSteerLowSpeed = 0.42f;
+    tuning.maxSteerHighSpeed = 0.10f;
+    tuning.maxYawRateLowSpeed = 2.20f;
+    tuning.maxYawRateHighSpeed = 0.82f;
     tuning.steerResponse *= kRacePaceScale;
     tuning.steerReturnResponse *= kRacePaceScale;
     tuning.yawResponseGrip *= kRacePaceScale;
-    tuning.yawResponseDrift *= kRacePaceScale;
     tuning.yawResponseExit *= kRacePaceScale;
     tuning.lateralGripResponse *= kRacePaceScale;
-    tuning.driftLateralResponse *= kRacePaceScale;
     tuning.brakeLoadResponse *= kRacePaceScale;
     tuning.brakeReleaseResponse *= kRacePaceScale;
+    tuning.brakeOversteerSteerThreshold = 0.16f;
+    tuning.brakeOversteerYawGain = 0.28f;
+    tuning.brakeYawLimitScale = 1.04f;
+    tuning.brakeOversteerSlip = 0.045f;
+    tuning.brakeRearGripScale = 0.82f;
+    tuning.brakeSlipResponse = 12.0f;
+    tuning.brakeSlipRecovery = 20.0f;
+    tuning.downforceGripGain = 0.62f;
+    tuning.tireLimitedYawScale = 0.90f;
+    tuning.brakingLateralGripUsage = 0.62f;
+    tuning.accelerationGripUsageScale = 0.78f;
+    tuning.driftMinEntrySpeed = tuning.maxForwardSpeed * 2.0f;
+    tuning.driftMinSustainSpeed = tuning.maxForwardSpeed * 2.0f;
     tuning.boostAcceleration *= kAccelerationScale;
     tuning.gravity *= kAccelerationScale;
     tuning.landingImpulseDecay *= kRacePaceScale;
-    tuning.driftChargeRate *= 1.12f * spec.drift;
-    tuning.maxBodyRoll *= 1.08f;
+    tuning.maxBodyRoll *= 0.46f;
+    tuning.maxBodyPitch *= 0.70f;
+    tuning.maxBrakePitch *= 0.62f;
     return tuning;
 }
 
 void applyAttackingAiSetup(ArcadeVehicleConfig& tuning) {
-    tuning.maxForwardSpeed *= 1.10f;
-    tuning.engineAcceleration *= 1.07f;
-    tuning.launchAccelerationBonus *= 1.07f;
-    tuning.lateralGripAcceleration *= 1.08f;
-    tuning.driftGripAcceleration *= 1.08f;
-    tuning.brakeReleaseResponse = 2.4f * kRacePaceScale;
-    tuning.brakeOversteerSteerThreshold = 0.06f;
-    tuning.brakeOversteerYawGain = 4.80f;
-    tuning.brakeYawLimitScale = 1.20f;
-    tuning.brakeOversteerSlip = 0.42f;
-    tuning.brakeRearGripScale = 0.22f;
-    tuning.brakeSlipResponse = 18.0f;
-    tuning.brakeSlipRecovery = 4.2f;
+    tuning.maxForwardSpeed *= 1.025f;
+    tuning.engineAcceleration *= 1.035f;
+    tuning.launchAccelerationBonus *= 1.03f;
+    tuning.brakeDeceleration *= 1.04f;
+    tuning.lateralGripAcceleration *= 1.02f;
+    tuning.steerResponse *= 1.06f;
+    tuning.brakeReleaseResponse *= 1.08f;
 }
 
 std::array<KartSpec3D, 4> makeKartSpecs() {
     return {{
-        {"TIDEBREAKER XR", {224, 57, 56, 255}, {255, 202, 63, 255}, {82, 205, 224, 255}, 198.0f, 258.0f, 214.0f, 1.02f, 1.05f, 34.0f, 48.0f, 15.0f, 0},
-        {"REEFRUNNER R4", {35, 151, 211, 255}, {255, 235, 90, 255}, {111, 222, 227, 255}, 204.0f, 240.0f, 208.0f, 0.98f, 1.14f, 32.0f, 51.0f, 14.0f, 1},
-        {"SUNSKIPPER GT", {240, 139, 45, 255}, {47, 61, 76, 255}, {95, 201, 217, 255}, 190.0f, 278.0f, 222.0f, 1.09f, 1.00f, 38.0f, 46.0f, 16.0f, 2},
-        {"BOARDWALK BRUISER", {61, 81, 103, 255}, {232, 67, 61, 255}, {91, 205, 217, 255}, 210.0f, 224.0f, 204.0f, 0.94f, 1.22f, 38.0f, 52.0f, 18.0f, 3},
+        {"TIDEBREAKER FX", {224, 57, 56, 255}, {255, 202, 63, 255}, {82, 205, 224, 255}, 198.0f, 258.0f, 214.0f, 1.05f, 0.98f, 34.4f, 83.6f, 18.4f, 0},
+        {"REEFRUNNER FA", {35, 151, 211, 255}, {255, 235, 90, 255}, {111, 222, 227, 255}, 204.0f, 240.0f, 208.0f, 1.02f, 1.04f, 34.4f, 83.6f, 17.6f, 1},
+        {"SUNSKIPPER F1", {240, 139, 45, 255}, {47, 61, 76, 255}, {95, 201, 217, 255}, 190.0f, 278.0f, 222.0f, 0.98f, 0.96f, 34.4f, 83.6f, 19.0f, 2},
+        {"BOARDWALK FORMULA", {61, 81, 103, 255}, {232, 67, 61, 255}, {91, 205, 217, 255}, 210.0f, 224.0f, 204.0f, 1.00f, 1.00f, 34.7f, 83.6f, 18.2f, 3},
     }};
 }
 
@@ -1417,6 +1423,8 @@ struct Kart3D : ArcadeVehicleState {
     float aiIntentTimer = 0.0f;
     float aiCommandSteer = 0.0f;
     float aiCommandTargetSpeed = 0.0f;
+    float aiCommandThrottle = 0.0f;
+    float aiCommandBrake = 0.0f;
     float ghostTimer = 0.0f;
     Vec2 previousRenderPos{};
     float previousRenderElevation = 0.0f;
@@ -1435,7 +1443,7 @@ struct Particle3D {
     Color color = WHITE;
 };
 
-enum class AuditDriver { NoBrake, Brake, Drift };
+enum class AuditDriver { NoBrake, Brake, Attack };
 
 struct AuditResult3D {
     const char* name = "";
@@ -1454,6 +1462,8 @@ struct AuditResult3D {
     int boostFrames = 0;
     int driftFrames = 0;
     int brakeDriftFrames = 0;
+    int brakeFrames = 0;
+    int poweredExitFrames = 0;
     int landings = 0;
     int lap = 0;
 };
@@ -1496,6 +1506,8 @@ struct AiPaceAuditResult3D {
     int roadViolationFrames = 0;
     int driftFrames = 0;
     int brakeDriftFrames = 0;
+    int brakeFrames = 0;
+    int poweredExitFrames = 0;
     int contactFrames = 0;
     int contacts = 0;
     int landings = 0;
@@ -2218,7 +2230,7 @@ public:
 
     Input3D scriptedInput() const {
         const Kart3D& player = karts_[0];
-        Input3D input = auditInput(AuditDriver::Drift, player);
+        Input3D input = auditInput(AuditDriver::Attack, player);
         float nearestTraffic = std::numeric_limits<float>::max();
         float passingSide = 0.0f;
         for (int i = 1; i < activeKartCount(); ++i) {
@@ -2243,21 +2255,23 @@ public:
     Mode mode() const { return mode_; }
 
     bool runHandlingAudit() {
-        const AuditResult3D noBrake = simulateAuditDriver(AuditDriver::NoBrake, 64.0f);
-        const AuditResult3D brake = simulateAuditDriver(AuditDriver::Brake, 64.0f);
-        const AuditResult3D drift = simulateAuditDriver(AuditDriver::Drift, 64.0f);
-        const bool controlledRoad = drift.offroadFrames < 1800 && drift.maxOffroad <= 39.0f;
-        const bool noBrakeConsequences = noBrake.offroadFrames > 120 || noBrake.maxOffroad > 18.0f;
+        track_.rebuild(TrackLayoutId::Monza);
+        const AuditResult3D noBrake = simulateAuditDriver(AuditDriver::NoBrake, 75.0f);
+        const AuditResult3D brake = simulateAuditDriver(AuditDriver::Brake, 75.0f);
+        const AuditResult3D attack = simulateAuditDriver(AuditDriver::Attack, 75.0f);
+        const bool controlledRoad = attack.offroadFrames < 60 && attack.maxOffroad <= 1.0f;
+        const bool noBrakeConsequences = noBrake.offroadFrames > 30 || noBrake.maxOffroad > 5.0f;
         const bool groundClear = std::abs(noBrake.minGroundClearance) <= 0.03f && std::abs(brake.minGroundClearance) <= 0.03f &&
-                                 std::abs(drift.minGroundClearance) <= 0.03f;
-        const bool stable = noBrake.progressJumps == 0 && brake.progressJumps == 0 && drift.progressJumps == 0;
-        const bool moving = std::max({noBrake.score, brake.score, drift.score}) > track_.totalLength() * 0.50f;
-        const float measuredLapSeconds = drift.score > 1.0f ? 64.0f * track_.totalLength() / drift.score : 999.0f;
-        const bool referencePace = measuredLapSeconds >= 47.0f && measuredLapSeconds <= 55.0f;
-        const bool authoredJumps = drift.maxAirTime >= 0.55f && drift.maxAirTime <= 0.95f && drift.landings >= 2;
+                                 std::abs(attack.minGroundClearance) <= 0.03f;
+        const bool stable = noBrake.progressJumps == 0 && brake.progressJumps == 0 && attack.progressJumps == 0;
+        const bool moving = attack.score > 700.0f;
+        const float measuredLapSeconds = attack.score > 1.0f ? 75.0f * track_.totalLength() / attack.score : 999.0f;
         const bool inputContract = controllerContractAudit();
-        const bool requiredDrifting = drift.brakeDriftFrames > 20 && drift.maxSlip > 0.14f && drift.maxSlip < 0.30f;
-        const bool ok = controlledRoad && noBrakeConsequences && groundClear && stable && moving && authoredJumps && inputContract && requiredDrifting;
+        const bool formulaCornering = attack.brakeFrames > 100 && attack.poweredExitFrames > 100 &&
+                                      attack.driftFrames == 0 && attack.maxSlip < 0.14f &&
+                                      attack.score > brake.score * 1.005f;
+        const bool ok = controlledRoad && noBrakeConsequences && groundClear && stable && moving &&
+                        inputContract && formulaCornering;
 
         auto print = [](const AuditResult3D& r) {
             std::cout << r.name << "_score=" << r.score << " lap=" << r.lap << " avg=" << r.averageSpeed << " max=" << r.maxSpeed
@@ -2265,6 +2279,7 @@ public:
                       << " max_offroad_phase=" << r.maxOffroadPhase
                       << " max_drift_charge=" << r.maxDriftCharge
                       << " max_slip=" << r.maxSlip << " brake_drift_frames=" << r.brakeDriftFrames
+                      << " brake_frames=" << r.brakeFrames << " powered_exit_frames=" << r.poweredExitFrames
                       << " min_ground_clearance=" << r.minGroundClearance << " progress_jumps=" << r.progressJumps
                       << " max_airtime=" << r.maxAirTime << " landings=" << r.landings
                       << " drift_frames=" << r.driftFrames << " boost_frames=" << r.boostFrames << " ";
@@ -2272,12 +2287,11 @@ public:
         std::cout << "handling-audit ";
         print(noBrake);
         print(brake);
-        print(drift);
+        print(attack);
         std::cout << "controlled_road=" << controlledRoad << " no_brake_consequences=" << noBrakeConsequences
-                  << " ground_clear=" << groundClear << " stable=" << stable << " moving=" << moving << " reference_pace=" << referencePace
+                  << " ground_clear=" << groundClear << " stable=" << stable << " moving=" << moving
                   << " measured_lap_s=" << measuredLapSeconds
-                  << " authored_jumps=" << authoredJumps
-                  << " required_drifting=" << requiredDrifting
+                  << " formula_cornering=" << formulaCornering
                   << " input_contract=" << inputContract
                   << "\n";
         return ok;
@@ -2415,11 +2429,12 @@ public:
 
     bool runAiPaceAudit() {
         particles_.clear();
+        track_.rebuild(TrackLayoutId::Monza);
         const float startProgress = track_.startProgress();
         const TrackPoint3D start = track_.sample(startProgress);
         Kart3D kart;
         kart.spec = specs_[0];
-        kart.tuning = tuningForSpec(kart.spec);
+        kart.tuning = selectedTrackTuning(kart.spec);
         applyAttackingAiSetup(kart.tuning);
         kart.racer = racers_[0];
         kart.pos = start.pos;
@@ -2442,7 +2457,8 @@ public:
         std::array<int, 10> sectorFrames{};
         std::array<int, 10> sectorContactFrames{};
         sectorMinSpeed.fill(std::numeric_limits<float>::max());
-        constexpr int kMaxFrames = static_cast<int>(45.0f / kFixedDt);
+        bool hasBraked = false;
+        constexpr int kMaxFrames = static_cast<int>(360.0f / kFixedDt);
         for (int frame = 0; frame < kMaxFrames; ++frame) {
             const float beforeProgress = kart.progress;
             const float beforeContact = kart.contactTimer;
@@ -2476,6 +2492,13 @@ public:
             result.roadViolationFrames += roadViolation > 0.01f ? 1 : 0;
             result.driftFrames += kart.drifting ? 1 : 0;
             result.brakeDriftFrames += kart.brakeLoad > 0.20f && std::abs(kart.slipAngle) > 0.14f ? 1 : 0;
+            if (kart.aiCommandBrake > 0.20f) {
+                ++result.brakeFrames;
+                hasBraked = true;
+            }
+            if (hasBraked && kart.aiCommandBrake < 0.05f && kart.aiCommandThrottle > 0.80f) {
+                ++result.poweredExitFrames;
+            }
             result.contactFrames += kart.contactTimer > 0.01f ? 1 : 0;
             result.contacts += beforeContact <= 0.001f && kart.contactTimer > 0.05f ? 1 : 0;
             result.landings += !wasGrounded && kart.grounded ? 1 : 0;
@@ -2509,11 +2532,13 @@ public:
         const float p90TrackCurvature = trackCurvatures[trackCurvatures.size() * 9 / 10];
         const float maxTrackCurvature = trackCurvatures.back();
 
-        const bool targetPace = result.lapSeconds >= 27.0f && result.lapSeconds <= 28.5f;
-        const bool physicalPath = result.progressJumps == 0 && result.maxProgressStep <= 80.0f &&
-                                  result.maxRoadViolation <= 40.0f && result.roadViolationFrames < 1100 && result.contacts <= 8;
-        const bool attacking = result.averageSpeed > 350.0f && result.brakeDriftFrames > 100 && result.landings >= 2;
-        const bool ok = targetPace && physicalPath && attacking;
+        const bool targetPace = result.lapSeconds >= 200.0f && result.lapSeconds <= 250.0f;
+        const bool physicalPath = result.progressJumps == 0 && result.maxProgressStep <= 1.0f &&
+                                  result.maxRoadViolation <= 18.0f && result.roadViolationFrames < 180 && result.contacts == 0;
+        const bool formulaRacecraft = result.averageSpeed > 400.0f && result.brakeFrames > 200 &&
+                                      result.poweredExitFrames > 1000 && result.driftFrames == 0 &&
+                                      result.brakeDriftFrames == 0;
+        const bool ok = targetPace && physicalPath && formulaRacecraft;
         std::cout << "ai-pace-audit lap_s=" << result.lapSeconds << " distance=" << result.distance
                   << " final_phase=" << result.finalPhase << " avg_speed=" << result.averageSpeed
                   << " max_speed=" << result.maxSpeed << " max_road_violation=" << result.maxRoadViolation
@@ -2526,12 +2551,13 @@ public:
                   << " max_road_violation_target_speed=" << result.maxRoadViolationTargetSpeed
                   << " road_violation_frames=" << result.roadViolationFrames << " drift_frames=" << result.driftFrames
                   << " brake_drift_frames=" << result.brakeDriftFrames
+                  << " brake_frames=" << result.brakeFrames << " powered_exit_frames=" << result.poweredExitFrames
                   << " contacts=" << result.contacts << " contact_frames=" << result.contactFrames
                   << " landings=" << result.landings << " max_progress_step=" << result.maxProgressStep
                   << " progress_jumps=" << result.progressJumps << " max_track_curvature=" << maxTrackCurvature
                   << " median_track_curvature=" << medianTrackCurvature << " p90_track_curvature=" << p90TrackCurvature
                   << " target_pace=" << targetPace
-                  << " physical_path=" << physicalPath << " attacking=" << attacking << " ok=" << ok << "\n";
+                  << " physical_path=" << physicalPath << " formula_racecraft=" << formulaRacecraft << " ok=" << ok << "\n";
         std::cout << "ai-pace-splits";
         for (size_t i = 0; i < result.splitSeconds.size(); ++i) {
             std::cout << " " << (i + 1) * 10 << ":" << result.splitSeconds[i];
@@ -2562,7 +2588,8 @@ public:
         const float invHeavy = inverseKartMass(heavy);
         const float lightResponseFirst = invLight / (invLight + invHeavy);
         const float lightResponseSecond = invLight / (invHeavy + invLight);
-        const bool massDistinct = kartMass(heavy) > kartMass(light) * 1.08f;
+        const float massRatio = kartMass(heavy) / kartMass(light);
+        const bool massComparable = massRatio >= 0.94f && massRatio <= 1.06f;
         const bool roleSymmetric = std::abs(lightResponseFirst - lightResponseSecond) < 0.000001f;
         light.progress = 400.0f;
         heavy.progress = 400.0f;
@@ -2616,7 +2643,7 @@ public:
         const bool noAutomaticRecovery = roadEdgeViolation(shoulderKart, finalShoulderPoint) > 5.0f &&
                                          shoulderKart.ghostTimer <= 0.001f;
         const bool rearPushes = rearEnd.strikerSpeedAfterContact > 100.0f && rearEnd.targetSpeedAfterContact > 48.0f;
-        const bool ok = rearOk && headOk && sideOk && massDistinct && roleSymmetric && jumpClears && wallGlances &&
+        const bool ok = rearOk && headOk && sideOk && massComparable && roleSymmetric && jumpClears && wallGlances &&
                         noAutomaticRecovery && rearPushes;
 
         auto print = [](const CollisionAuditResult3D& r) {
@@ -2627,7 +2654,8 @@ public:
         print(rearEnd);
         print(headOn);
         print(sideSwipe);
-        std::cout << "rear_ok=" << rearOk << " head_ok=" << headOk << " side_ok=" << sideOk << " mass_distinct=" << massDistinct
+        std::cout << "rear_ok=" << rearOk << " head_ok=" << headOk << " side_ok=" << sideOk
+                  << " mass_comparable=" << massComparable << " mass_ratio=" << massRatio
                   << " role_symmetric=" << roleSymmetric << " jump_clears=" << jumpClears
                   << " rear_striker_speed=" << rearEnd.strikerSpeedAfterContact
                   << " rear_target_speed=" << rearEnd.targetSpeedAfterContact << " rear_pushes=" << rearPushes
@@ -2683,6 +2711,7 @@ public:
         const float releaseSpeedRatio = length(braked.vel) / initialSpeed;
 
         std::array<float, 3> brakeRotation{};
+        std::array<float, 3> brakeSpeed{};
         constexpr std::array<float, 3> kBrakeLevels = {0.25f, 0.60f, 1.0f};
         for (size_t level = 0; level < kBrakeLevels.size(); ++level) {
             ArcadeVehicleState modulation = movingKart(0.72f);
@@ -2693,6 +2722,7 @@ public:
                 stepArcadeVehicle(modulation, tuning, modulationControl, road, kFixedDt);
             }
             brakeRotation[level] = std::abs(modulation.heading);
+            brakeSpeed[level] = length(modulation.vel);
         }
 
         ArcadeVehicleState powered = braked;
@@ -2748,24 +2778,24 @@ public:
         const float expectedRenderedLapLength = kSpaTargetLength * kSpaSimulationUnitsPerMeter * kRenderScale;
         const bool renderedScaleValid = std::abs(renderedLapLength - expectedRenderedLapLength) < 0.5f;
         const bool steeringProgressive = gentleLateralMeters < 1.5f && fullLockHeading > 0.25f;
-        const bool brakeRotationStrong = peakBrakeSlip > 0.55f && peakBrakeSlip < 0.95f && peakBrakeYaw > 1.50f &&
-                                         brakeHeadingRotation > 0.32f && brakeHeadingRotation < 0.80f &&
-                                         releaseSpeedRatio > 0.45f && releaseSpeedRatio < 0.85f;
-        const bool brakeModulates = brakeRotation[0] < brakeRotation[1] && brakeRotation[1] < brakeRotation[2];
-        const bool throttleCatches = catchSlip <= coastSlip + 0.02f && catchSlip <= peakBrakeSlip * 0.60f &&
-                                     catchYaw <= coastYaw + 0.08f && catchYaw <= peakBrakeYaw * 0.30f &&
-                                     poweredLateralMeters <= coastLateralMeters + 0.50f && poweredLateralMeters < 5.0f &&
-                                     poweredSeparationMeters < 2.0f && poweredCatchSpeed >= coastCatchSpeed &&
-                                     poweredAdditionalRotation < 0.35f && poweredSpeedGainMetersPerSecond > -4.0f &&
-                                     poweredSpeedGainMetersPerSecond <= alignedSpeedGainMetersPerSecond + 0.50f &&
-                                     std::abs(powered.slipAngle) < 0.06f && std::abs(powered.yawRate) < 0.12f &&
-                                     powered.brakeLoad < 0.01f;
-        const bool ok = renderedScaleValid && steeringProgressive && brakeRotationStrong && brakeModulates && throttleCatches;
+        const bool stableFormulaBraking = peakBrakeSlip < 0.08f && peakBrakeYaw < 0.90f &&
+                                          brakeHeadingRotation > 0.10f && brakeHeadingRotation < 0.32f &&
+                                          releaseSpeedRatio > 0.42f && releaseSpeedRatio < 0.68f;
+        const bool brakeModulates = brakeSpeed[0] > brakeSpeed[1] && brakeSpeed[1] > brakeSpeed[2] &&
+                                    brakeRotation[0] > 0.08f && brakeRotation[2] > 0.08f;
+        const bool poweredExit = catchSlip <= 0.06f && catchYaw < 0.55f &&
+                                 poweredLateralMeters < 3.0f && poweredSeparationMeters < 2.0f &&
+                                 poweredCatchSpeed > coastCatchSpeed && poweredAdditionalRotation < 0.35f &&
+                                 poweredSpeedGainMetersPerSecond > 0.5f &&
+                                 poweredSpeedGainMetersPerSecond <= alignedSpeedGainMetersPerSecond + 0.50f &&
+                                 powered.brakeLoad < 0.01f;
+        const bool ok = renderedScaleValid && steeringProgressive && stableFormulaBraking && brakeModulates && poweredExit;
         std::cout << "spa-control-audit rendered_lap=" << renderedLapLength
                   << " gentle_lateral_m=" << gentleLateralMeters << " full_lock_heading=" << fullLockHeading
                   << " brake_peak_slip=" << peakBrakeSlip << " brake_peak_yaw=" << peakBrakeYaw
                   << " brake_heading=" << brakeHeadingRotation << " brake_speed_ratio=" << releaseSpeedRatio
                   << " brake_modulation=" << brakeRotation[0] << "," << brakeRotation[1] << "," << brakeRotation[2]
+                  << " brake_speeds=" << brakeSpeed[0] << "," << brakeSpeed[1] << "," << brakeSpeed[2]
                   << " catch_slip=" << catchSlip << "/" << coastSlip << " catch_yaw=" << catchYaw << "/" << coastYaw
                   << " catch_lateral_m=" << poweredLateralMeters << "/" << coastLateralMeters
                   << " catch_separation_m=" << poweredSeparationMeters << " catch_rotation=" << poweredAdditionalRotation
@@ -2774,8 +2804,8 @@ public:
                   << " recovery_slip=" << std::abs(powered.slipAngle) << " recovery_yaw=" << std::abs(powered.yawRate)
                   << " recovery_load=" << powered.brakeLoad
                   << " rendered_scale=" << renderedScaleValid << " steering=" << steeringProgressive
-                  << " brake_rotation=" << brakeRotationStrong << " brake_modulates=" << brakeModulates
-                  << " throttle_catch=" << throttleCatches << " ok=" << ok << "\n";
+                  << " stable_formula_braking=" << stableFormulaBraking << " brake_modulates=" << brakeModulates
+                  << " powered_exit=" << poweredExit << " ok=" << ok << "\n";
         return ok;
     }
 
@@ -2901,37 +2931,31 @@ private:
         ArcadeVehicleConfig tuning = tuningForSpec(spec);
         if (isMetricCircuit(track_.layout())) {
             tuning.maxForwardSpeed *= kSpaVehiclePaceScale;
-            tuning.engineAcceleration *= 0.60f;
-            tuning.launchAccelerationBonus *= 0.55f;
-            tuning.brakeDeceleration *= 0.82f;
-            tuning.boostAcceleration *= 1.35f;
-            // Angular response is dimensionless. Scaling it by the track's
-            // metres-to-simulation ratio made half-stick input nearly inert.
-            tuning.maxSteerLowSpeed *= 0.55f;
-            tuning.maxSteerHighSpeed *= 0.52f;
-            tuning.maxYawRateLowSpeed *= 0.30f;
-            tuning.maxYawRateHighSpeed *= 0.22f;
-            tuning.driftYawBase *= 0.56f;
-            tuning.driftYawSpeedGain *= 0.56f;
+            tuning.engineAcceleration *= 0.64f;
+            tuning.launchAccelerationBonus *= 0.58f;
+            tuning.brakeDeceleration *= 1.06f;
+            tuning.maxSteerLowSpeed = 0.32f;
+            tuning.maxSteerHighSpeed = 0.075f;
+            tuning.maxYawRateLowSpeed = 1.55f;
+            tuning.maxYawRateHighSpeed = 0.42f;
             tuning.brakeLoadResponse = 20.0f;
-            tuning.brakeReleaseResponse = 18.0f;
-            tuning.brakeOversteerMinSpeed = 85.0f;
-            tuning.brakeOversteerFullSpeed = 310.0f;
-            tuning.brakeOversteerSteerThreshold = 0.04f;
-            tuning.brakeOversteerYawGain = 3.20f;
-            tuning.brakeYawLimitScale = 4.80f;
-            tuning.brakeOversteerSlip = 0.68f;
-            tuning.brakeRearGripScale = 0.12f;
-            tuning.brakeSlipResponse = 20.0f;
-            tuning.brakeSlipRecovery = 22.0f;
-            tuning.throttleCatchStrength = 1.0f;
-            tuning.throttleCatchSlipRecovery = 40.0f;
-            tuning.throttleCatchYawResponse = 30.0f;
-            tuning.throttleCatchLateralResponse = 40.0f;
-            tuning.throttleCatchDriveScale = 0.85f;
-            tuning.accelerationGripUsageScale = 0.10f;
-            tuning.steerResponse *= 0.78f;
-            tuning.steerReturnResponse *= 1.00f;
+            tuning.brakeReleaseResponse = 24.0f;
+            tuning.brakeOversteerMinSpeed = tuning.maxForwardSpeed * 0.18f;
+            tuning.brakeOversteerFullSpeed = tuning.maxForwardSpeed;
+            tuning.brakeOversteerSteerThreshold = 0.18f;
+            tuning.brakeOversteerYawGain = 0.18f;
+            tuning.brakeYawLimitScale = 1.03f;
+            tuning.brakeOversteerSlip = 0.035f;
+            tuning.brakeRearGripScale = 0.86f;
+            tuning.brakeSlipResponse = 14.0f;
+            tuning.brakeSlipRecovery = 24.0f;
+            tuning.throttleCatchStrength = 0.0f;
+            tuning.accelerationGripUsageScale = 0.82f;
+            tuning.downforceGripGain = 0.70f;
+            tuning.tireLimitedYawScale = 0.88f;
+            tuning.brakingLateralGripUsage = 0.68f;
+            tuning.steerResponse *= 0.90f;
+            tuning.steerReturnResponse *= 1.08f;
         }
         return tuning;
     }
@@ -3371,20 +3395,16 @@ private:
 
         const float targetSpeed = aiTargetSpeed(kart) * (1.0f - recovery * 0.24f);
 
-        Input3D ai;
-        const Vec2 forward = fromAngle(kart.heading);
-        const Vec2 desiredDirection = normalize(future.pos + future.normal * laneTarget - kart.pos);
-        ai.steer = std::clamp(std::atan2(cross(forward, desiredDirection), dot(forward, desiredDirection)) * 2.15f, -1.0f, 1.0f);
-        ai.throttle = 1.0f;
-        ai.brake = speed > targetSpeed + 9.0f ? 1.0f : 0.0f;
-        ai.drift = false;
-        if (laneExcess > 1.0f) {
-            ai.throttle = std::min(ai.throttle, 0.58f);
-            ai.brake = std::max(ai.brake, std::clamp(laneExcess / 42.0f, 0.16f, 0.62f));
-            ai.drift = false;
+        Input3D ai = auditInput(AuditDriver::Attack, kart);
+        if (raceTraffic && std::abs(kart.aiLaneIntent) > 0.01f && laneExcess <= 1.0f) {
+            const float trafficSteer = aiSteerForProgress(kart, index, laneTarget);
+            ai.steer = lerp(ai.steer, trafficSteer, 0.38f);
         }
+        ai.drift = false;
         kart.aiCommandSteer = ai.steer;
         kart.aiCommandTargetSpeed = targetSpeed;
+        kart.aiCommandThrottle = ai.throttle;
+        kart.aiCommandBrake = ai.brake;
         integrateKart(kart, ai, dt);
     }
 
@@ -3394,16 +3414,31 @@ private:
                                         ? speed / kSpaSimulationUnitsPerMeter
                                         : speed;
         const float pathSpeed = distanceSpeed / kRacePaceScale;
-        const TrackPoint3D future = track_.sample(kart.progress + 95.0f + pathSpeed * 0.88f);
-        const TrackPoint3D apex = track_.sample(kart.progress + 155.0f + pathSpeed * 0.58f);
+        const float futureDistance = isMetricCircuit(track_.layout())
+                                         ? 155.0f + pathSpeed * 1.35f
+                                         : 95.0f + pathSpeed * 0.88f;
+        const float apexDistance = isMetricCircuit(track_.layout())
+                                       ? 275.0f + pathSpeed * 0.95f
+                                       : 155.0f + pathSpeed * 0.58f;
+        const float immediateDistance = isMetricCircuit(track_.layout())
+                                            ? 38.0f + pathSpeed * 0.18f
+                                            : 24.0f + pathSpeed * 0.12f;
+        const TrackPoint3D future = track_.sample(kart.progress + futureDistance);
+        const TrackPoint3D apex = track_.sample(kart.progress + apexDistance);
+        const TrackPoint3D immediate = track_.sample(kart.progress + immediateDistance);
         const TrackPoint3D center = isMetricCircuit(track_.layout())
                                         ? track_.sample(kart.progress)
                                         : track_.pointAtIndex(kart.nearest);
-        const float corner = std::max(future.curvature, apex.curvature);
+        float corner = std::max(future.curvature, apex.curvature);
+        if (isMetricCircuit(track_.layout())) {
+            for (float distance : {60.0f, 105.0f, 150.0f, 205.0f, 260.0f, 320.0f}) {
+                corner = std::max(corner, track_.sample(kart.progress + distance).curvature);
+            }
+        }
         const float turnSign = apex.signedCurvature == 0.0f ? future.signedCurvature : apex.signedCurvature;
         const float laneExcess = std::max(0.0f, std::abs(kart.lane) - roadCenterLimit(kart, center));
         float laneTarget = 0.0f;
-        if (driver == AuditDriver::Drift && laneExcess <= 1.0f) {
+        if (driver == AuditDriver::Attack && laneExcess <= 1.0f) {
             laneTarget = -std::copysign(6.0f, turnSign) * std::clamp(corner * 2.6f, 0.0f, 1.0f);
         }
 
@@ -3411,40 +3446,38 @@ private:
         input.steer = aiSteerForProgress(kart, 0, laneTarget);
         if (isMetricCircuit(track_.layout())) {
             const float laneLimit = std::max(1.0f, roadCenterLimit(kart, center));
-            input.steer = std::clamp(input.steer - kart.lane / laneLimit * 0.70f, -1.0f, 1.0f);
+            input.steer = std::clamp(input.steer - kart.lane / laneLimit * 1.15f, -1.0f, 1.0f);
         }
         input.throttle = 1.0f;
 
         const float targetScale = isMetricCircuit(track_.layout())
-                                      ? std::clamp(1.00f - corner * 4.20f, 0.28f, 0.98f)
-                                      : std::clamp((driver == AuditDriver::Drift ? 1.06f : 1.04f) - corner * 3.15f, 0.56f, 1.05f);
+                                      ? std::clamp(1.02f - corner * 2.25f, 0.27f, 1.00f)
+                                      : std::clamp((driver == AuditDriver::Attack ? 1.06f : 1.04f) - corner * 3.15f, 0.56f, 1.05f);
         const float targetSpeed = kart.tuning.maxForwardSpeed * targetScale;
-        if (driver == AuditDriver::Brake || driver == AuditDriver::Drift) {
-            const bool needsBrake = speed > targetSpeed + (driver == AuditDriver::Drift ? 12.0f : 7.0f) * kRacePaceScale;
+        if (driver == AuditDriver::Brake || driver == AuditDriver::Attack) {
+            const bool needsBrake = speed > targetSpeed + (driver == AuditDriver::Attack ? 12.0f : 7.0f) * kRacePaceScale;
             if (needsBrake) {
-                input.brake = std::clamp((speed - targetSpeed) / (42.0f * kRacePaceScale),
-                                         driver == AuditDriver::Drift ? 0.14f : 0.22f, 0.78f);
-                input.throttle = driver == AuditDriver::Drift ? 0.86f : 0.68f;
+                const bool beforeTurn = immediate.curvature < std::max(0.10f, corner * 0.72f) &&
+                                        std::abs(input.steer) < 0.82f;
+                input.brake = beforeTurn
+                                  ? std::clamp((speed - targetSpeed) / (42.0f * kRacePaceScale),
+                                               driver == AuditDriver::Attack ? 0.18f : 0.22f, 0.86f)
+                                  : 0.0f;
+                input.throttle = 0.0f;
             }
         }
         if (driver != AuditDriver::NoBrake && laneExcess > 1.0f) {
             input.steer = std::clamp(aiSteerForProgress(kart, 0, 0.0f) -
                                          kart.lane / std::max(1.0f, roadCenterLimit(kart, center)) * 1.00f,
                                      -1.0f, 1.0f);
-            input.throttle = std::min(input.throttle, 0.62f);
-            input.brake = std::max(input.brake, std::clamp(laneExcess / 38.0f, 0.20f, 0.70f));
+            const bool recoveryNeedsBrake = speed > targetSpeed * 0.82f;
+            input.throttle = recoveryNeedsBrake ? 0.0f : 0.38f;
+            input.brake = recoveryNeedsBrake
+                              ? std::max(input.brake, std::clamp(laneExcess / 38.0f, 0.20f, 0.70f))
+                              : 0.0f;
             input.drift = false;
         }
-        if (driver == AuditDriver::Drift && laneExcess <= 1.0f) {
-            const bool nearEdge = std::abs(kart.lane) > std::max(0.0f, roadCenterLimit(kart, center) - 4.0f);
-            const bool entryDemand = kart.boostTimer <= 0.04f && !nearEdge && corner > 0.042f &&
-                                     speed > 44.0f * kRacePaceScale && std::abs(input.steer) > 0.070f;
-            input.drift = false;
-            if (entryDemand && !isMetricCircuit(track_.layout()) && kart.brakeLoad < 0.72f) {
-                input.throttle = 1.0f;
-                input.brake = 1.0f;
-            }
-        }
+        input.drift = false;
         return input;
     }
 
@@ -3453,7 +3486,7 @@ private:
         const TrackPoint3D start = track_.sample(0.0f);
         Kart3D kart;
         kart.spec = specs_[0];
-        kart.tuning = tuningForSpec(kart.spec);
+        kart.tuning = selectedTrackTuning(kart.spec);
         kart.racer = racers_[0];
         kart.pos = start.pos;
         kart.heading = angleOf(start.tangent);
@@ -3468,11 +3501,19 @@ private:
         const int frames = static_cast<int>(seconds / kFixedDt);
         float speedSum = 0.0f;
         float cumulativeProgress = 0.0f;
+        bool hasBraked = false;
         for (int frame = 0; frame < frames; ++frame) {
             const float beforeContact = kart.contactTimer;
             const float beforeProgress = kart.progress;
             const bool wasGrounded = kart.grounded;
             const Input3D input = auditInput(driver, kart);
+            if (input.brake > 0.20f) {
+                ++result.brakeFrames;
+                hasBraked = true;
+            }
+            if (hasBraked && input.brake < 0.05f && input.throttle > 0.80f) {
+                ++result.poweredExitFrames;
+            }
             updatePlayer(kart, input, kFixedDt);
             const float progressDelta = signedDistanceToLoop(beforeProgress, kart.progress, track_.totalLength());
             if (progressDelta < -40.0f || progressDelta > 90.0f) {
@@ -3519,8 +3560,11 @@ private:
         const float steeringCurvature = std::max({std::abs(smoothedSignedCurvature(kart.progress + 90.0f)),
                                                   std::abs(smoothedSignedCurvature(kart.progress + 180.0f)),
                                                   std::abs(smoothedSignedCurvature(kart.progress + 290.0f))});
-        const float horizonScale = lerp(1.0f, 0.30f, std::clamp((steeringCurvature - 0.08f) / 0.48f, 0.0f, 1.0f));
-        const float steeringHorizon = std::clamp((128.0f + pathSpeed * 0.65f) * horizonScale, 55.0f, 340.0f);
+        const float horizonScale = lerp(1.0f, isMetricCircuit(track_.layout()) ? 0.14f : 0.30f,
+                                        std::clamp((steeringCurvature - 0.08f) / 0.48f, 0.0f, 1.0f));
+        const float minimumHorizon = isMetricCircuit(track_.layout()) ? 24.0f : 55.0f;
+        const float steeringHorizon = std::clamp((128.0f + pathSpeed * 0.65f) * horizonScale,
+                                                 minimumHorizon, 340.0f);
         const TrackPoint3D future = track_.sample(kart.progress + steeringHorizon);
         if (!isMetricCircuit(track_.layout())) {
             laneTarget -= std::copysign(13.0f, future.signedCurvature) *
@@ -3529,7 +3573,7 @@ private:
         const Vec2 desired = future.pos + future.normal * laneTarget;
         const Vec2 forward = fromAngle(kart.heading);
         const Vec2 toTarget = normalize(desired - kart.pos);
-        const float steeringGain = isMetricCircuit(track_.layout()) ? 1.40f : 1.95f;
+        const float steeringGain = isMetricCircuit(track_.layout()) ? 1.85f : 1.95f;
         return std::clamp(std::atan2(cross(forward, toTarget), dot(forward, toTarget)) * steeringGain, -1.0f, 1.0f);
     }
 

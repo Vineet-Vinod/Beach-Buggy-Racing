@@ -670,19 +670,19 @@ struct ArcadeRender::Impl {
             {"assets_src/tracks/sunset_cove/sunset_cove.glb", 0.085f,
              {{4900.0f, 200.0f, 2520.0f}, {5070.0f, 230.0f, 2670.0f}}},
             {"assets_src/tracks/spa/spa.glb", 1.445f,
-             {{2850.0f, 110.0f, 2000.0f}, {2970.0f, 122.0f, 2100.0f}}},
+             {{3000.0f, 104.0f, 1990.0f}, {3120.0f, 111.0f, 2090.0f}}},
             {"assets_src/tracks/suzuka/suzuka.glb", 1.445f,
-             {{2860.0f, 48.0f, 1640.0f}, {2990.0f, 57.0f, 1720.0f}}},
+             {{2970.0f, 42.0f, 1710.0f}, {3090.0f, 48.0f, 1800.0f}}},
             {"assets_src/tracks/silverstone/silverstone.glb", 1.445f,
-             {{2340.0f, 22.0f, 2070.0f}, {2440.0f, 28.0f, 2170.0f}}},
+             {{2530.0f, 18.0f, 1960.0f}, {2650.0f, 23.0f, 2060.0f}}},
             {"assets_src/tracks/monza/monza.glb", 1.445f,
-             {{2010.0f, 24.0f, 2350.0f}, {2110.0f, 30.0f, 2470.0f}}},
+             {{3320.0f, 24.0f, 1850.0f}, {3460.0f, 30.0f, 1960.0f}}},
             {"assets_src/tracks/interlagos/interlagos.glb", 1.445f,
-             {{1620.0f, 53.0f, 1510.0f}, {1700.0f, 62.0f, 1600.0f}}},
+             {{1280.0f, 51.0f, 1750.0f}, {1360.0f, 57.0f, 1860.0f}}},
         }};
         formula_buggy::assets::GlbLoadOptions carOptions;
         carOptions.dimensions = formula_buggy::assets::DimensionLimits{
-            {1.55f, 0.90f, 3.35f}, {2.25f, 1.90f, 4.55f}};
+            {1.90f, 0.90f, 4.70f}, {2.15f, 1.30f, 5.10f}};
         formula_buggy::assets::GlbLoadOptions driverOptions;
         driverOptions.dimensions = formula_buggy::assets::DimensionLimits{
             {0.45f, 0.80f, 0.45f}, {1.20f, 1.60f, 1.40f}};
@@ -804,7 +804,7 @@ struct ArcadeRender::Impl {
         drawAuthoredModel(*car, carTransform);
 
         driver->sampleAnimation(clip, state.visualTime, 0);
-        Matrix driverLocal = compose({0.0f, 1.00f * carScale, -0.10f * carScale},
+        Matrix driverLocal = compose({0.0f, 0.74f * carScale, -0.12f * carScale},
                                      {carScale, carScale, carScale},
                                      {0.0f, 0.0f, -state.driverLean * 0.035f});
         drawAuthoredModel(*driver, childTransform(driverLocal, root));
