@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "asset": "suzuka",
+  "type": "track_world",
+  "display_name": "Suzuka",
+  "venue": "Suzuka International Racing Course inspired coastal circuit",
+  "country": "Japan",
+  "units": "meter",
+  "coordinate_unit": "meter",
+  "axes_blender": {
+    "right": "+X",
+    "front": "-Y",
+    "up": "+Z"
+  },
+  "target_lap_length": {
+    "value": 5807.0,
+    "unit": "meter"
+  },
+  "target_lap_length_m": 5807.0,
+  "measured_planar_centerline_asset_units": 5806.5252,
+  "measured_surface_centerline_asset_units": 5807.9732,
+  "turn_count": 18,
+  "clockwise": true,
+  "road_width_asset_units": {
+    "min": 10.002,
+    "max": 15.999,
+    "unit": "meter",
+    "profile": "kSuzukaWidth",
+    "formula": null
+  },
+  "road_width_cpp_world_units": {
+    "min": 14.453,
+    "max": 23.119
+  },
+  "source_centerline": {
+    "file": "src/track_catalog.cpp",
+    "symbol": "kSuzukaCenterline",
+    "control_points": 71,
+    "normalization_scale": 1.83346175,
+    "control_sha256": "b52f65355ba241d08e714e7da601c04ff1d4744a50f2296e89fad128ad0583a8",
+    "elevation_symbol": "kSuzukaElevation",
+    "elevation_sha256": "37d265e7f716f30d6a407c797da44ef0be9eb464400eb5e0bbc511bd8aa2aaa3",
+    "width_symbol": "kSuzukaWidth",
+    "width_sha256": "1666c1aeb0463e8959d35db5e0aa985cc857744ef71d3d341f8e46b37bb710e0",
+    "catmull_rom_steps_per_control_segment": 32,
+    "closed_loop_arc_length_resampling": true
+  },
+  "runtime_geometry": {
+    "centerline_samples": 1024,
+    "mesh_objects": 12,
+    "vertices": 13823,
+    "triangles": 13478,
+    "materials": 15
+  },
+  "measured_bounds_blender": {
+    "min": [
+      -623.316,
+      -636.198,
+      -5.0
+    ],
+    "max": [
+      2296.849,
+      1042.005,
+      47.161
+    ],
+    "dimensions": [
+      2920.165,
+      1678.203,
+      52.161
+    ]
+  },
+  "measured_bounds_gltf_y_up": {
+    "min": [
+      -623.316,
+      -5.0,
+      -1042.005
+    ],
+    "max": [
+      2296.849,
+      47.161,
+      636.198
+    ],
+    "dimensions": [
+      2920.165,
+      52.161,
+      1678.203
+    ]
+  },
+  "expected_bounds_cpp_world": {
+    "min": [
+      -900.692,
+      -7.225,
+      -1505.697
+    ],
+    "max": [
+      3318.947,
+      68.148,
+      919.306
+    ],
+    "dimensions": [
+      4219.638,
+      75.373,
+      2425.003
+    ]
+  },
+  "runtime_alignment": {
+    "cpp_layout_id": "TrackLayoutId::Suzuka",
+    "asset_origin": "C++ catalog plan origin and zero-elevation datum; not the start line",
+    "blender_to_gltf_matrix_row_major": [
+      [
+        1,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        -1,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        1
+      ]
+    ],
+    "gltf_and_raylib_axes": {
+      "right": "+X",
+      "up": "+Y",
+      "course_plan_y": "+Z"
+    },
+    "cpp_simulation_units_per_asset_unit": 17.0,
+    "cpp_render_scale": 0.085,
+    "recommended_glb_uniform_scale": 1.445,
+    "recommended_world_position": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "recommended_yaw_degrees": 0.0,
+    "mapping": "cppWorld = gltfPosition * recommended_glb_uniform_scale",
+    "road_surface_offset_above_centerline_asset_units": 0.06,
+    "opaque_layer_elevations_asset_units": {
+      "ocean": -5.0,
+      "sand": -0.8,
+      "vegetation": -0.4,
+      "embankment_outer": -0.2
+    },
+    "visual_replacement_scope": [
+      "road",
+      "runoff",
+      "curbs",
+      "terrain",
+      "ocean",
+      "props",
+      "start_gantry"
+    ],
+    "authoritative_runtime_system": "Track3D remains authoritative for physics, progress, elevation and width",
+    "start": {
+      "phase": 0.0,
+      "position_blender": [
+        770.053933,
+        641.711611,
+        9.0
+      ],
+      "forward_blender": [
+        -0.92420887,
+        0.38188737,
+        0.0
+      ],
+      "position_gltf_raylib": [
+        770.053933,
+        9.0,
+        -641.711611
+      ],
+      "forward_gltf_raylib": [
+        -0.92420887,
+        0.0,
+        -0.38188737
+      ]
+    }
+  },
+  "material_roles": {
+    "road": "asphalt",
+    "runoff": "runoff",
+    "curb_primary": "curb_red",
+    "curb_secondary": "curb_white",
+    "sand": "beach_sand",
+    "vegetation": "island_vegetation",
+    "ocean": "ocean_water",
+    "palm_trunk": "palm_trunk",
+    "palm_fronds": "palm_fronds",
+    "house_primary": "house_coral",
+    "house_secondary": "house_sun",
+    "house_roof": "house_roof",
+    "rocks": "coastal_stone",
+    "gantry": "gantry_metal",
+    "start_banner": "start_banner"
+  },
+  "required_materials": [
+    "asphalt",
+    "beach_sand",
+    "coastal_stone",
+    "curb_red",
+    "curb_white",
+    "gantry_metal",
+    "house_coral",
+    "house_roof",
+    "house_sun",
+    "island_vegetation",
+    "ocean_water",
+    "palm_fronds",
+    "palm_trunk",
+    "runoff",
+    "start_banner"
+  ],
+  "required_nodes": [
+    "map_root",
+    "circuit_root",
+    "terrain_root",
+    "scenery_root",
+    "track_surface",
+    "track_runoff",
+    "track_curbs",
+    "track_embankment",
+    "sand_island",
+    "ocean",
+    "palm_groves",
+    "coastal_houses",
+    "coastal_rocks",
+    "start_gantry",
+    "start_finish_line"
+  ],
+  "source": "suzuka.blend",
+  "export": "suzuka.glb",
+  "preview": "suzuka_preview.png"
+}
