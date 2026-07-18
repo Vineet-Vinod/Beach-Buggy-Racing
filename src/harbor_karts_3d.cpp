@@ -1430,6 +1430,16 @@ Input3D readInput(ControllerReader& controller, bool devKeyboard) {
     return controller.read(devKeyboard);
 }
 
+enum class ContactCause3D { None, Barrier, Vehicle };
+
+std::string_view contactCauseName(ContactCause3D cause) {
+    switch (cause) {
+        case ContactCause3D::Barrier: return "barrier";
+        case ContactCause3D::Vehicle: return "vehicle";
+        default: return "none";
+    }
+}
+
 struct Kart3D : ArcadeVehicleState {
     KartSpec3D spec;
     ArcadeVehicleConfig tuning;
@@ -1448,12 +1458,17 @@ struct Kart3D : ArcadeVehicleState {
     float aiCommandTargetSpeed = 0.0f;
     float aiCommandThrottle = 0.0f;
     float aiCommandBrake = 0.0f;
+    float launchLane = 0.0f;
+    float launchLaneTimer = 0.0f;
     float ghostTimer = 0.0f;
     Vec2 previousRenderPos{};
     float previousRenderElevation = 0.0f;
     float previousRenderHeading = 0.0f;
     float previousRenderProgress = 0.0f;
+    float contactImpulse = 0.0f;
+    ContactCause3D contactCause = ContactCause3D::None;
     bool barrierContact = false;
+    bool vehicleContact = false;
 };
 
 struct Particle3D {
@@ -1543,8 +1558,10 @@ struct CollisionAuditResult3D {
     float maxOverlap = 0.0f;
     float strikerSpeedAfterContact = 0.0f;
     float targetSpeedAfterContact = 0.0f;
+    float maxContactImpulse = 0.0f;
     int overlapFrames = 0;
     int contactFrames = 0;
+    bool vehicleTelemetry = false;
 };
 
 struct KartContact3D {
@@ -2257,7 +2274,8 @@ public:
             << ",\"road_edge_clearance_m\":" << roadClearance
             << ",\"barrier_clearance_m\":" << barrierClearance
             << ",\"on_road\":" << (roadClearance >= 0.0f ? "true" : "false")
-            << ",\"barrier_contact\":" << (player.barrierContact ? "true" : "false")
+            << ',' << agent_play::contactTelemetryJson(player.barrierContact, player.vehicleContact,
+                                                        player.contactImpulse, contactCauseName(player.contactCause))
             << ",\"grounded\":" << (player.grounded ? "true" : "false")
             << ",\"elevation_m\":" << player.elevation / unitsPerMeter << "}"
             << ",\"nearby_cars\":[";
@@ -2789,9 +2807,12 @@ public:
         const CollisionAuditResult3D rearEnd = simulateCollisionScenario("rear_end", 0);
         const CollisionAuditResult3D headOn = simulateCollisionScenario("head_on", 1);
         const CollisionAuditResult3D sideSwipe = simulateCollisionScenario("side_swipe", 2);
-        const bool rearOk = rearEnd.contactFrames > 0 && rearEnd.maxOverlap < 1.25f && rearEnd.overlapFrames == 0;
-        const bool headOk = headOn.contactFrames > 0 && headOn.maxOverlap < 1.25f && headOn.overlapFrames == 0;
-        const bool sideOk = sideSwipe.contactFrames > 0 && sideSwipe.maxOverlap < 1.25f && sideSwipe.overlapFrames == 0;
+        const bool rearOk = rearEnd.contactFrames > 0 && rearEnd.maxOverlap < 1.25f && rearEnd.overlapFrames == 0 &&
+                            rearEnd.vehicleTelemetry && rearEnd.maxContactImpulse > 0.0f;
+        const bool headOk = headOn.contactFrames > 0 && headOn.maxOverlap < 1.25f && headOn.overlapFrames == 0 &&
+                            headOn.vehicleTelemetry && headOn.maxContactImpulse > 0.0f;
+        const bool sideOk = sideSwipe.contactFrames > 0 && sideSwipe.maxOverlap < 1.25f && sideSwipe.overlapFrames == 0 &&
+                            sideSwipe.vehicleTelemetry && sideSwipe.maxContactImpulse > 0.0f;
         Kart3D light;
         Kart3D heavy;
         light.spec = specs_[1];
@@ -2901,7 +2922,9 @@ public:
         directKart.pos = traversalPoint.pos + traversalPoint.normal * (directLimit + 2.0f);
         constrainToTrack(directKart);
         const float directStopSpeed = length(directKart.vel);
-        const bool directBarrierStops = directKart.barrierContact && directStopSpeed < 5.0f;
+        const bool directBarrierStops = directKart.barrierContact && directStopSpeed < 5.0f &&
+                                        directKart.contactCause == ContactCause3D::Barrier &&
+                                        !directKart.vehicleContact && directKart.contactImpulse > 0.0f;
 
         Kart3D wallKart;
         wallKart.spec = specs_[0];
@@ -2977,15 +3000,64 @@ public:
         }
         const bool lowSpeedTiresGrounded = slowKart.grounded && maxSlowPhysicsClearance < 0.001f &&
                                            maxSlowRenderContactError < 0.001f;
+
+        selectedSession_ = harbor::ui::GameModeOption::Race;
+        selectedMap_ = 4;
+        startRace();
+        bool gridClear = true;
+        float initialGridOverlap = 0.0f;
+        for (int a = 0; a < kKartCount; ++a) {
+            for (int b = a + 1; b < kKartCount; ++b) {
+                const KartContact3D contact = kartContact(karts_[static_cast<size_t>(a)],
+                                                         karts_[static_cast<size_t>(b)]);
+                if (contact.touching) {
+                    gridClear = false;
+                    initialGridOverlap = std::max(initialGridOverlap, contact.penetration);
+                }
+            }
+        }
+        while (raceFlow_ && raceFlow_->phase() == ArcadeRacePhase::Countdown) {
+            update(kFixedDt, Input3D{}, true);
+        }
+        float minimumGreenGhost = std::numeric_limits<float>::max();
+        for (const Kart3D& kart : karts_) {
+            minimumGreenGhost = std::min(minimumGreenGhost, kart.ghostTimer);
+        }
+        const float launchStartProgress = karts_[0].progress;
+        int launchVehicleContactFrames = 0;
+        float launchMaxOverlap = 0.0f;
+        Input3D launchInput;
+        launchInput.throttle = 1.0f;
+        for (int frame = 0; frame < static_cast<int>(3.0f / kFixedDt); ++frame) {
+            update(kFixedDt, launchInput, true);
+            launchVehicleContactFrames += karts_[0].vehicleContact ? 1 : 0;
+            for (int a = 0; a < kKartCount; ++a) {
+                for (int b = a + 1; b < kKartCount; ++b) {
+                    const KartContact3D contact = kartContact(karts_[static_cast<size_t>(a)],
+                                                             karts_[static_cast<size_t>(b)]);
+                    if (contact.touching) {
+                        launchMaxOverlap = std::max(launchMaxOverlap, contact.penetration);
+                    }
+                }
+            }
+        }
+        const float launchDistanceMeters =
+            signedDistanceToLoop(launchStartProgress, karts_[0].progress, track_.totalLength()) /
+            kSpaSimulationUnitsPerMeter;
+        const bool cleanLaunch = gridClear && minimumGreenGhost >= 1.49f &&
+                                 launchVehicleContactFrames == 0 && launchMaxOverlap < 0.05f &&
+                                 launchDistanceMeters > 2.0f;
         const bool rearPushes = rearEnd.strikerSpeedAfterContact > 100.0f && rearEnd.targetSpeedAfterContact > 48.0f;
         const bool ok = rearOk && headOk && sideOk && massComparable && roleSymmetric && jumpClears && wallGlances &&
                         noAutomaticRecovery && rearPushes && envelopeOrdered && widthTransitions && footprintExact &&
                         curbsDriveable && runoffDriveable && visibleBarrierOnset && directBarrierStops &&
-                        lowSpeedTiresGrounded;
+                        lowSpeedTiresGrounded && cleanLaunch;
 
         auto print = [](const CollisionAuditResult3D& r) {
             std::cout << r.name << "_max_overlap=" << r.maxOverlap << " " << r.name << "_overlap_frames=" << r.overlapFrames << " "
-                      << r.name << "_contact_frames=" << r.contactFrames << " ";
+                      << r.name << "_contact_frames=" << r.contactFrames << " "
+                      << r.name << "_impulse=" << r.maxContactImpulse << " "
+                      << r.name << "_vehicle_telemetry=" << r.vehicleTelemetry << " ";
         };
         std::cout << "collision-audit-3d ";
         print(rearEnd);
@@ -3008,6 +3080,12 @@ public:
                   << " low_speed_physics_clearance=" << maxSlowPhysicsClearance
                   << " low_speed_render_contact_error=" << maxSlowRenderContactError
                   << " low_speed_tires_grounded=" << lowSpeedTiresGrounded
+                  << " grid_clear=" << gridClear << " initial_grid_overlap=" << initialGridOverlap
+                  << " green_ghost_s=" << minimumGreenGhost
+                  << " launch_vehicle_contact_frames=" << launchVehicleContactFrames
+                  << " launch_max_overlap=" << launchMaxOverlap
+                  << " launch_distance_m=" << launchDistanceMeters
+                  << " clean_launch=" << cleanLaunch
                   << " no_automatic_recovery=" << noAutomaticRecovery << "\n";
         return ok;
     }
@@ -3468,7 +3546,18 @@ private:
     void resetRace() {
         karts_.clear();
         const float startProgress = track_.startProgress();
-        const TrackPoint3D start = track_.sample(startProgress);
+        float longestCar = 0.0f;
+        float widestCar = 0.0f;
+        for (const KartSpec3D& spec : specs_) {
+            longestCar = std::max(longestCar, spec.length);
+            widestCar = std::max(widestCar, spec.width);
+        }
+        const float unitsPerMeter = isMetricCircuit(track_.layout()) ? kSpaSimulationUnitsPerMeter : 1.0f;
+        const float firstRowInset = longestCar * 0.5f + 1.0f * unitsPerMeter;
+        const float rowSpacing = longestCar + 3.0f * unitsPerMeter;
+        const float columnOffset = std::max(widestCar * 0.95f, 2.0f * unitsPerMeter);
+        static constexpr std::array<int, kKartCount> kGridRow = {0, 1, 2, 3, 4, 5};
+        static constexpr std::array<float, kKartCount> kGridSide = {-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f};
         for (int i = 0; i < kKartCount; ++i) {
             Kart3D kart;
             kart.spec = specs_[static_cast<size_t>(i == 0 ? selectedCar_ : i % static_cast<int>(specs_.size()))];
@@ -3477,16 +3566,15 @@ private:
                 applyAttackingAiSetup(kart.tuning);
             }
             kart.racer = racers_[static_cast<size_t>(i == 0 ? selectedRacer_ : (i * 3) % static_cast<int>(racers_.size()))];
-            static constexpr std::array<float, kKartCount> kGridProgress = {-420.0f, -84.0f, -126.0f, -246.0f, -288.0f, -374.0f};
-            static constexpr std::array<float, kKartCount> kGridLane = {34.0f, -34.0f, 34.0f, -34.0f, 34.0f, -34.0f};
-            const float gridScale = isMetricCircuit(track_.layout())
-                                        ? 1.0f / kSpaSimulationUnitsPerMeter
-                                        : 1.0f;
-            const float stagger = startProgress +
-                                  (isTimeTrial() && i == 0 ? 0.0f
-                                                          : kGridProgress[static_cast<size_t>(i)] * gridScale);
+            const float stagger = isTimeTrial() && i == 0
+                                      ? startProgress
+                                      : startProgress - firstRowInset -
+                                            static_cast<float>(kGridRow[static_cast<size_t>(i)]) * rowSpacing;
             const TrackPoint3D grid = track_.sample(stagger);
-            const float lane = std::clamp(kGridLane[static_cast<size_t>(i)], -roadCenterLimit(kart, grid), roadCenterLimit(kart, grid));
+            const float lane = isTimeTrial() && i == 0
+                                   ? 0.0f
+                                   : std::clamp(kGridSide[static_cast<size_t>(i)] * columnOffset,
+                                                -roadCenterLimit(kart, grid), roadCenterLimit(kart, grid));
             kart.pos = grid.pos + grid.normal * lane;
             kart.heading = angleOf(grid.tangent);
             kart.vel = {};
@@ -3498,9 +3586,11 @@ private:
             kart.previousProgress = kart.progress;
             kart.lap = -1;
             kart.lane = lane;
+            kart.launchLane = lane;
+            kart.launchLaneTimer = isTimeTrial() ? 0.0f : 2.25f;
             kart.aiTempo = 1.075f - static_cast<float>(std::max(0, i - 1)) * 0.004f;
             kart.aiRisk = 0.72f + static_cast<float>((i * 7) % 5) * 0.045f;
-            kart.ghostTimer = 1.0f;
+            kart.ghostTimer = isTimeTrial() ? 0.0f : 1.5f;
             karts_.push_back(kart);
         }
         particles_.clear();
@@ -3531,7 +3621,7 @@ private:
         raceFlow_->update(0.0f, inputs);
         raceFlow_->beginCountdown();
         updateRaceOrder();
-        const Vector3 focus = track_.roadPoint(start, 0.0f);
+        const Vector3 focus = track_.roadPoint(track_.sample(startProgress), 0.0f);
         camera_.position = add(focus, {0.0f, 5.0f, -16.0f});
         camera_.target = focus;
         camera_.up = {0.0f, 1.0f, 0.0f};
@@ -3752,6 +3842,9 @@ private:
         const float targetSpeed = aiTargetSpeed(kart) * (1.0f - recovery * 0.24f);
 
         Input3D ai = auditInput(AuditDriver::Attack, kart);
+        if (kart.launchLaneTimer > 0.0f) {
+            ai.steer = 0.0f;
+        }
         if (raceTraffic && std::abs(kart.aiLaneIntent) > 0.01f && laneExcess <= 1.0f) {
             const float trafficSteer = aiSteerForProgress(kart, index, laneTarget);
             ai.steer = lerp(ai.steer, trafficSteer, 0.38f);
@@ -4011,6 +4104,12 @@ private:
             if (karts_[0].contactTimer > 0.05f || karts_[1].contactTimer > 0.05f) {
                 ++result.contactFrames;
             }
+            result.maxContactImpulse = std::max({result.maxContactImpulse,
+                                                 karts_[0].contactImpulse,
+                                                 karts_[1].contactImpulse});
+            result.vehicleTelemetry = result.vehicleTelemetry ||
+                                      (karts_[0].vehicleContact && karts_[0].contactCause == ContactCause3D::Vehicle) ||
+                                      (karts_[1].vehicleContact && karts_[1].contactCause == ContactCause3D::Vehicle);
         }
         return result;
     }
@@ -4020,6 +4119,12 @@ private:
         kart.previousRenderElevation = kart.elevation;
         kart.previousRenderHeading = kart.heading;
         kart.previousRenderProgress = kart.progress;
+        kart.launchLaneTimer = std::max(0.0f, kart.launchLaneTimer - dt);
+        if (kart.contactTimer <= 0.001f) {
+            kart.contactImpulse = 0.0f;
+            kart.contactCause = ContactCause3D::None;
+            kart.vehicleContact = false;
+        }
         kart.ghostTimer = std::max(0.0f, kart.ghostTimer - dt);
         updateProgress(kart);
         const TrackPoint3D center = track_.sample(kart.progress);
@@ -4089,6 +4194,9 @@ private:
                 kart.heading = angleOf(normalize(lerp(fromAngle(kart.heading), travelTangent, 0.18f + incidence * 0.30f)));
                 kart.yawRate *= 0.58f;
                 kart.contactTimer = std::max(kart.contactTimer, 0.18f);
+                kart.contactImpulse = std::max(kart.contactImpulse, std::abs(normalVelocity) * kartMass(kart));
+                kart.contactCause = ContactCause3D::Barrier;
+                kart.vehicleContact = false;
             }
             kart.drifting = false;
             return;
@@ -4120,6 +4228,9 @@ private:
             if (!kart.barrierContact) {
                 kart.contactTimer = std::max(kart.contactTimer, 0.18f);
             }
+            kart.contactImpulse = std::max(kart.contactImpulse, std::abs(normalVelocity) * kartMass(kart));
+            kart.contactCause = ContactCause3D::Barrier;
+            kart.vehicleContact = false;
             kart.barrierContact = true;
         }
     }
@@ -4167,14 +4278,22 @@ private:
                     if (iter == 0) {
                         const Vec2 relativeVelocity = kb.vel - ka.vel;
                         const float closingSpeed = dot(relativeVelocity, n);
+                        float resolvedImpulse = 0.0f;
                         if (closingSpeed < 0.0f) {
                             const Vec2 forwardA = fromAngle(ka.heading);
                             const Vec2 forwardB = fromAngle(kb.heading);
                             const Vec2 averageForward = normalize(forwardA + forwardB);
                             const bool sameDirection = dot(forwardA, forwardB) > 0.55f;
                             const bool longitudinalContact = lengthSq(averageForward) > 0.01f && std::abs(dot(n, averageForward)) > 0.48f;
-                            const float impulseScale = sameDirection && longitudinalContact ? 0.22f : 1.10f;
+                            const float launchSpeed = 14.0f * (isMetricCircuit(track_.layout())
+                                                                  ? kSpaSimulationUnitsPerMeter
+                                                                  : 1.0f);
+                            const bool lowSpeedContact = std::max(length(ka.vel), length(kb.vel)) < launchSpeed;
+                            const float impulseScale = sameDirection && longitudinalContact
+                                                           ? (lowSpeedContact ? 0.10f : 0.22f)
+                                                           : 1.10f;
                             const float impulse = -impulseScale * closingSpeed / invSum;
+                            resolvedImpulse = impulse;
                             ka.vel -= n * (impulse * invA);
                             kb.vel += n * (impulse * invB);
 
@@ -4185,12 +4304,24 @@ private:
                             kb.vel += tangent * (tangentImpulse * invB);
                         }
 
-                        ka.vel *= 0.996f;
-                        kb.vel *= 0.996f;
+                        const float damping = std::max(length(ka.vel), length(kb.vel)) <
+                                                      14.0f * (isMetricCircuit(track_.layout())
+                                                                   ? kSpaSimulationUnitsPerMeter
+                                                                   : 1.0f)
+                                                  ? 0.9995f
+                                                  : 0.996f;
+                        ka.vel *= damping;
+                        kb.vel *= damping;
+                        ka.contactImpulse = std::max(ka.contactImpulse, resolvedImpulse);
+                        kb.contactImpulse = std::max(kb.contactImpulse, resolvedImpulse);
                     }
 
                     ka.contactTimer = 0.26f;
                     kb.contactTimer = 0.26f;
+                    ka.contactCause = ContactCause3D::Vehicle;
+                    kb.contactCause = ContactCause3D::Vehicle;
+                    ka.vehicleContact = true;
+                    kb.vehicleContact = true;
                 }
             }
         }
@@ -4289,6 +4420,9 @@ private:
         kart.boostPower = 0.0f;
         kart.driftCharge = 0.0f;
         kart.contactTimer = 0.0f;
+        kart.contactImpulse = 0.0f;
+        kart.contactCause = ContactCause3D::None;
+        kart.vehicleContact = false;
         kart.ghostTimer = 1.0f;
         updateProgress(kart);
         kart.previousRenderPos = kart.pos;
@@ -5404,7 +5538,7 @@ int runAgentPlaySession(Game3D& game, const std::filesystem::path& captureDirect
     }
 
     std::uint64_t simulationFrame = 0;
-    std::cout << "{\"ok\":true,\"type\":\"ready\",\"protocol\":1,\"fixed_dt_s\":" << kFixedDt
+    std::cout << "{\"ok\":true,\"type\":\"ready\",\"protocol\":2,\"fixed_dt_s\":" << kFixedDt
               << ",\"frame_directory\":" << agent_play::jsonString(std::filesystem::absolute(captureDirectory).string())
               << ",\"state\":" << game.agentStateJson(simulationFrame) << "}\n" << std::flush;
 
@@ -5483,7 +5617,7 @@ int runAgentPlaySession(Game3D& game, const std::filesystem::path& captureDirect
 int runHarborKarts3D(int argc, char** argv) {
     if (hasArg(argc, argv, "--agent-play-audit")) {
         const bool ok = agent_play::runProtocolParserAudit();
-        std::cout << "agent-play-protocol-audit commands=6 bounds=valid escaping=valid ok=" << ok << "\n";
+        std::cout << "agent-play-protocol-audit commands=6 bounds=valid escaping=valid contact_schema=valid ok=" << ok << "\n";
         return ok ? 0 : 1;
     }
     if (hasArg(argc, argv, "--track-catalog-audit")) {

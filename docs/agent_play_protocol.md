@@ -14,7 +14,7 @@ cmake --build build/game --parallel
 
 The process writes one JSON object per line and then waits for one JSON command
 per line on standard input. Keep the process alive across the full play session.
-The initial `ready` response contains protocol version `1`, the fixed timestep,
+The initial `ready` response contains protocol version `2`, the fixed timestep,
 the frame directory, and the initial state.
 
 ## Commands
@@ -58,12 +58,19 @@ Every successful `state`, `step`, `frame`, and `reset` response includes:
 - Race phase, countdown, race time, lap progress, position, and wrong-way state.
 - Speed, position, heading, yaw, slip, steering, engine/brake load, and elevation.
 - Signed clearances to the road edge and physical barrier, plus road/contact/grounded flags.
+- Separate `barrier_contact` and `vehicle_contact` flags, the last `contact_impulse`,
+  and a `contact_cause` of `none`, `barrier`, or `vehicle`.
 - Relative progress, lane, and speed for cars within 150 meters.
 
 `road_edge_clearance_m` may be negative while the car is still in driveable
 runoff. `barrier_clearance_m` reaches zero at the physical collision boundary.
 Use the rendered frame to evaluate the visible scene and telemetry to make
 precise control decisions.
+
+Contact telemetry remains active for the short collision response window, so a
+multi-frame `step` can still report an impact that happened near the end of the
+command. `contact_impulse` is the resolved world-space impulse magnitude and is
+zero when no impact is active.
 
 ## Agent Loop
 

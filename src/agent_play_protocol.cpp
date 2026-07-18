@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <charconv>
 #include <cmath>
+#include <iomanip>
 #include <limits>
+#include <sstream>
 
 namespace agent_play {
 namespace {
@@ -341,6 +343,15 @@ std::string jsonString(std::string_view text) {
     return output;
 }
 
+std::string contactTelemetryJson(bool barrierContact, bool vehicleContact, float impulse, std::string_view cause) {
+    std::ostringstream output;
+    output << "\"barrier_contact\":" << (barrierContact ? "true" : "false")
+           << ",\"vehicle_contact\":" << (vehicleContact ? "true" : "false")
+           << ",\"contact_impulse\":" << std::fixed << std::setprecision(4) << std::max(0.0f, impulse)
+           << ",\"contact_cause\":" << jsonString(cause);
+    return output.str();
+}
+
 bool runProtocolParserAudit() {
     const ParseResult step = parseCommand(
         R"({"cmd":"step","id":17,"frames":120,"render":true,"input":{"steer":-0.5,"throttle":1,"brake":0.25,"confirm":true,"page_right":true}})");
@@ -355,7 +366,10 @@ bool runProtocolParserAudit() {
                              !parseCommand(R"({"cmd":"step","input":{"steer":2}})").ok &&
                              !parseCommand(R"({"cmd":"unknown"})").ok && !parseCommand("not json").ok;
     const bool escapingValid = jsonString("a\n\"b") == "\"a\\n\\\"b\"";
-    return stepValid && commandsValid && errorsValid && escapingValid;
+    const bool contactTelemetryValid =
+        contactTelemetryJson(false, true, 12.5f, "vehicle") ==
+        "\"barrier_contact\":false,\"vehicle_contact\":true,\"contact_impulse\":12.5000,\"contact_cause\":\"vehicle\"";
+    return stepValid && commandsValid && errorsValid && escapingValid && contactTelemetryValid;
 }
 
 }  // namespace agent_play

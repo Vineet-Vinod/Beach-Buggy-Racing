@@ -41,6 +41,7 @@ struct ParseResult {
 
 ParseResult parseCommand(std::string_view line);
 std::string jsonString(std::string_view text);
+std::string contactTelemetryJson(bool barrierContact, bool vehicleContact, float impulse, std::string_view cause);
 bool runProtocolParserAudit();
 
 }  // namespace agent_play
