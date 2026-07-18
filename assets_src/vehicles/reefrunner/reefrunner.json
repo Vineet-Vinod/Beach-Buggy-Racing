@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "asset": "reefrunner",
+  "units": "meters",
+  "axes_blender": {
+    "right": "+X",
+    "front": "-Y",
+    "up": "+Z"
+  },
+  "measured_bounds_blender": {
+    "min": [
+      -0.9633,
+      -1.96,
+      0.03
+    ],
+    "max": [
+      0.9633,
+      1.98,
+      1.565
+    ],
+    "dimensions": [
+      1.9267,
+      3.94,
+      1.535
+    ]
+  },
+  "runtime_budget": {
+    "mesh_objects": 47,
+    "vertices": 6614,
+    "triangles": 13060
+  },
+  "verification": {
+    "status": "passed",
+    "required_nodes_present": true,
+    "named_actions_present": [
+      "accelerate",
+      "brake",
+      "idle",
+      "turn_left",
+      "turn_right"
+    ],
+    "action_channel_counts": {
+      "accelerate": 27,
+      "brake": 27,
+      "idle": 27,
+      "turn_left": 27,
+      "turn_right": 27
+    },
+    "skin_count": 1,
+    "exported_meshes": 47,
+    "dimension_error_percent": {
+      "width_x": 4.71,
+      "length_y": 0.0,
+      "height_z": 0.99
+    },
+    "dimension_tolerance_percent": 8.0
+  },
+  "required_nodes": [
+    "car_root",
+    "body",
+    "wheel_FL",
+    "wheel_FR",
+    "wheel_RL",
+    "wheel_RR",
+    "steering",
+    "brake_lights",
+    "driver_mount",
+    "vehicle_rig",
+    "seat_anchor"
+  ],
+  "source": "reefrunner.blend",
+  "export": "reefrunner.glb",
+  "preview": "reefrunner_preview.png",
+  "type": "vehicle",
+  "display_name": "Reefrunner R4",
+  "family": "rally hatch",
+  "target_dimensions_m": {
+    "width_x": 1.84,
+    "length_y": 3.94,
+    "height_z": 1.52
+  },
+  "animation_clips": {
+    "accelerate": [
+      1,
+      24
+    ],
+    "turn_left": [
+      30,
+      50
+    ],
+    "turn_right": [
+      30,
+      50
+    ],
+    "brake": [
+      60,
+      72
+    ],
+    "idle": [
+      80,
+      108
+    ]
+  },
+  "mounts": {
+    "driver_object": "driver_mount",
+    "driver_bone": "seat_anchor",
+    "gltf_local_y_up_z_forward_m": [
+      0.0,
+      1.0,
+      -0.1
+    ]
+  }
+}
