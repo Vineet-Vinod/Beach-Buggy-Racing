@@ -52,6 +52,7 @@ Gamepad and keyboard are both supported.
 - Left stick / D-pad or A/D / arrows: steer; change the highlighted menu choice
 - RT: accelerate
 - LT or B / Circle: brake for corner entry; hold at low speed to reverse
+- RB / E: shift up; LB / Q: shift down
 - W / up and S / down: keyboard accelerate and brake
 - D-pad or arrows/WASD: navigate driver, car, map, lap, pause, and results screens
 - LB/RB or Q/E: previous/next choice on selection screens
@@ -90,9 +91,12 @@ Gamepad and keyboard are both supported.
   with restrained road vibration and no chase interpolation or camera switching
 - Momentum-preserving formula handling with a combined tire-grip budget,
   speed-sensitive steering, aerodynamic downforce, brake/load transfer,
-  high-speed understeer, stable braking zones, powered corner exits, real
-  gravity, grounded low-speed tire contact, landing compression, visible-wall
-  collision response, and stuck recovery
+  trail braking, high-speed understeer, stable braking zones, powered corner
+  exits, real gravity, grounded low-speed tire contact, landing compression,
+  visible-wall collision response, and stuck recovery
+- Eight-speed manual sequential transmission with paddle edge detection,
+  downshift over-rev protection, shift torque interruption, gear-dependent
+  engine braking, rolling resistance, and speed-squared aerodynamic drag
 - Formula-aware AI that scans upcoming curvature, brakes before turn-in,
   coasts at the tire limit, accelerates from the apex, and does not drift
 - Procedural engine, drivetrain, road, wind, tire-scrub, and landing audio
@@ -188,8 +192,8 @@ for the command schema and recommended vision-agent loop.
 `--self-test` runs a deterministic physics/AI smoke test without SDL.
 `--audio-audit` runs nine hardware-independent DSP checks for engine load,
 speed, tire scrub, landing response, output bounds, and determinism.
-`--vehicle-audit` runs 27 deterministic unit checks for momentum, steering,
-binary brake oversteer, surfaces, jumping, landing, and fixed-step consistency
+`--vehicle-audit` runs deterministic unit checks for momentum, steering,
+manual shifting, engine braking, drag, surfaces, jumping, landing, and fixed-step consistency
 without opening a window. `--race-flow-audit` runs 20 checks for countdowns, checkpoints,
 wrong-way state, finish ordering, infinite races, and discontinuity handling.
 `--race-audit` runs a longer headless simulation and reports progress jumps,
@@ -222,9 +226,9 @@ visual inspection, including Suzuka's runtime bridge approach and crossover.
 contact cases; it also proves that curbs and runoff remain driveable, contact
 begins at the visible barrier, and the rendered tires stay on the road datum at
 low speed. `handling-audit-3d` checks formula acceleration, a 305-330 km/h speed
-envelope in both track unit systems, progressive stopping distances, fixed
-T-cam geometry, and flat-versus-braked behavior through named Monza and Suzuka
-corners.
+envelope in both track unit systems, progressive stopping distances, natural
+coast-down, quadratic aero loss, trail braking, fixed T-cam geometry, and
+flat-versus-braked behavior through named Monza and Suzuka corners.
 `perf-audit-3d` records 3D frame timings and fails if p95 misses the 60fps
 budget.
 `--diagnose-controller` prints both raylib and direct SDL controller readings,
