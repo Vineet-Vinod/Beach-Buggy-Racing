@@ -47,7 +47,9 @@ make run
 
 ## Controls
 
-Gamepad and keyboard are both supported.
+Gamepad, steering wheel, and keyboard input can be used together. The
+DragonRise Wired Wheel (`0079:189c`) is detected automatically, with a linear,
+low-deadzone steering profile and analog accelerator/brake pedals.
 
 - Left stick / D-pad or A/D / arrows: steer; change the highlighted menu choice
 - RT: accelerate
@@ -61,6 +63,12 @@ Gamepad and keyboard are both supported.
 - Start or Escape: pause the race
 - Back / Select: resume from pause; R resets to the last valid checkpoint while racing
 - Start + Back / Select or F10: quit
+
+Wheel controls use the rim for steering, accelerator and brake pedals for RT
+and LT, the wheel's A/B buttons for confirm/back, the D-pad for menus, and the
+shoulder/paddle buttons for shifting. Multiple connected SDL input devices are
+merged, so a wheel and gamepad do not need to be unplugged to switch between
+them.
 
 ## Current Gameplay
 

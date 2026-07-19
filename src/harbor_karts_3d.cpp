@@ -1120,6 +1120,32 @@ float axisWithDeadzone(float value) {
     return sign * curved;
 }
 
+bool isWiredWheel(Uint16 vendor, Uint16 product) {
+    // DragonRise Wired Wheel. The Linux xpad driver deliberately exposes this
+    // device as a standard Xbox pad, so the VID/PID is the reliable way to
+    // preserve wheel-specific steering response.
+    return vendor == 0x0079 && product == 0x189c;
+}
+
+float wheelAxisWithDeadzone(float value) {
+    value = std::clamp(value, -1.0f, 1.0f);
+    constexpr float dead = 0.025f;
+    if (std::abs(value) <= dead) {
+        return 0.0f;
+    }
+    const float sign = value < 0.0f ? -1.0f : 1.0f;
+    return sign * (std::abs(value) - dead) / (1.0f - dead);
+}
+
+float signedPedalUnit(float value) {
+    const float normalized = std::clamp((value + 1.0f) * 0.5f, 0.0f, 1.0f);
+    return normalized < 0.025f ? 0.0f : (normalized - 0.025f) / 0.975f;
+}
+
+float normalizedSdlAxis(Sint16 value) {
+    return std::clamp(static_cast<float>(value) / 32767.0f, -1.0f, 1.0f);
+}
+
 float normalizeRaylibTrigger(float raw, bool& signedRange) {
     raw = std::clamp(raw, -1.0f, 1.0f);
     if (raw < -0.50f) {
@@ -1163,7 +1189,14 @@ bool controllerContractAudit() {
                                axisWithDeadzone(0.60f) > 0.23f && axisWithDeadzone(0.60f) < 0.27f &&
                                axisWithDeadzone(0.90f) > 0.70f && axisWithDeadzone(1.0f) == 1.0f &&
                                std::abs(axisWithDeadzone(-0.60f) + axisWithDeadzone(0.60f)) < 0.0001f;
-    return steeringCurve && canonicalBrake(0.0f, false) == 0.0f &&
+    const bool wheelProfile = isWiredWheel(0x0079, 0x189c) && !isWiredWheel(0x045e, 0x028e) &&
+                              wheelAxisWithDeadzone(0.02f) == 0.0f && wheelAxisWithDeadzone(1.0f) == 1.0f &&
+                              wheelAxisWithDeadzone(-1.0f) == -1.0f && wheelAxisWithDeadzone(0.50f) > 0.48f &&
+                              wheelAxisWithDeadzone(0.50f) < 0.50f && signedPedalUnit(-1.0f) == 0.0f &&
+                              signedPedalUnit(1.0f) == 1.0f && signedPedalUnit(0.0f) > 0.48f &&
+                              signedPedalUnit(0.0f) < 0.50f &&
+                              wheelAxisWithDeadzone(normalizedSdlAxis(2048)) > 0.035f;
+    return steeringCurve && wheelProfile && canonicalBrake(0.0f, false) == 0.0f &&
            std::abs(canonicalBrake(0.20f, false) - 0.20f) < 0.0001f &&
            std::abs(canonicalBrake(0.55f, false) - 0.55f) < 0.0001f && canonicalBrake(1.0f, false) == 1.0f &&
            canonicalBrake(0.0f, true) == 1.0f && canonicalBrake(1.0f, true) == 1.0f && bReleaseClears &&
@@ -1172,7 +1205,7 @@ bool controllerContractAudit() {
 }
 
 float sdlAxisUnit(Sint16 value) {
-    const float f = static_cast<float>(value) / 32767.0f;
+    const float f = normalizedSdlAxis(value);
     return std::abs(f) < 0.08f ? 0.0f : std::clamp(f, -1.0f, 1.0f);
 }
 
@@ -1236,19 +1269,17 @@ public:
             return true;
         }
         refresh();
-        return pad_ != nullptr || joystick_ != nullptr;
+        return !pads_.empty() || !joysticks_.empty();
     }
 
     Input3D read(bool devKeyboard) {
         updateSdlState();
         refresh();
         Input3D input;
-        if (pad_) {
+        if (!pads_.empty() || !joysticks_.empty()) {
             mergeSdl(input);
         } else if (IsGamepadAvailable(0)) {
             input = readRaylib();
-        } else if (joystick_) {
-            mergeSdl(input);
         }
         applyKeyboardFallback(input, devKeyboard);
         input.brake = canonicalBrake(input.brake, input.bHeld);
@@ -1265,20 +1296,26 @@ public:
                       << " rb=" << IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1)
                       << " a=" << IsGamepadButtonDown(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN) << "\n";
         }
-        if (pad_) {
-            std::cout << "sdl gamepad: " << SDL_GetGamepadName(pad_) << " steer=" << sdlAxisUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_LEFTX))
-                      << " lt=" << sdlTriggerUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_LEFT_TRIGGER))
-                      << " rt=" << sdlTriggerUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER))
-                      << " rb=" << SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)
-                      << " a=" << SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_SOUTH) << "\n";
-        } else if (joystick_) {
-            std::cout << "sdl joystick: " << SDL_GetJoystickName(joystick_) << " axes=" << SDL_GetNumJoystickAxes(joystick_)
-                      << " buttons=" << SDL_GetNumJoystickButtons(joystick_) << " steer=" << rawJoystickAxis(joystick_, 0)
-                      << " lt=" << std::max(0.0f, rawJoystickAxis(joystick_, 2))
-                      << " rt=" << std::max(0.0f, rawJoystickAxis(joystick_, 5)) << " rb=" << rawJoystickButton(joystick_, 5)
-                      << " a=" << rawJoystickButton(joystick_, 0) << "\n";
+        for (SDL_Gamepad* pad : pads_) {
+            const bool wheel = isWiredWheel(SDL_GetGamepadVendor(pad), SDL_GetGamepadProduct(pad));
+            std::cout << "sdl " << (wheel ? "wheel" : "gamepad") << ": " << SDL_GetGamepadName(pad)
+                      << " vid_pid=" << std::hex << SDL_GetGamepadVendor(pad) << ":" << SDL_GetGamepadProduct(pad)
+                      << std::dec << " steer=" << sdlAxisUnit(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX))
+                      << " lt=" << sdlTriggerUnit(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER))
+                      << " rt=" << sdlTriggerUnit(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER))
+                      << " rb=" << SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)
+                      << " a=" << SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_SOUTH) << "\n";
         }
-        if (!IsGamepadAvailable(0) && !pad_ && !joystick_) {
+        for (SDL_Joystick* joystick : joysticks_) {
+            const bool wheel = isWiredWheel(SDL_GetJoystickVendor(joystick), SDL_GetJoystickProduct(joystick));
+            std::cout << "sdl " << (wheel ? "wheel" : "joystick") << ": " << SDL_GetJoystickName(joystick)
+                      << " vid_pid=" << std::hex << SDL_GetJoystickVendor(joystick) << ":" << SDL_GetJoystickProduct(joystick)
+                      << std::dec << " axes=" << SDL_GetNumJoystickAxes(joystick)
+                      << " buttons=" << SDL_GetNumJoystickButtons(joystick) << " steer=" << rawJoystickAxis(joystick, 0)
+                      << " lt=" << rawJoystickAxis(joystick, 2) << " rt=" << rawJoystickAxis(joystick, 5)
+                      << " rb=" << rawJoystickButton(joystick, 5) << " a=" << rawJoystickButton(joystick, 0) << "\n";
+        }
+        if (!IsGamepadAvailable(0) && pads_.empty() && joysticks_.empty()) {
             std::cout << "controller: none\n";
         }
     }
@@ -1347,92 +1384,126 @@ private:
         if (!sdlFallbackReady_) {
             return;
         }
-        if (pad_ && SDL_GamepadConnected(pad_)) {
-            joystick_ = SDL_GetGamepadJoystick(pad_);
-            return;
-        }
-        if (joystick_ && SDL_JoystickConnected(joystick_)) {
-            return;
-        }
-        close();
+
+        std::erase_if(pads_, [](SDL_Gamepad* pad) {
+            if (SDL_GamepadConnected(pad)) {
+                return false;
+            }
+            SDL_CloseGamepad(pad);
+            return true;
+        });
+        std::erase_if(joysticks_, [](SDL_Joystick* joystick) {
+            if (SDL_JoystickConnected(joystick)) {
+                return false;
+            }
+            SDL_CloseJoystick(joystick);
+            return true;
+        });
 
         int count = 0;
         SDL_JoystickID* pads = SDL_GetGamepads(&count);
-        if (pads && count > 0) {
-            pad_ = SDL_OpenGamepad(pads[0]);
-            if (pad_) {
-                joystick_ = SDL_GetGamepadJoystick(pad_);
+        for (int i = 0; pads && i < count; ++i) {
+            const SDL_JoystickID id = pads[i];
+            const bool alreadyOpen = std::any_of(pads_.begin(), pads_.end(), [id](SDL_Gamepad* pad) {
+                return SDL_GetGamepadID(pad) == id;
+            });
+            if (!alreadyOpen) {
+                if (SDL_Gamepad* pad = SDL_OpenGamepad(id)) {
+                    pads_.push_back(pad);
+                }
             }
         }
         SDL_free(pads);
-        if (pad_) {
-            return;
-        }
 
         SDL_JoystickID* joysticks = SDL_GetJoysticks(&count);
-        if (joysticks && count > 0) {
-            joystick_ = SDL_OpenJoystick(joysticks[0]);
+        for (int i = 0; joysticks && i < count; ++i) {
+            const SDL_JoystickID id = joysticks[i];
+            if (SDL_IsGamepad(id)) {
+                continue;
+            }
+            const bool alreadyOpen = std::any_of(joysticks_.begin(), joysticks_.end(), [id](SDL_Joystick* joystick) {
+                return SDL_GetJoystickID(joystick) == id;
+            });
+            if (!alreadyOpen) {
+                if (SDL_Joystick* joystick = SDL_OpenJoystick(id)) {
+                    joysticks_.push_back(joystick);
+                }
+            }
         }
         SDL_free(joysticks);
     }
 
     void close() {
-        if (pad_) {
-            SDL_CloseGamepad(pad_);
-            pad_ = nullptr;
-            joystick_ = nullptr;
-        } else if (joystick_) {
-            SDL_CloseJoystick(joystick_);
-            joystick_ = nullptr;
+        for (SDL_Gamepad* pad : pads_) {
+            SDL_CloseGamepad(pad);
         }
+        for (SDL_Joystick* joystick : joysticks_) {
+            SDL_CloseJoystick(joystick);
+        }
+        pads_.clear();
+        joysticks_.clear();
         previousDigital_ = {};
         raylibLeftTriggerSigned_ = false;
         raylibRightTriggerSigned_ = false;
     }
 
     void mergeSdl(Input3D& input) {
-        if (pad_) {
-            input.steer = std::abs(input.steer) > 0.01f ? input.steer : axisWithDeadzone(sdlAxisUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_LEFTX)));
-            input.throttle = std::max(input.throttle, sdlTriggerUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)));
-            input.brake = std::max(input.brake, sdlTriggerUnit(SDL_GetGamepadAxis(pad_, SDL_GAMEPAD_AXIS_LEFT_TRIGGER)));
-            input.a = input.a || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_SOUTH);
-            input.bHeld = input.bHeld || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_EAST);
-            input.start = input.start || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_START);
-            input.back = input.back || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_BACK);
-            input.left = input.left || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || input.steer < -kMenuSteerThreshold;
-            input.right = input.right || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || input.steer > kMenuSteerThreshold;
-            input.up = input.up || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_UP);
-            input.down = input.down || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
-            input.pageLeft = input.pageLeft || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
-            input.pageRight = input.pageRight || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
-            input.shiftDown = input.shiftDown || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
-            input.shiftUp = input.shiftUp || SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
-            const float dpadSteer = (SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ? 1.0f : 0.0f) -
-                                    (SDL_GetGamepadButton(pad_, SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? 1.0f : 0.0f);
+        const auto mergeSteering = [&input](float steer) {
+            if (std::abs(steer) > std::abs(input.steer)) {
+                input.steer = steer;
+            }
+        };
+        for (SDL_Gamepad* pad : pads_) {
+            const bool wheel = isWiredWheel(SDL_GetGamepadVendor(pad), SDL_GetGamepadProduct(pad));
+            const float rawSteer = normalizedSdlAxis(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX));
+            mergeSteering(wheel ? wheelAxisWithDeadzone(rawSteer) : axisWithDeadzone(rawSteer));
+            input.throttle = std::max(input.throttle, sdlTriggerUnit(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)));
+            input.brake = std::max(input.brake, sdlTriggerUnit(SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER)));
+            input.a = input.a || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_SOUTH);
+            input.bHeld = input.bHeld || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_EAST);
+            input.start = input.start || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_START);
+            input.back = input.back || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_BACK);
+            input.left = input.left || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+            input.right = input.right || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+            input.up = input.up || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_UP);
+            input.down = input.down || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+            input.pageLeft = input.pageLeft || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+            input.pageRight = input.pageRight || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+            input.shiftDown = input.shiftDown || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+            input.shiftUp = input.shiftUp || SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+            const float dpadSteer = (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) ? 1.0f : 0.0f) -
+                                    (SDL_GetGamepadButton(pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) ? 1.0f : 0.0f);
             if (std::abs(dpadSteer) > std::abs(input.steer)) {
                 input.steer = dpadSteer;
             }
-        } else if (joystick_) {
-            input.steer = std::abs(input.steer) > 0.01f ? input.steer : axisWithDeadzone(rawJoystickAxis(joystick_, 0));
-            input.throttle = std::max(input.throttle, std::max(0.0f, rawJoystickAxis(joystick_, 5)));
-            input.brake = std::max(input.brake, std::max(0.0f, rawJoystickAxis(joystick_, 2)));
-            input.a = input.a || rawJoystickButton(joystick_, 0);
-            input.back = input.back || rawJoystickButton(joystick_, 6);
-            input.start = input.start || rawJoystickButton(joystick_, 7);
-            input.pageLeft = input.pageLeft || rawJoystickButton(joystick_, 4);
-            input.pageRight = input.pageRight || rawJoystickButton(joystick_, 5);
-            input.shiftDown = input.shiftDown || rawJoystickButton(joystick_, 4);
-            input.shiftUp = input.shiftUp || rawJoystickButton(joystick_, 5);
-            input.bHeld = input.bHeld || rawJoystickButton(joystick_, 1);
-            input.left = input.left || rawJoystickButton(joystick_, 11) || input.steer < -kMenuSteerThreshold;
-            input.right = input.right || rawJoystickButton(joystick_, 12) || input.steer > kMenuSteerThreshold;
-            input.up = input.up || rawJoystickButton(joystick_, 13);
-            input.down = input.down || rawJoystickButton(joystick_, 14);
         }
+        for (SDL_Joystick* joystick : joysticks_) {
+            const bool wheel = isWiredWheel(SDL_GetJoystickVendor(joystick), SDL_GetJoystickProduct(joystick));
+            const float rawSteer = rawJoystickAxis(joystick, 0);
+            mergeSteering(wheel ? wheelAxisWithDeadzone(rawSteer) : axisWithDeadzone(rawSteer));
+            const float throttle = rawJoystickAxis(joystick, 5);
+            const float brake = rawJoystickAxis(joystick, 2);
+            input.throttle = std::max(input.throttle, wheel ? signedPedalUnit(throttle) : std::max(0.0f, throttle));
+            input.brake = std::max(input.brake, wheel ? signedPedalUnit(brake) : std::max(0.0f, brake));
+            input.a = input.a || rawJoystickButton(joystick, 0);
+            input.back = input.back || rawJoystickButton(joystick, 6);
+            input.start = input.start || rawJoystickButton(joystick, 7);
+            input.pageLeft = input.pageLeft || rawJoystickButton(joystick, 4);
+            input.pageRight = input.pageRight || rawJoystickButton(joystick, 5);
+            input.shiftDown = input.shiftDown || rawJoystickButton(joystick, 4);
+            input.shiftUp = input.shiftUp || rawJoystickButton(joystick, 5);
+            input.bHeld = input.bHeld || rawJoystickButton(joystick, 1);
+            input.left = input.left || rawJoystickButton(joystick, 11);
+            input.right = input.right || rawJoystickButton(joystick, 12);
+            input.up = input.up || rawJoystickButton(joystick, 13);
+            input.down = input.down || rawJoystickButton(joystick, 14);
+        }
+        input.left = input.left || input.steer < -kMenuSteerThreshold;
+        input.right = input.right || input.steer > kMenuSteerThreshold;
     }
 
-    SDL_Gamepad* pad_ = nullptr;
-    SDL_Joystick* joystick_ = nullptr;
+    std::vector<SDL_Gamepad*> pads_;
+    std::vector<SDL_Joystick*> joysticks_;
     Input3D previousDigital_{};
     bool sdlFallbackReady_ = false;
     bool raylibLeftTriggerSigned_ = false;
