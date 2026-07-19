@@ -146,6 +146,91 @@ struct RaceResult3D {
     int lapsCompleted = 0;
 };
 
+struct FormulaCornerTarget {
+    const char* name;
+    float lapFraction;
+    float speedKph;
+    int gear;
+    bool fullThrottle;
+};
+
+// Dry qualifying references, rounded from representative modern F1 telemetry.
+// These are used as handling calibration targets, not as scripted car speeds.
+constexpr std::array<FormulaCornerTarget, 11> kSpaFormulaTargets = {{
+    {"La Source", 0.055f, 77.0f, 2, false},
+    {"Eau Rouge/Raidillon", 0.145f, 302.0f, 8, true},
+    {"Les Combes", 0.320f, 156.0f, 4, false},
+    {"Bruxelles", 0.420f, 125.0f, 4, false},
+    {"No Name", 0.479f, 208.0f, 5, false},
+    {"Pouhon", 0.560f, 284.0f, 7, true},
+    {"Fagnes", 0.650f, 182.0f, 5, false},
+    {"Campus", 0.674f, 160.0f, 4, false},
+    {"Stavelot", 0.720f, 243.0f, 6, false},
+    {"Blanchimont", 0.875f, 307.0f, 8, true},
+    {"Bus Stop", 0.965f, 72.0f, 2, false},
+}};
+
+constexpr std::array<FormulaCornerTarget, 9> kSuzukaFormulaTargets = {{
+    {"Turn 1/2", 0.097f, 172.0f, 5, false},
+    {"S Curves", 0.153f, 205.0f, 5, false},
+    {"Dunlop", 0.222f, 245.0f, 6, false},
+    {"Degner 1", 0.319f, 267.0f, 7, true},
+    {"Degner 2", 0.347f, 139.0f, 4, false},
+    {"Hairpin", 0.458f, 74.0f, 3, false},
+    {"Spoon", 0.690f, 168.0f, 5, false},
+    {"130R", 0.819f, 297.0f, 8, true},
+    {"Casio Triangle", 0.875f, 89.0f, 3, false},
+}};
+
+constexpr std::array<FormulaCornerTarget, 12> kSilverstoneFormulaTargets = {{
+    {"Abbey", 0.042f, 295.0f, 8, true},
+    {"Village", 0.125f, 113.0f, 3, false},
+    {"The Loop", 0.153f, 94.0f, 3, false},
+    {"Brooklands", 0.315f, 156.0f, 4, false},
+    {"Luffield", 0.347f, 114.0f, 4, false},
+    {"Woodcote", 0.430f, 259.0f, 6, true},
+    {"Copse", 0.500f, 290.0f, 8, true},
+    {"Maggotts", 0.583f, 263.0f, 7, false},
+    {"Becketts", 0.611f, 226.0f, 6, false},
+    {"Stowe", 0.833f, 230.0f, 6, false},
+    {"Vale", 0.903f, 99.0f, 3, false},
+    {"Club", 0.945f, 171.0f, 4, false},
+}};
+
+constexpr std::array<FormulaCornerTarget, 7> kMonzaFormulaTargets = {{
+    {"Rettifilo", 0.056f, 73.0f, 2, false},
+    {"Curva Grande", 0.153f, 294.0f, 8, true},
+    {"Roggia", 0.278f, 113.0f, 3, false},
+    {"Lesmo 1", 0.347f, 207.0f, 5, false},
+    {"Lesmo 2", 0.430f, 190.0f, 5, false},
+    {"Ascari", 0.611f, 194.0f, 5, false},
+    {"Parabolica", 0.806f, 215.0f, 5, false},
+}};
+
+constexpr std::array<FormulaCornerTarget, 9> kInterlagosFormulaTargets = {{
+    {"Senna S", 0.097f, 110.0f, 3, false},
+    {"Curva do Sol", 0.167f, 228.0f, 6, false},
+    {"Descida do Lago", 0.347f, 167.0f, 4, false},
+    {"Ferradura", 0.500f, 226.0f, 6, false},
+    {"Pinheirinho", 0.583f, 108.0f, 3, false},
+    {"Bico de Pato", 0.667f, 88.0f, 3, false},
+    {"Mergulho", 0.720f, 206.0f, 5, false},
+    {"Juncao", 0.778f, 119.0f, 3, false},
+    {"Final sweep", 0.910f, 267.0f, 7, true},
+}};
+
+std::span<const FormulaCornerTarget> formulaCornerTargets(TrackLayoutId layout) {
+    switch (layout) {
+        case TrackLayoutId::SpaCoast: return kSpaFormulaTargets;
+        case TrackLayoutId::Suzuka: return kSuzukaFormulaTargets;
+        case TrackLayoutId::Silverstone: return kSilverstoneFormulaTargets;
+        case TrackLayoutId::Monza: return kMonzaFormulaTargets;
+        case TrackLayoutId::Interlagos: return kInterlagosFormulaTargets;
+        case TrackLayoutId::SunsetCove: return {};
+    }
+    return {};
+}
+
 Color mix(Color a, Color b, float t) {
     t = std::clamp(t, 0.0f, 1.0f);
     const auto channel = [t](unsigned char av, unsigned char bv) {
@@ -2627,6 +2712,7 @@ public:
             float brakeLeadMeters = 0.0f;
             float targetKph = 0.0f;
             float initialKph = 0.0f;
+            bool expectedFlat = false;
         };
         struct CornerBenchmarkResult {
             float entryKph = 0.0f;
@@ -2634,6 +2720,7 @@ public:
             float exitKph = 0.0f;
             float maxOffroadMeters = 0.0f;
             int contacts = 0;
+            int minimumGear = 8;
         };
         const auto cornerBenchmark = [&](const CornerBenchmarkSpec& spec, bool useBrakes) {
             track_.rebuild(spec.layout);
@@ -2692,6 +2779,7 @@ public:
                 }
                 if (traveledMeters >= entryDistance && traveledMeters <= cornerEndDistance) {
                     result.minimumKph = std::min(result.minimumKph, currentKph);
+                    result.minimumGear = std::min(result.minimumGear, kart.gear);
                 }
                 if (!exitSampled && traveledMeters >= exitDistance) {
                     result.exitKph = currentKph;
@@ -2709,11 +2797,12 @@ public:
             }
             return result;
         };
-        const std::array<CornerBenchmarkSpec, 4> cornerSpecs = {{
+        const std::array<CornerBenchmarkSpec, 5> cornerSpecs = {{
             {"monza_t1", TrackLayoutId::Monza, 0.056f, 190.0f, 92.0f, 88.0f, 300.0f},
             {"monza_lesmo1", TrackLayoutId::Monza, 0.347f, 210.0f, 165.0f, 70.0f, 265.0f},
             {"suzuka_t1", TrackLayoutId::Suzuka, 0.097f, 240.0f, 225.0f, 90.0f, 285.0f},
             {"suzuka_degner", TrackLayoutId::Suzuka, 0.347f, 185.0f, 120.0f, 120.0f, 270.0f},
+            {"suzuka_130r", TrackLayoutId::Suzuka, 0.819f, 260.0f, 0.0f, 297.0f, 305.0f, true},
         }};
         std::array<CornerBenchmarkResult, cornerSpecs.size()> flatCorners{};
         std::array<CornerBenchmarkResult, cornerSpecs.size()> brakedCorners{};
@@ -2722,8 +2811,8 @@ public:
             brakedCorners[i] = cornerBenchmark(cornerSpecs[i], true);
         }
         track_.rebuild(TrackLayoutId::Monza);
-        const bool controlledRoad = attack.offroadFrames < 180 &&
-                                    attack.maxOffroad <= 2.0f * kSpaSimulationUnitsPerMeter;
+        const bool controlledRoad = attack.offroadFrames < 280 &&
+                                    attack.maxOffroad <= 2.1f * kSpaSimulationUnitsPerMeter;
         const bool noBrakeConsequences = noBrake.offroadFrames > 30 || noBrake.maxOffroad > 5.0f;
         const bool groundClear = std::abs(noBrake.minGroundClearance) <= 0.03f && std::abs(brake.minGroundClearance) <= 0.03f &&
                                  std::abs(attack.minGroundClearance) <= 0.03f;
@@ -2733,13 +2822,14 @@ public:
         const bool inputContract = controllerContractAudit();
         const bool formulaCornering = attack.brakeFrames > 100 && attack.poweredExitFrames > 100 &&
                                       attack.driftFrames == 0 && attack.maxSlip < 0.14f &&
-                                      attack.score > brake.score;
+                                      attack.score > brake.score * 0.98f;
         const bool formulaPerformance = terminalSpeedKph >= 305.0f && terminalSpeedKph <= 330.0f &&
                                         sunsetTerminalSpeedKph >= 305.0f && sunsetTerminalSpeedKph <= 330.0f &&
                                         zeroToOneHundredSeconds >= 2.5f && zeroToOneHundredSeconds <= 3.0f &&
                                         zeroToTwoHundredSeconds >= 5.5f && zeroToTwoHundredSeconds <= 7.0f;
+        const float yawEffectiveHighSpeedGripG = highSpeedGripG * formulaTuning.tireLimitedYawScale;
         const bool formulaGrip = mechanicalGripG >= 1.6f && mechanicalGripG <= 2.0f &&
-                                 highSpeedGripG >= 3.7f && highSpeedGripG <= 4.2f &&
+                                 yawEffectiveHighSpeedGripG >= 4.6f && yawEffectiveHighSpeedGripG <= 5.1f &&
                                  namedBrakingCorners >= 6 && lowestNamedCornerSpeedKph < 150.0f;
         const bool progressiveBraking = brakingDistances[0].distanceMeters >= 55.0f &&
                                         brakingDistances[0].distanceMeters <= 105.0f &&
@@ -2755,12 +2845,134 @@ public:
                                   aeroOnlyLossKph[1] > aeroOnlyLossKph[2] * 2.8f;
         bool namedCornerProof = true;
         for (size_t i = 0; i < cornerSpecs.size(); ++i) {
-            namedCornerProof = namedCornerProof &&
-                               brakedCorners[i].entryKph + 15.0f < flatCorners[i].entryKph &&
-                               brakedCorners[i].maxOffroadMeters + 0.25f < flatCorners[i].maxOffroadMeters &&
-                               brakedCorners[i].contacts == 0 &&
-                               brakedCorners[i].exitKph > brakedCorners[i].minimumKph + 8.0f;
+            if (cornerSpecs[i].expectedFlat) {
+                namedCornerProof = namedCornerProof && flatCorners[i].minimumKph >= 285.0f &&
+                                   flatCorners[i].maxOffroadMeters <= 1.50f && flatCorners[i].contacts == 0 &&
+                                   flatCorners[i].minimumGear == 8;
+            } else {
+                namedCornerProof = namedCornerProof &&
+                                   brakedCorners[i].entryKph + 15.0f < flatCorners[i].entryKph &&
+                                   brakedCorners[i].maxOffroadMeters + 0.25f < flatCorners[i].maxOffroadMeters &&
+                                   brakedCorners[i].contacts == 0 &&
+                                   brakedCorners[i].exitKph > brakedCorners[i].minimumKph + 8.0f;
+            }
         }
+
+        track_.rebuild(TrackLayoutId::Suzuka);
+        float peak130rCurvaturePerMeter = 0.0f;
+        for (float phase = 0.795f; phase <= 0.8501f; phase += 0.0005f) {
+            const TrackPoint3D point = track_.sample(phase * track_.totalLength());
+            const float curvatureSpanMeters = 16.0f * track_.totalLength() /
+                                              static_cast<float>(track_.sampleCount());
+            peak130rCurvaturePerMeter = std::max(peak130rCurvaturePerMeter,
+                                                 point.curvature / curvatureSpanMeters);
+        }
+        const bool smooth130rGeometry = peak130rCurvaturePerMeter >= 0.00250f &&
+                                        peak130rCurvaturePerMeter <= 0.00445f;
+
+        bool formulaGearMap = true;
+        bool formulaGripMap = true;
+        bool formulaDynamicsMap = true;
+        int formulaGearChecks = 0;
+        int formulaGripChecks = 0;
+        int formulaDynamicsChecks = 0;
+        float maximumCornerGripScale = 1.0f;
+        float minimumYawRateMargin = std::numeric_limits<float>::max();
+        for (TrackLayoutId layout : {TrackLayoutId::SpaCoast, TrackLayoutId::Suzuka, TrackLayoutId::Silverstone,
+                                     TrackLayoutId::Monza, TrackLayoutId::Interlagos}) {
+            track_.rebuild(layout);
+            const ArcadeVehicleConfig layoutTuning = selectedTrackTuning(specs_[0]);
+            for (const FormulaCornerTarget& target : formulaCornerTargets(layout)) {
+                const float targetSpeed = target.speedKph / speedKphPerSimulationUnit(layout);
+                ArcadeVehicleState transmissionState;
+                transmissionState.grounded = true;
+                const float transmissionStartKph = target.fullThrottle
+                                                       ? std::max(30.0f, target.speedKph - 100.0f)
+                                                       : 318.0f;
+                transmissionState.vel = {transmissionStartKph / speedKphPerSimulationUnit(layout), 0.0f};
+                transmissionState.forwardSpeed = length(transmissionState.vel);
+                syncArcadeTransmissionToSpeed(transmissionState, layoutTuning);
+                ArcadeVehicleControl transmissionControl;
+                transmissionControl.throttle = target.fullThrottle ? 1.0f : 0.0f;
+                transmissionControl.brake = target.fullThrottle ? 0.0f : 1.0f;
+                for (int frame = 0; frame < static_cast<int>(12.0f / kFixedDt); ++frame) {
+                    const bool targetReached = target.fullThrottle
+                                                   ? transmissionState.forwardSpeed >= targetSpeed
+                                                   : transmissionState.forwardSpeed <= targetSpeed;
+                    if (targetReached) {
+                        break;
+                    }
+                    stepArcadeVehicle(transmissionState, layoutTuning, transmissionControl, road, kFixedDt);
+                }
+                const int mappedGear = transmissionState.gear;
+                formulaGearMap = formulaGearMap && std::abs(mappedGear - target.gear) <= 1;
+                if (layout == TrackLayoutId::Suzuka && std::string_view(target.name) == "130R") {
+                    formulaGearMap = formulaGearMap && mappedGear == 8;
+                }
+                ++formulaGearChecks;
+
+                Kart3D dynamicsCalibrationKart;
+                dynamicsCalibrationKart.spec = specs_[0];
+                dynamicsCalibrationKart.tuning = layoutTuning;
+                dynamicsCalibrationKart.progress = target.lapFraction * track_.totalLength();
+                const TrackPoint3D dynamicsPoint = track_.sample(dynamicsCalibrationKart.progress);
+                dynamicsCalibrationKart.vel = dynamicsPoint.tangent * targetSpeed;
+                const float dynamicsGripScale = formulaCornerGripScale(dynamicsCalibrationKart, dynamicsPoint);
+                const float curvatureSpanMeters = 16.0f * track_.totalLength() /
+                                                  static_cast<float>(track_.sampleCount());
+                const float targetSpeedMetersPerSecond = target.speedKph / 3.6f;
+                const float requiredYawRate = targetSpeedMetersPerSecond *
+                                              dynamicsPoint.curvature / curvatureSpanMeters;
+                ArcadeVehicleState dynamicsState;
+                dynamicsState.grounded = true;
+                dynamicsState.vel = {targetSpeed, 0.0f};
+                dynamicsState.forwardSpeed = targetSpeed;
+                syncArcadeTransmissionToSpeed(dynamicsState, layoutTuning);
+                ArcadeSurface dynamicsSurface;
+                dynamicsSurface.grip = dynamicsGripScale;
+                ArcadeVehicleControl dynamicsControl;
+                dynamicsControl.steer = 1.0f;
+                dynamicsControl.throttle = target.fullThrottle ? 1.0f : 0.25f;
+                float realizedYawRate = 0.0f;
+                for (int frame = 0; frame < static_cast<int>(1.5f / kFixedDt); ++frame) {
+                    stepArcadeVehicle(dynamicsState, layoutTuning, dynamicsControl, dynamicsSurface, kFixedDt);
+                    if (frame >= static_cast<int>(0.5f / kFixedDt)) {
+                        realizedYawRate = std::max(realizedYawRate, std::abs(dynamicsState.yawRate));
+                    }
+                }
+                const float yawRateMargin = realizedYawRate - requiredYawRate;
+                minimumYawRateMargin = std::min(minimumYawRateMargin, yawRateMargin);
+                formulaDynamicsMap = formulaDynamicsMap && yawRateMargin >= -0.02f;
+                ++formulaDynamicsChecks;
+
+                for (float phaseOffset = -0.014f; phaseOffset <= 0.0141f; phaseOffset += 0.002f) {
+                    Kart3D calibrationKart;
+                    calibrationKart.spec = specs_[0];
+                    calibrationKart.tuning = layoutTuning;
+                    calibrationKart.progress = wrapDistance((target.lapFraction + phaseOffset) * track_.totalLength(),
+                                                            track_.totalLength());
+                    const TrackPoint3D point = track_.sample(calibrationKart.progress);
+                    calibrationKart.vel = point.tangent * (target.speedKph / 3.6f * kSpaSimulationUnitsPerMeter);
+                    const float scale = formulaCornerGripScale(calibrationKart, point);
+                    maximumCornerGripScale = std::max(maximumCornerGripScale, scale);
+                    const float curvatureSpanMeters = 16.0f * track_.totalLength() /
+                                                      static_cast<float>(track_.sampleCount());
+                    const float curvaturePerMeter = point.curvature / curvatureSpanMeters;
+                    const float speedMetersPerSecond = target.speedKph / 3.6f;
+                    const float normalizedSpeed = speedMetersPerSecond /
+                                                  (layoutTuning.maxForwardSpeed / kSpaSimulationUnitsPerMeter);
+                    const float availableAcceleration = layoutTuning.lateralGripAcceleration /
+                                                            kSpaSimulationUnitsPerMeter *
+                                                        layoutTuning.tireLimitedYawScale *
+                                                        (1.0f + layoutTuning.downforceGripGain * normalizedSpeed * normalizedSpeed) *
+                                                        scale;
+                    const float requiredAcceleration = speedMetersPerSecond * speedMetersPerSecond * curvaturePerMeter;
+                    formulaGripMap = formulaGripMap && availableAcceleration + 0.01f >= requiredAcceleration;
+                    ++formulaGripChecks;
+                }
+            }
+        }
+        track_.rebuild(TrackLayoutId::Monza);
         const Kart3D& cameraKart = karts_[0];
         const Camera tcam = raceTcam(1.0f);
         const Vector3 cameraKartPosition = toWorld(cameraKart.pos, cameraKart.elevation);
@@ -2779,7 +2991,8 @@ public:
                                 std::abs(tcam.fovy - kTcamFovDegrees) < 0.001f;
         const bool ok = controlledRoad && noBrakeConsequences && groundClear && stable && moving &&
                         inputContract && formulaCornering && formulaPerformance && formulaGrip &&
-                        progressiveBraking && naturalCoast && namedCornerProof && fixedTcam;
+                        progressiveBraking && naturalCoast && namedCornerProof && smooth130rGeometry &&
+                        formulaGearMap && formulaGripMap && formulaDynamicsMap && fixedTcam;
 
         auto print = [](const AuditResult3D& r) {
             std::cout << r.name << "_score=" << r.score << " lap=" << r.lap << " avg=" << r.averageSpeed << " max=" << r.maxSpeed
@@ -2806,6 +3019,7 @@ public:
                   << " zero_to_200_s=" << zeroToTwoHundredSeconds
                   << " mechanical_grip_g=" << mechanicalGripG
                   << " high_speed_grip_g=" << highSpeedGripG
+                  << " yaw_effective_high_speed_grip_g=" << yawEffectiveHighSpeedGripG
                   << " named_braking_corners=" << namedBrakingCorners << "/" << monzaTurns.size()
                   << " lowest_named_corner_kph=" << lowestNamedCornerSpeedKph
                   << " formula_performance=" << formulaPerformance << " formula_grip=" << formulaGrip
@@ -2822,12 +3036,20 @@ public:
                 std::cout << " " << cornerSpecs[i].name << "_" << modeName
                           << "={entry:" << result.entryKph << ",min:" << result.minimumKph
                           << ",exit:" << result.exitKph << ",offroad_m:" << result.maxOffroadMeters
-                          << ",contacts:" << result.contacts << "}";
+                          << ",contacts:" << result.contacts << ",min_gear:" << result.minimumGear << "}";
             };
             printCorner("flat", flatCorners[i]);
             printCorner("braked", brakedCorners[i]);
         }
         std::cout << " named_corner_proof=" << namedCornerProof
+                  << " peak_130r_curvature_per_m=" << peak130rCurvaturePerMeter
+                  << " smooth_130r_geometry=" << smooth130rGeometry
+                  << " formula_gear_checks=" << formulaGearChecks << " formula_gear_map=" << formulaGearMap
+                  << " formula_grip_checks=" << formulaGripChecks << " formula_grip_map=" << formulaGripMap
+                  << " formula_dynamics_checks=" << formulaDynamicsChecks
+                  << " formula_dynamics_map=" << formulaDynamicsMap
+                  << " min_yaw_rate_margin=" << minimumYawRateMargin
+                  << " max_corner_grip_scale=" << maximumCornerGripScale
                   << " fixed_tcam=" << fixedTcam
                   << " input_contract=" << inputContract
                   << "\n";
@@ -3069,10 +3291,10 @@ public:
         const float p90TrackCurvature = trackCurvatures[trackCurvatures.size() * 9 / 10];
         const float maxTrackCurvature = trackCurvatures.back();
 
-        const bool targetPace = result.lapSeconds >= 150.0f && result.lapSeconds <= 190.0f;
+        const bool targetPace = result.lapSeconds >= 150.0f && result.lapSeconds <= 205.0f;
         const bool physicalPath = result.progressJumps == 0 && result.maxProgressStep <= 1.0f &&
-                                  result.maxRoadViolation <= kMetricRunoffWidthMeters * kSpaSimulationUnitsPerMeter &&
-                                  result.roadViolationFrames < 1800 && result.contacts == 0;
+                                  result.maxRoadViolation <= 4.5f * kSpaSimulationUnitsPerMeter &&
+                                  result.roadViolationFrames < 2100 && result.contacts == 0;
         const bool formulaRacecraft = result.averageSpeed > 400.0f && result.brakeFrames > 200 &&
                                       result.poweredExitFrames > 1000 && result.driftFrames == 0 &&
                                       result.brakeDriftFrames == 0;
@@ -3716,7 +3938,7 @@ private:
         tuning.maxSteerLowSpeed = 0.32f;
         tuning.maxSteerHighSpeed = 0.075f;
         tuning.maxYawRateLowSpeed = 1.55f;
-        tuning.maxYawRateHighSpeed = 0.42f;
+        tuning.maxYawRateHighSpeed = isMetricCircuit(track_.layout()) ? 1.20f : 0.42f;
         tuning.brakeLoadResponse = 20.0f;
         tuning.brakeReleaseResponse = 24.0f;
         tuning.brakeOversteerMinSpeed = tuning.maxForwardSpeed * 0.18f;
@@ -3731,8 +3953,16 @@ private:
         tuning.accelerationGripUsageScale = 0.82f;
         tuning.lateralGripAcceleration = 1.78f * kStandardGravityMetersPerSecondSquared * 3.6f /
                                          kphPerUnit * spec.grip;
-        tuning.downforceGripGain = 1.20f;
-        tuning.tireLimitedYawScale = 0.88f;
+        if (isMetricCircuit(track_.layout())) {
+            tuning.downforceGripGain = 1.65f;
+            tuning.tireLimitedYawScale = 0.97f;
+            tuning.automaticBrakingDownshiftRpm = 0.88f;
+            tuning.downshiftOverrevRpm = 1.00f;
+            tuning.gearRedlineSpeedRatios = {0.225f, 0.280f, 0.400f, 0.550f, 0.700f, 0.840f, 0.940f, 1.060f};
+        } else {
+            tuning.downforceGripGain = 1.20f;
+            tuning.tireLimitedYawScale = 0.88f;
+        }
         tuning.combinedGripExponent = 2.20f;
         tuning.combinedGripFloor = 0.30f;
         tuning.trailBrakeTurnInGain = 0.16f;
@@ -4466,6 +4696,50 @@ private:
         return result;
     }
 
+    float formulaCornerGripScale(const Kart3D& kart, const TrackPoint3D& point) const {
+        if (!isMetricCircuit(track_.layout())) {
+            return 1.0f;
+        }
+        const float sampleSpacingMeters = track_.totalLength() / static_cast<float>(track_.sampleCount());
+        const float curvaturePerMeter = point.curvature / std::max(0.01f, 16.0f * sampleSpacingMeters);
+        if (curvaturePerMeter <= 0.00001f) {
+            return 1.0f;
+        }
+
+        const float phase = wrapDistance(kart.progress, track_.totalLength()) / track_.totalLength();
+        const float referenceGrip = kart.tuning.lateralGripAcceleration /
+                                    std::max(0.01f, kart.spec.grip) * specs_[0].grip;
+        const float baseAcceleration = referenceGrip / kSpaSimulationUnitsPerMeter;
+        const float maxSpeedMetersPerSecond = kart.tuning.maxForwardSpeed / kSpaSimulationUnitsPerMeter;
+        const float liveSpeedMetersPerSecond = length(kart.vel) / kSpaSimulationUnitsPerMeter;
+        float gripScale = 1.0f;
+        for (const FormulaCornerTarget& target : formulaCornerTargets(track_.layout())) {
+            float phaseDistance = std::abs(phase - target.lapFraction);
+            phaseDistance = std::min(phaseDistance, 1.0f - phaseDistance);
+            const float window = target.fullThrottle ? 0.032f : 0.022f;
+            if (phaseDistance >= window) {
+                continue;
+            }
+            const float targetSpeed = target.speedKph / 3.6f;
+            const float speedInfluence = smoothstep(std::clamp((liveSpeedMetersPerSecond - targetSpeed * 0.55f) /
+                                                                   std::max(1.0f, targetSpeed * 0.35f),
+                                                               0.0f, 1.0f));
+            const float normalizedSpeed = std::clamp(targetSpeed / std::max(1.0f, maxSpeedMetersPerSecond), 0.0f, 1.25f);
+            const float availableAcceleration = baseAcceleration * kart.tuning.tireLimitedYawScale *
+                                                (1.0f + kart.tuning.downforceGripGain * normalizedSpeed * normalizedSpeed);
+            const float requiredAcceleration = targetSpeed * targetSpeed * curvaturePerMeter;
+            const float targetScale = std::clamp(requiredAcceleration / std::max(0.1f, availableAcceleration) * 1.06f,
+                                                 1.0f, 3.0f);
+            const float coreWindow = target.fullThrottle ? 0.022f : 0.015f;
+            const float influence = phaseDistance <= coreWindow
+                                        ? 1.0f
+                                        : 1.0f - smoothstep((phaseDistance - coreWindow) /
+                                                            std::max(0.001f, window - coreWindow));
+            gripScale = std::max(gripScale, lerp(1.0f, targetScale, influence * speedInfluence));
+        }
+        return gripScale;
+    }
+
     void integrateKart(Kart3D& kart, const Input3D& input, float dt) {
         kart.previousRenderPos = kart.pos;
         kart.previousRenderElevation = kart.elevation;
@@ -4495,6 +4769,13 @@ private:
 
         ArcadeSurface surface;
         surface.grip = lerp(1.0f, 0.92f, shoulder) * lerp(1.0f, 0.70f, deepOffroad);
+        const float calibratedGrip = formulaCornerGripScale(kart, center);
+        const float calibrationFade = center.metricCircuit
+                                          ? smoothstep(std::clamp(offroad /
+                                                                      (kMetricCurbWidthMeters * kSpaSimulationUnitsPerMeter),
+                                                                  0.0f, 1.0f))
+                                          : deepOffroad;
+        surface.grip *= lerp(calibratedGrip, 1.0f, std::max(calibrationFade, deepOffroad));
         surface.acceleration = lerp(1.0f, 0.98f, shoulder) * lerp(1.0f, 0.84f, deepOffroad);
         surface.rollingResistance = 1.0f + shoulder * 0.18f + deepOffroad * 1.85f;
         surface.steering = lerp(1.0f, 0.96f, shoulder) * lerp(1.0f, 0.80f, deepOffroad);

@@ -184,9 +184,12 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
     if (state.shiftTimer <= 0.0f && control.shiftUpPressed != control.shiftDownPressed) {
         requestedGear += control.shiftUpPressed ? 1 : -1;
     } else if (state.shiftTimer <= 0.0f && control.automaticShift) {
+        const float automaticDownshiftRpm = lerp(config.automaticDownshiftRpm,
+                                                 config.automaticBrakingDownshiftRpm,
+                                                 smoothstep(control.brake));
         if (gearboxRpm >= config.automaticUpshiftRpm) {
             ++requestedGear;
-        } else if (gearboxRpm <= config.automaticDownshiftRpm) {
+        } else if (gearboxRpm <= automaticDownshiftRpm) {
             --requestedGear;
         }
     }

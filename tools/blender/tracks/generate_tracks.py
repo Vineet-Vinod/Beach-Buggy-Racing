@@ -77,9 +77,9 @@ TRACKS = {
         "cpp_layout_id": "TrackLayoutId::Suzuka",
         "start_phase": 0.0,
         "bridge_crossing": {
-            "lower_distance_m": 2272.0,
+            "lower_distance_m": 2315.7,
             "lower_section": "Degner to Hairpin",
-            "upper_distance_m": 4645.0,
+            "upper_distance_m": 4660.5,
             "upper_section": "Spoon to 130R",
             "minimum_clearance_m": 10.0,
         },

@@ -31,8 +31,8 @@ constexpr TrackControlPoint kSuzukaCenterline[] = {
     {-422.832f, -245.994f}, {-383.335f, -235.951f}, {-344.599f, -223.323f},
     {-307.444f, -206.636f}, {-271.872f, -186.742f}, {-236.607f, -166.305f},
     {-201.468f, -145.652f}, {-166.406f, -124.869f}, {-131.399f, -103.992f},
-    {-96.442f, -83.034f}, {-61.697f, -61.735f}, {-41.248f, -27.473f},
-    {-31.595f, 12.082f}, {-31.640f, 52.790f}, {-33.436f, 93.509f},
+    {-102.796f, -81.591f}, {-78.265f, -52.298f}, {-58.434f, -18.128f},
+    {-43.933f, 18.906f}, {-35.391f, 56.789f}, {-33.436f, 93.509f},
     {-35.242f, 134.228f}, {-9.876f, 158.014f}, {-1.648f, 196.537f},
     {20.834f, 229.583f}, {57.365f, 247.168f}, {97.720f, 251.954f},
     {138.479f, 252.025f}, {179.238f, 252.096f}, {219.997f, 252.168f},
@@ -53,7 +53,7 @@ constexpr TrackWidthPoint kSuzukaWidth[] = {
 
 // The Spoon-to-130R back straight is the bridge; the Degner-to-hairpin branch
 // passes beneath it. These stations match the sole plan-view intersection.
-constexpr TrackGradeSeparation kSuzukaCrossings[] = {{2272.0f, 4645.0f, 10.0f}};
+constexpr TrackGradeSeparation kSuzukaCrossings[] = {{2315.7f, 4660.5f, 10.0f}};
 
 constexpr TrackControlPoint kSilverstoneCenterline[] = {
     {69.383f, -231.257f}, {36.068f, -193.943f}, {2.221f, -157.113f},

@@ -17,8 +17,8 @@
     "unit": "meter"
   },
   "target_lap_length_m": 5807.0,
-  "measured_planar_centerline_asset_units": 5806.0359,
-  "measured_surface_centerline_asset_units": 5808.059,
+  "measured_planar_centerline_asset_units": 5805.9514,
+  "measured_surface_centerline_asset_units": 5807.9745,
   "turn_count": 18,
   "clockwise": true,
   "road_width_asset_units": {
@@ -36,8 +36,8 @@
     "file": "src/track_catalog.cpp",
     "symbol": "kSuzukaCenterline",
     "control_points": 72,
-    "normalization_scale": 1.9974466,
-    "control_sha256": "24ee2c6e2fd81eae0954f67290668bca9fce8c60dc3508919b2cd1f6869bb563",
+    "normalization_scale": 2.00745164,
+    "control_sha256": "b480bc823fb2808d5bbafe3089e4eb236444ec8263198512a7f8c5dc9759b730",
     "elevation_symbol": "kSuzukaElevation",
     "elevation_sha256": "8a260458f420258a1e8602fea06f90b55b39ebd8a83ea46f6dd2c861cf6bd503",
     "width_symbol": "kSuzukaWidth",
@@ -54,53 +54,53 @@
   },
   "measured_bounds_blender": {
     "min": [
-      -1518.119,
-      -876.809,
+      -1524.577,
+      -880.044,
       -5.0
     ],
     "max": [
-      1514.094,
-      876.521,
+      1520.533,
+      879.739,
       39.745
     ],
     "dimensions": [
-      3032.213,
-      1753.33,
+      3045.11,
+      1759.783,
       44.745
     ]
   },
   "measured_bounds_gltf_y_up": {
     "min": [
-      -1518.119,
+      -1524.577,
       -5.0,
-      -876.521
+      -879.739
     ],
     "max": [
-      1514.094,
+      1520.533,
       39.745,
-      876.809
+      880.044
     ],
     "dimensions": [
-      3032.213,
+      3045.11,
       44.745,
-      1753.33
+      1759.783
     ]
   },
   "expected_bounds_cpp_world": {
     "min": [
-      -2193.682,
+      -2203.014,
       -7.225,
-      -1266.573
+      -1271.223
     ],
     "max": [
-      2187.866,
+      2197.17,
       57.432,
-      1266.989
+      1271.664
     ],
     "dimensions": [
-      4381.548,
+      4400.184,
       64.657,
-      2533.562
+      2542.886
     ]
   },
   "runtime_alignment": {
@@ -174,8 +174,8 @@
     "start": {
       "phase": 0.0,
       "position_blender": [
-        520.844188,
-        -503.833933,
+        523.453051,
+        -506.357593,
         14.0
       ],
       "forward_blender": [
@@ -184,9 +184,9 @@
         0.0
       ],
       "position_gltf_raylib": [
-        520.844188,
+        523.453051,
         14.0,
-        503.833933
+        506.357593
       ],
       "forward_gltf_raylib": [
         0.99999848,
@@ -585,18 +585,16 @@
     "barrier_max_authored_error": 0.0
   },
   "bridge_contract": {
-    "lower_station": 401,
-    "upper_station": 820,
-    "lower_distance_m": 2272.0,
+    "lower_station": 408,
+    "upper_station": 822,
+    "lower_distance_m": 2315.7,
     "lower_section": "Degner to Hairpin",
-    "upper_distance_m": 4645.0,
+    "upper_distance_m": 4660.5,
     "upper_section": "Spoon to 130R",
     "minimum_clearance_m": 10.0,
-    "planar_separation_asset_units": 1.223825,
-    "clearance_asset_units": 15.324048,
+    "planar_separation_asset_units": 2.084476,
+    "clearance_asset_units": 14.855277,
     "embankment_open_stations": [
-      806,
-      807,
       808,
       809,
       810,
@@ -623,7 +621,9 @@
       831,
       832,
       833,
-      834
+      834,
+      835,
+      836
     ]
   },
   "required_materials": [

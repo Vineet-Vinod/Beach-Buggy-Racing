@@ -89,6 +89,7 @@ struct ArcadeVehicleConfig {
     float redlineRpm = 12000.0f;
     float automaticUpshiftRpm = 0.96f;
     float automaticDownshiftRpm = 0.50f;
+    float automaticBrakingDownshiftRpm = 0.50f;
     float downshiftOverrevRpm = 1.08f;
     float shiftDuration = 0.075f;
     float shiftRejectDuration = 0.28f;

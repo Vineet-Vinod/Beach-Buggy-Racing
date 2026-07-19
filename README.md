@@ -236,7 +236,10 @@ begins at the visible barrier, and the rendered tires stay on the road datum at
 low speed. `handling-audit-3d` checks formula acceleration, a 305-330 km/h speed
 envelope in both track unit systems, progressive stopping distances, natural
 coast-down, quadratic aero loss, trail braking, fixed T-cam geometry, and
-flat-versus-braked behavior through named Monza and Suzuka corners.
+flat-versus-braked behavior through named Monza and Suzuka corners. The
+[formula handling targets](docs/formula_handling_targets.md) map representative
+qualifying speeds and gears for all five real-world-inspired circuits,
+including a full-throttle eighth-gear regression for Suzuka's 130R.
 `perf-audit-3d` records 3D frame timings and fails if p95 misses the 60fps
 budget.
 `--diagnose-controller` prints both raylib and direct SDL controller readings,
