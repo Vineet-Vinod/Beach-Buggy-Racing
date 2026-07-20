@@ -2019,6 +2019,7 @@ public:
             audio_.initialize();
         }
         buildParticleTexture();
+        loadGaragePreviewTextures();
         buildTrackRenderer();
         resetRace();
     }
@@ -2034,6 +2035,18 @@ public:
             if (IsTextureValid(particleTexture_)) {
                 UnloadTexture(particleTexture_);
                 particleTexture_ = {};
+            }
+            for (Texture2D& texture : carPreviewTextures_) {
+                if (IsTextureValid(texture)) {
+                    UnloadTexture(texture);
+                    texture = {};
+                }
+            }
+            for (Texture2D& texture : driverPreviewTextures_) {
+                if (IsTextureValid(texture)) {
+                    UnloadTexture(texture);
+                    texture = {};
+                }
             }
             renderer_.shutdown();
         }
@@ -2158,18 +2171,21 @@ public:
         renderer_.setLighting(lighting);
         BeginMode3D(camera_);
         rlDisableBackfaceCulling();
-        const bool authoredTrackDrawn = renderer_.drawAuthoredTrack(static_cast<size_t>(track_.layout()));
-        if (!authoredTrackDrawn) {
+        const bool drawCircuitWorld = mode_ != Mode::Garage;
+        const bool authoredTrackDrawn = drawCircuitWorld &&
+                                        renderer_.drawAuthoredTrack(static_cast<size_t>(track_.layout()));
+        if (drawCircuitWorld && !authoredTrackDrawn) {
             drawEnvironment();
         }
         rlEnableBackfaceCulling();
-        if (!authoredTrackDrawn) {
+        if (drawCircuitWorld && !authoredTrackDrawn) {
             drawTrack();
             drawProps();
         }
         drawParticles();
         drawKarts();
         EndMode3D();
+        drawGaragePreviewArtwork();
         // Keep the dense world pass from sharing a near-capacity rlgl batch
         // with the menu/HUD primitives that must remain complete and crisp.
         rlDrawRenderBatchActive();
@@ -3794,6 +3810,35 @@ private:
         SetTextureFilter(particleTexture_, TEXTURE_FILTER_BILINEAR);
     }
 
+    void loadGaragePreviewTextures() {
+        static constexpr std::array<const char*, 4> kCarPreviewPaths = {
+            "assets_src/vehicles/tidebreaker/tidebreaker_preview.png",
+            "assets_src/vehicles/reefrunner/reefrunner_preview.png",
+            "assets_src/vehicles/sunskipper/sunskipper_preview.png",
+            "assets_src/vehicles/boardwalk/boardwalk_preview.png",
+        };
+        static constexpr std::array<const char*, 6> kDriverPreviewPaths = {
+            "assets_src/drivers/imani_reef/imani_reef_preview.png",
+            "assets_src/drivers/dax_calder/dax_calder_preview.png",
+            "assets_src/drivers/marina_quill/marina_quill_preview.png",
+            "assets_src/drivers/niko_brass/niko_brass_preview.png",
+            "assets_src/drivers/sol_vega/sol_vega_preview.png",
+            "assets_src/drivers/bea_torque/bea_torque_preview.png",
+        };
+        for (size_t i = 0; i < kCarPreviewPaths.size(); ++i) {
+            carPreviewTextures_[i] = LoadTexture(kCarPreviewPaths[i]);
+            if (IsTextureValid(carPreviewTextures_[i])) {
+                SetTextureFilter(carPreviewTextures_[i], TEXTURE_FILTER_BILINEAR);
+            }
+        }
+        for (size_t i = 0; i < kDriverPreviewPaths.size(); ++i) {
+            driverPreviewTextures_[i] = LoadTexture(kDriverPreviewPaths[i]);
+            if (IsTextureValid(driverPreviewTextures_[i])) {
+                SetTextureFilter(driverPreviewTextures_[i], TEXTURE_FILTER_BILINEAR);
+            }
+        }
+    }
+
     std::vector<ArcadeRacerInput> currentRaceInputs() const {
         std::vector<ArcadeRacerInput> inputs(static_cast<size_t>(activeKartCount()));
         for (int i = 0; i < activeKartCount(); ++i) {
@@ -4032,10 +4077,17 @@ private:
     void updateGarageCamera(float dt) {
         (void)dt;
         const TrackPoint3D start = track_.sample(track_.startProgress() + 52.0f);
+        const KartSpec3D& previewSpec = specs_[static_cast<size_t>(selectedCar_)];
         const float orbit = std::sin(garageSpin_ * 0.32f) * 8.0f;
-        camera_.position = toWorld(start.pos - start.tangent * 72.0f + start.normal * (18.0f + orbit),
-                                   bankedElevation(start, 18.0f) + 27.0f);
-        camera_.target = toWorld(start.pos + start.tangent * 4.0f, bankedElevation(start, 0.0f) + 8.0f);
+        const float cameraDistance = std::max(120.0f, previewSpec.length * 1.90f);
+        const float cameraSide = std::max(18.0f, previewSpec.width * 0.55f);
+        const float cameraHeight = std::max(30.0f, previewSpec.height * 1.70f);
+        const float targetHeight = std::max(10.0f, previewSpec.height * 0.90f);
+        camera_.position = toWorld(start.pos - start.tangent * cameraDistance +
+                                       start.normal * (cameraSide + orbit),
+                                   bankedElevation(start, cameraSide) + cameraHeight);
+        camera_.target = toWorld(start.pos + start.tangent * 4.0f,
+                                 bankedElevation(start, 0.0f) + targetHeight);
         camera_.up = {0.0f, 1.0f, 0.0f};
         camera_.fovy = 44.0f;
         camera_.projection = CAMERA_PERSPECTIVE;
@@ -5712,6 +5764,13 @@ private:
 
     void drawKarts() {
         if (mode_ == Mode::Garage) {
+            const bool hasDriverArtwork = selectionStage_ == harbor::ui::SelectionStage::Driver &&
+                                          IsTextureValid(driverPreviewTextures_[static_cast<size_t>(selectedRacer_)]);
+            const bool hasCarArtwork = selectionStage_ == harbor::ui::SelectionStage::Car &&
+                                       IsTextureValid(carPreviewTextures_[static_cast<size_t>(selectedCar_)]);
+            if (hasDriverArtwork || hasCarArtwork) {
+                return;
+            }
             const TrackPoint3D start = track_.sample(track_.startProgress() + 52.0f);
             Kart3D preview = karts_[0];
             preview.spec = specs_[static_cast<size_t>(selectedCar_)];
@@ -5720,6 +5779,7 @@ private:
             preview.heading = angleOf(start.tangent) + std::sin(garageSpin_ * 0.58f) * 0.10f;
             preview.vel = start.tangent * 38.0f;
             preview.progress = start.progress;
+            preview.elevation = bankedElevation(start, 0.0f);
             preview.nearest = track_.nearestIndex(preview.pos);
             preview.steerSmoothed = std::sin(garageSpin_ * 1.2f) * 0.08f;
             drawKart(preview, true);
@@ -5764,6 +5824,36 @@ private:
                 DrawSphere(toWorld(p.pos, p.elevation), size * 0.5f, c);
             }
         }
+    }
+
+    void drawGaragePreviewArtwork() {
+        if (mode_ != Mode::Garage) {
+            return;
+        }
+        const Texture2D* preview = nullptr;
+        if (selectionStage_ == harbor::ui::SelectionStage::Driver) {
+            preview = &driverPreviewTextures_[static_cast<size_t>(selectedRacer_)];
+        } else if (selectionStage_ == harbor::ui::SelectionStage::Car) {
+            preview = &carPreviewTextures_[static_cast<size_t>(selectedCar_)];
+        }
+        if (preview == nullptr || !IsTextureValid(*preview)) {
+            return;
+        }
+
+        const float width = static_cast<float>(std::max(1, GetScreenWidth()));
+        const float height = static_cast<float>(std::max(1, GetScreenHeight()));
+        const float scale = std::clamp(height / 720.0f, 0.75f, 1.75f);
+        const float margin = 24.0f * scale;
+        const float headerHeight = 98.0f * scale;
+        const float footerHeight = 62.0f * scale;
+        const float contentTop = headerHeight + 22.0f * scale;
+        const float contentBottom = height - footerHeight - 18.0f * scale;
+        const float contentHeight = std::max(260.0f * scale, contentBottom - contentTop);
+        const float contentWidth = width - margin * 2.0f;
+        const Rectangle showcase{margin, contentTop, contentWidth * 0.58f, contentHeight};
+        const Rectangle source{0.0f, 0.0f, static_cast<float>(preview->width),
+                               static_cast<float>(preview->height)};
+        DrawTexturePro(*preview, source, showcase, {0.0f, 0.0f}, 0.0f, WHITE);
     }
 
     void drawSpeedFx() {
@@ -6011,6 +6101,8 @@ private:
     ArcadeAudio audio_;
     harbor::TrackRenderer trackRenderer_;
     Texture2D particleTexture_{};
+    std::array<Texture2D, 4> carPreviewTextures_{};
+    std::array<Texture2D, 6> driverPreviewTextures_{};
     Camera camera_{};
     Camera previousCamera_{};
     Mode mode_ = Mode::Loading;
