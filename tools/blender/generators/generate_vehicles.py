@@ -222,6 +222,24 @@ def swept_wing(name, stations, z, thickness, mat, owner, *, camber=0.0):
     return obj
 
 
+def detail_torus(name, location, major_radius, minor_radius, mat, owner,
+                 rotation=(0.0, 0.0, 0.0)):
+    """A budget-friendly ring for wheel graphics viewed at game distance."""
+    bpy.ops.mesh.primitive_torus_add(major_radius=major_radius,
+                                     minor_radius=minor_radius,
+                                     major_segments=18, minor_segments=6,
+                                     location=location, rotation=rotation)
+    obj = bpy.context.object
+    obj.name = name
+    obj.data.name = f"{name}_mesh"
+    obj.data.materials.append(mat)
+    obj.parent = owner
+    obj[ASSET_PROP] = True
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = True
+    return obj
+
+
 def add_modern_agile_body(body, mats):
     """Original compact formula body influenced by current rule-era proportions."""
     # A broad floor lip and central keel keep the body visually planted while
@@ -575,12 +593,16 @@ def build_vehicle(slug: str):
                      radius * 0.50, 0.025, mats["carbon"], pivot,
                      rotation=(0, math.pi / 2, 0), vertices=32,
                      bevel=0.006)
-            torus(f"{name}_aqua_ring", (outer_face + side * 0.014, 0, 0),
-                  radius * 0.46, radius * 0.020, mats["accent"], pivot,
-                  rotation=(0, math.pi / 2, 0))
-            torus(f"{name}_sidewall_mark", (outer_face + side * 0.018, 0, 0),
-                  radius * 0.83, radius * 0.012, mats["detail"], pivot,
-                  rotation=(0, math.pi / 2, 0))
+            detail_torus(f"{name}_aqua_ring",
+                         (outer_face + side * 0.014, 0, 0),
+                         radius * 0.46, radius * 0.020,
+                         mats["accent"], pivot,
+                         rotation=(0, math.pi / 2, 0))
+            detail_torus(f"{name}_sidewall_mark",
+                         (outer_face + side * 0.018, 0, 0),
+                         radius * 0.83, radius * 0.012,
+                         mats["detail"], pivot,
+                         rotation=(0, math.pi / 2, 0))
         cylinder(f"{name}_center_lock", (side * width * 0.55, 0, 0),
                  radius * 0.12, width * 0.08, mats["accent"], pivot,
                  rotation=(0, math.pi / 2, 0), vertices=16, bevel=0.008)

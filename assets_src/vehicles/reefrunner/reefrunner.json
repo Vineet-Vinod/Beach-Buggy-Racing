@@ -26,8 +26,8 @@
   },
   "runtime_budget": {
     "mesh_objects": 123,
-    "vertices": 14680,
-    "triangles": 28920
+    "vertices": 13304,
+    "triangles": 26168
   },
   "verification": {
     "status": "passed",
