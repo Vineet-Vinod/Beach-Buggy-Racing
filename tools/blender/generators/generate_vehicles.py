@@ -398,21 +398,56 @@ def add_modern_agile_wings(body, mats):
             (side * 0.17, 2.06, 0.84), 0.021, mats["carbon"], body)
 
 
-def add_suspension(body, positions, mats):
+def add_suspension(body, positions, mats, style):
     """Expose double wishbones and push rods at all four corners."""
     for corner, (x, y, z) in positions.items():
         side = math.copysign(1.0, x)
         axle = "front" if "F" in corner else "rear"
         chassis_y = y + (0.22 if axle == "front" else -0.20)
+        wheel_width = 0.30 if axle == "front" else 0.38
+        upright_x = x - side * (wheel_width * 0.5 + 0.015)
+        if style == "agile" and axle == "front":
+            # These points sit just inside the curved nose surface. The old
+            # generic X=0.28 pickups floated outside this car's slender nose.
+            pickups = ((chassis_y - 0.24, 0.085, 0.075),
+                       (chassis_y + 0.24, 0.120, 0.130))
+            lower_chassis_z, upper_chassis_z = 0.29, 0.40
+            pushrod_chassis = (side * 0.06, chassis_y + 0.04, 0.45)
+        elif style == "agile":
+            # Rear arms attach to the sidepod/gearbox shoulder, then converge
+            # onto the narrow tail for an unmistakably connected structure.
+            pickups = ((chassis_y - 0.24, 0.290, 0.200),
+                       (chassis_y + 0.24, 0.100, 0.100))
+            lower_chassis_z, upper_chassis_z = 0.24, 0.48
+            pushrod_chassis = (side * 0.18, chassis_y - 0.08, 0.59)
+        else:
+            pickups = ((chassis_y - 0.24, 0.280, 0.280),
+                       (chassis_y + 0.24, 0.280, 0.280))
+            lower_chassis_z, upper_chassis_z = 0.24, 0.48
+            pushrod_chassis = (side * 0.22, chassis_y, 0.60)
         for layer, hub_z, chassis_z in (("lower", z - 0.12, 0.24),
                                        ("upper", z + 0.13, 0.48)):
-            for offset in (-0.24, 0.24):
-                bar(f"{corner}_{layer}_{offset:+}",
-                    (side * 0.28, chassis_y + offset, chassis_z),
-                    (x - side * 0.08, y, hub_z), 0.018,
+            if style == "agile":
+                chassis_z = (lower_chassis_z if layer == "lower"
+                             else upper_chassis_z)
+            x_index = 1 if layer == "lower" else 2
+            for pickup_index, pickup in enumerate(pickups):
+                pickup_y, pickup_x = pickup[0], pickup[x_index]
+                chassis_point = (side * pickup_x, pickup_y, chassis_z)
+                bar(f"{corner}_{layer}_{pickup_index}",
+                    chassis_point, (upright_x, y, hub_z), 0.018,
                     mats["carbon"], body)
-        bar(f"{corner}_pushrod", (side * 0.22, chassis_y, 0.60),
-            (x - side * 0.08, y, z + 0.10), 0.014, mats["metal"], body)
+                if style == "agile":
+                    cylinder(f"{corner}_{layer}_pickup_{pickup_index}",
+                             chassis_point, 0.030, 0.050,
+                             mats["metal"], body,
+                             rotation=(0, math.pi / 2, 0),
+                             vertices=8, bevel=0.0)
+        if style == "agile":
+            bar(f"{corner}_upright", (upright_x, y, z - 0.15),
+                (upright_x, y, z + 0.16), 0.024, mats["metal"], body)
+        bar(f"{corner}_pushrod", pushrod_chassis,
+            (upright_x, y, z + 0.10), 0.014, mats["metal"], body)
 
 
 def add_wings(body, style, mats):
@@ -606,7 +641,7 @@ def build_vehicle(slug: str):
         cylinder(f"{name}_center_lock", (side * width * 0.55, 0, 0),
                  radius * 0.12, width * 0.08, mats["accent"], pivot,
                  rotation=(0, math.pi / 2, 0), vertices=16, bevel=0.008)
-    add_suspension(body, positions, mats)
+    add_suspension(body, positions, mats, style)
 
     torus("steering_wheel", (0, 0, 0), 0.145, 0.022,
           mats["carbon"], steering, rotation=(math.radians(68), 0, 0))

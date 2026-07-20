@@ -25,9 +25,9 @@
     ]
   },
   "runtime_budget": {
-    "mesh_objects": 123,
-    "vertices": 13304,
-    "triangles": 26168
+    "mesh_objects": 143,
+    "vertices": 13944,
+    "triangles": 27368
   },
   "verification": {
     "status": "passed",
@@ -47,7 +47,7 @@
       "turn_right": 27
     },
     "skin_count": 1,
-    "exported_meshes": 123,
+    "exported_meshes": 143,
     "dimension_error_percent": {
       "width_x": 0.26,
       "length_y": 1.02,
