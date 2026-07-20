@@ -99,20 +99,15 @@ float authoredRoadSurfaceLift(TrackLayoutId layout) {
                : kTrackSurfaceLift;
 }
 
-constexpr std::array<const char*, 6> kDriverBackstories = {
-    "A fearless reef courier whose calm focus holds up when the pack gets crowded.",
-    "A sharp crew chief who can hear a missed shift before the driver feels it.",
-    "A coastal sprint specialist who turns late braking into clean overtakes.",
-    "A precise rally navigator with an instinct for changing grip and elevation.",
-    "A bold open-face racer who attacks every apex with measured confidence.",
-    "A dockside engineer who builds strong cars and drives them even harder.",
-};
+constexpr const char* kStandardDriverBackstory =
+    "One neutral, fully equipped racing driver shared by every Formula car.";
 
-constexpr std::array<const char*, 4> kCarBackstories = {
-    "The aqua-and-orange works livery for the Formula Buggy spec chassis.",
-    "A blue-and-yellow livery on the same Formula Buggy spec chassis.",
-    "The orange sunset livery for the shared Formula Buggy spec package.",
-    "A graphite-and-coral livery on the shared Formula Buggy spec package.",
+constexpr std::array<const char*, 5> kCarBackstories = {
+    "Marc uses a graphite, silver and aqua treatment on the shared Formula chassis.",
+    "Fiery pairs deep red bodywork with cream and warm gold details.",
+    "MacL combines papaya orange, black bodywork and electric blue accents.",
+    "RB layers red and yellow speed lines over a dark navy base.",
+    "Dash uses a clean white and cobalt field edged with restrained red details.",
 };
 
 struct MapSpec3D {
@@ -1102,14 +1097,13 @@ std::array<KartSpec3D, 5> makeKartSpecs() {
 }
 
 std::array<std::string, 6> makeRacers() {
-    return {"IMANI REEF", "DAX CALDER", "MARINA QUILL", "NIKO BRASS", "SOL VEGA", "BEA TORQUE"};
+    return {"STANDARD DRIVER", "RACER 02", "RACER 03",
+            "RACER 04", "RACER 05", "RACER 06"};
 }
 
 std::uint8_t racerAssetVariant(std::string_view racer) {
-    static constexpr std::array<std::string_view, 6> kNames = {
-        "IMANI REEF", "DAX CALDER", "MARINA QUILL", "NIKO BRASS", "SOL VEGA", "BEA TORQUE"};
-    const auto match = std::find(kNames.begin(), kNames.end(), racer);
-    return match == kNames.end() ? 0u : static_cast<std::uint8_t>(std::distance(kNames.begin(), match));
+    (void)racer;
+    return 0u;
 }
 
 uint32_t stableHash(std::string_view text) {
@@ -3854,13 +3848,8 @@ private:
             "assets_src/vehicles/formula_rb/formula_rb_preview.png",
             "assets_src/vehicles/formula_dash/formula_dash_preview.png",
         };
-        static constexpr std::array<const char*, 6> kDriverPreviewPaths = {
-            "assets_src/drivers/imani_reef/imani_reef_preview.png",
-            "assets_src/drivers/dax_calder/dax_calder_preview.png",
-            "assets_src/drivers/marina_quill/marina_quill_preview.png",
-            "assets_src/drivers/niko_brass/niko_brass_preview.png",
-            "assets_src/drivers/sol_vega/sol_vega_preview.png",
-            "assets_src/drivers/bea_torque/bea_torque_preview.png",
+        static constexpr std::array<const char*, 1> kDriverPreviewPaths = {
+            "assets_src/drivers/standard_driver/standard_driver_preview.png",
         };
         for (size_t i = 0; i < kCarPreviewPaths.size(); ++i) {
             carPreviewTextures_[i] = LoadTexture(kCarPreviewPaths[i]);
@@ -4006,7 +3995,7 @@ private:
                 }
                 break;
             case harbor::ui::SelectionStage::Driver:
-                wrapChoice(selectedRacer_, static_cast<int>(racers_.size()));
+                selectedRacer_ = 0;
                 break;
             case harbor::ui::SelectionStage::Car:
                 wrapChoice(selectedCar_, static_cast<int>(specs_.size()));
@@ -6020,10 +6009,6 @@ private:
         (void)fps;
         if (mode_ == Mode::Garage) {
             const KartSpec3D& spec = specs_[static_cast<size_t>(selectedCar_)];
-            static constexpr std::array<const char*, 6> kDriverRoles = {
-                "REEF COURIER", "CREW CHIEF", "COASTAL SPRINTER",
-                "RALLY NAVIGATOR", "APEX HUNTER", "RACE ENGINEER",
-            };
             harbor::ui::SelectionHudViewModel view;
             view.stage = selectionStage_;
             view.selectedMode = selectedSession_;
@@ -6062,11 +6047,11 @@ private:
                     view.itemCount = 2;
                     break;
                 case harbor::ui::SelectionStage::Driver:
-                    view.itemName = racers_[static_cast<size_t>(selectedRacer_)];
-                    view.itemSubtitle = kDriverRoles[static_cast<size_t>(selectedRacer_)];
-                    view.backstory = kDriverBackstories[static_cast<size_t>(selectedRacer_)];
-                    view.itemIndex = selectedRacer_;
-                    view.itemCount = static_cast<int>(racers_.size());
+                    view.itemName = "STANDARD DRIVER";
+                    view.itemSubtitle = "RACE SUIT / GLOVES / BOOTS / HELMET";
+                    view.backstory = kStandardDriverBackstory;
+                    view.itemIndex = 0;
+                    view.itemCount = 1;
                     break;
                 case harbor::ui::SelectionStage::Car:
                     view.itemName = spec.name;
@@ -6217,7 +6202,7 @@ private:
     harbor::TrackRenderer trackRenderer_;
     Texture2D particleTexture_{};
     std::array<Texture2D, 5> carPreviewTextures_{};
-    std::array<Texture2D, 6> driverPreviewTextures_{};
+    std::array<Texture2D, 1> driverPreviewTextures_{};
     Camera camera_{};
     Camera previousCamera_{};
     Mode mode_ = Mode::Loading;
@@ -6532,7 +6517,7 @@ int runHarborKarts3D(int argc, char** argv) {
         const arcade_render::AuthoredAssetAuditResult result = game.auditAuthoredAssets();
         cleanupRuntime();
         std::cout << "asset-audit cars=" << result.loadedCars << "/5"
-                  << " drivers=" << result.loadedDrivers << "/6"
+                  << " drivers=" << result.loadedDrivers << "/1"
                   << " tracks=" << result.loadedTracks << "/5"
                   << " dimension_checks=" << result.dimensionChecks
                   << " animation_checks=" << result.animationChecks

@@ -21,8 +21,7 @@ ASSETS = {
     "drivers": {
         "joint_count": 7,
         "triangle_limit": 12_000,
-        "slugs": ("imani_reef", "dax_calder", "marina_quill", "niko_brass",
-                  "sol_vega", "bea_torque"),
+        "slugs": ("standard_driver",),
     },
 }
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -122,6 +121,11 @@ def validate_manifest(path: Path, kind: str, slug: str, triangle_limit: int) -> 
                 f"tires do not contact the ground plane: {path}")
         require(hard_points.get("seat_anchor_blender") == [0.0, 0.12, 0.74],
                 f"formula seat anchor mismatch: {path}")
+    else:
+        require(manifest.get("display_name") == "Standard Driver",
+                f"unexpected driver identity: {path}")
+        require(manifest.get("design_style") == "standard helmeted human",
+                f"driver is not the standard helmeted design: {path}")
     return manifest
 
 
@@ -166,6 +170,12 @@ def validate_asset(root: Path, kind: str, slug: str, spec: dict) -> str:
         missing_formula_nodes = formula_nodes - node_names
         require(not missing_formula_nodes,
                 f"missing formula components {sorted(missing_formula_nodes)}: {paths['glb']}")
+    else:
+        standard_nodes = {"helmet_shell", "helmet_visor", "glove_-1",
+                          "glove_+1", "boot_-1", "boot_+1"}
+        missing_standard_nodes = standard_nodes - node_names
+        require(not missing_standard_nodes,
+                f"missing standard driver equipment {sorted(missing_standard_nodes)}: {paths['glb']}")
     return (f"{kind[:-1]:7} {slug:14} dims={manifest['measured_bounds_blender']['dimensions']} "
             f"tris={manifest['runtime_budget']['triangles']:5} "
             f"skin=1 joints={len(joints)} clips=5 preview=720x540")

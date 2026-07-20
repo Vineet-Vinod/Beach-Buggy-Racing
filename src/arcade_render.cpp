@@ -618,7 +618,7 @@ struct ArcadeRender::Impl {
     Mesh boatHull{};
     Mesh shadow{};
     std::array<std::optional<formula_buggy::assets::GlbAsset>, 5> authoredCars{};
-    std::array<std::optional<formula_buggy::assets::GlbAsset>, 6> authoredDrivers{};
+    std::array<std::optional<formula_buggy::assets::GlbAsset>, 1> authoredDrivers{};
     std::array<std::optional<formula_buggy::assets::GlbAsset>, 5> authoredTracks{};
 
     int sunDirectionLoc = -1;
@@ -652,13 +652,8 @@ struct ArcadeRender::Impl {
             "assets_src/vehicles/formula_rb/formula_rb.glb",
             "assets_src/vehicles/formula_dash/formula_dash.glb",
         };
-        static constexpr std::array<const char*, 6> kDriverPaths = {
-            "assets_src/drivers/imani_reef/imani_reef.glb",
-            "assets_src/drivers/dax_calder/dax_calder.glb",
-            "assets_src/drivers/marina_quill/marina_quill.glb",
-            "assets_src/drivers/niko_brass/niko_brass.glb",
-            "assets_src/drivers/sol_vega/sol_vega.glb",
-            "assets_src/drivers/bea_torque/bea_torque.glb",
+        static constexpr std::array<const char*, 1> kDriverPaths = {
+            "assets_src/drivers/standard_driver/standard_driver.glb",
         };
         struct TrackAssetSpec {
             const char* path;
