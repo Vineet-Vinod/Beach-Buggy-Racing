@@ -129,12 +129,11 @@ def make_standard_driver(torso, head, arm_l, arm_r, leg_l, leg_r, mats):
     # an angular chin bar. Graphics remain generic and sponsor-free.
     sphere("helmet_shell", (0, 0.005, 0.115), (0.150, 0.132, 0.178),
            mats["helmet_red"], head, 22, 14)
-    sphere("helmet_lower_shell", (0, -0.002, 0.018),
-           (0.138, 0.120, 0.122), mats["helmet_white"], head, 18, 10)
-    sphere("helmet_chin_guard", (0, -0.042, -0.008),
-           (0.125, 0.120, 0.094), mats["helmet_white"], head, 20, 12)
-    sphere("helmet_chin_lip", (0, -0.108, -0.036),
-           (0.087, 0.061, 0.040), mats["helmet_white"], head, 16, 8)
+    # One continuous lower shell replaces the former overlapping chin pieces,
+    # which read as a protruding mouth. Its forward ellipse meets the visor and
+    # tapers smoothly back toward the neck.
+    sphere("helmet_lower_shell", (0, -0.015, 0.015),
+           (0.138, 0.130, 0.122), mats["helmet_white"], head, 22, 12)
 
     # The visor and its upper reinforcement are continuous curved meshes that
     # track the crown radius from cheek to cheek.
