@@ -37,7 +37,7 @@ TRACKS = {
         "turns": 19,
         "clockwise": True,
         "palette": "highland",
-        "runtime_mirror_y": True,
+        "runtime_mirror_y": False,
         "cpp_layout_id": "TrackLayoutId::SpaCoast",
         "start_phase": 0.0,
         "cpp_simulation_units_per_asset_unit": 17.0,
@@ -55,6 +55,7 @@ TRACKS = {
         "turns": 18,
         "clockwise": True,
         "palette": "japan",
+        "runtime_mirror_y": True,
         "cpp_layout_id": "TrackLayoutId::Suzuka",
         "start_phase": 0.0,
         "bridge_crossing": {
@@ -79,6 +80,7 @@ TRACKS = {
         "turns": 18,
         "clockwise": True,
         "palette": "airfield",
+        "runtime_mirror_y": True,
         "cpp_layout_id": "TrackLayoutId::Silverstone",
         "start_phase": 0.0,
         "cpp_simulation_units_per_asset_unit": 17.0,
@@ -96,6 +98,7 @@ TRACKS = {
         "turns": 11,
         "clockwise": True,
         "palette": "parkland",
+        "runtime_mirror_y": True,
         "cpp_layout_id": "TrackLayoutId::Monza",
         "start_phase": 0.0,
         "cpp_simulation_units_per_asset_unit": 17.0,
@@ -113,6 +116,7 @@ TRACKS = {
         "turns": 15,
         "clockwise": False,
         "palette": "hillside",
+        "runtime_mirror_y": True,
         "cpp_layout_id": "TrackLayoutId::Interlagos",
         "start_phase": 0.0,
         "cpp_simulation_units_per_asset_unit": 17.0,
@@ -789,6 +793,8 @@ def make_world(slug, spec):
                  sample_stations(widths, distance, target_length, spec.get("width", 13.0)))
         # glTF Y-up conversion maps Blender (x, y, z) to (x, z, -y).
         # Negating runtime Y here therefore makes raylib GLB Z equal C++ track Y.
+        # runtime_mirror_y corrects the handedness reversal introduced when the
+        # Cartesian source plan is driven in raylib's Y-up XZ ground plane.
         center.append((runtime_x, -runtime_y, z))
         half_widths.append(width * 0.5)
 
@@ -1141,6 +1147,7 @@ def export_track(slug, spec, output_root):
             "asset_origin": "C++ catalog plan origin and zero-elevation datum; not the start line",
             "blender_to_gltf_matrix_row_major": [[1,0,0,0],[0,0,1,0],[0,-1,0,0],[0,0,0,1]],
             "gltf_and_raylib_axes": {"right": "+X", "up": "+Y", "course_plan_y": "+Z"},
+            "source_plan_y_reflected": bool(spec.get("runtime_mirror_y")),
             "cpp_simulation_units_per_asset_unit": spec["cpp_simulation_units_per_asset_unit"],
             "cpp_render_scale": 0.085,
             "recommended_glb_uniform_scale": round(cpp_scale, 6),

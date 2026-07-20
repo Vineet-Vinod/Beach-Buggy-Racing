@@ -23,6 +23,13 @@ from generate_tracks import (ASPHALT_MAX_LUMINANCE, ASPHALT_MIN_LUMINANCE, SAMPL
 
 REPO = Path(__file__).resolve().parents[3]
 TRACK_NAMES = ("spa", "suzuka", "silverstone", "monza", "interlagos")
+EXPECTED_SOURCE_PLAN_Y_REFLECTION = {
+    "spa": False,
+    "suzuka": True,
+    "silverstone": True,
+    "monza": True,
+    "interlagos": True,
+}
 
 
 def expected_centerline(slug: str):
@@ -286,6 +293,11 @@ def verify(root: Path, slug: str):
     if calculated_gltf_bounds != meta["measured_bounds_gltf_y_up"]:
         raise ValueError(f"{slug}: glTF bounds transform metadata is stale")
     alignment = meta["runtime_alignment"]
+    expected_reflection = EXPECTED_SOURCE_PLAN_Y_REFLECTION[slug]
+    if bool(spec.get("runtime_mirror_y")) != expected_reflection:
+        raise ValueError(f"{slug}: source-plan reflection would invert driver-visible turns")
+    if alignment["source_plan_y_reflected"] != expected_reflection:
+        raise ValueError(f"{slug}: source-plan reflection metadata is stale")
     expected_scale = spec["cpp_simulation_units_per_asset_unit"]*0.085
     if abs(alignment["recommended_glb_uniform_scale"]-expected_scale) > 1e-8:
         raise ValueError(f"{slug}: C++ world scale metadata is stale")

@@ -690,9 +690,13 @@ private:
 
     void build() {
         if (layout_ == TrackLayoutId::SpaCoast) {
-            buildFromControl(kSpaControlPoints, kSpaCourseScale, kSpaTargetLength, kSpaSimulationUnitsPerMeter, true);
+            buildFromControl(kSpaControlPoints, kSpaCourseScale, kSpaTargetLength, kSpaSimulationUnitsPerMeter);
         } else if (const TrackCatalogEntry* entry = catalogEntryForLayout(layout_)) {
-            buildFromControl(entry->centerline, 1.0f, entry->targetLengthMeters, kSpaSimulationUnitsPerMeter);
+            // TrackControlPoint uses Cartesian XY, while raylib drives on its
+            // Y-up XZ plane. Reflecting plan Y here preserves real-world turn
+            // handedness after that orientation-reversing basis conversion.
+            buildFromControl(entry->centerline, 1.0f, entry->targetLengthMeters,
+                             kSpaSimulationUnitsPerMeter, true);
         }
     }
 
@@ -842,10 +846,29 @@ bool runTrackCatalogAudit() {
         }
         const float relief = maxElevation - minElevation;
         const TrackShapeAuditResult shape = auditTrackCatalogShape(*catalog);
+        std::size_t runtimeLandmarkFailures = 0;
+        constexpr float kTurnWindow = 0.018f;
+        for (const TrackTurnExpectation& expected : trackTurnExpectations(item.catalog)) {
+            const TrackPoint3D before = track.sample(
+                (expected.lapFraction - kTurnWindow) * track.totalLength());
+            const TrackPoint3D center = track.sample(expected.lapFraction * track.totalLength());
+            const TrackPoint3D after = track.sample(
+                (expected.lapFraction + kTurnWindow) * track.totalLength());
+            const Vec2 first = center.pos - before.pos;
+            const Vec2 second = after.pos - center.pos;
+            const float simulationTurn = std::atan2(cross(first, second), dot(first, second));
+            // Mapping simulation (x, y) directly to world (x, z) reverses
+            // orientation around world-up, so the driver-visible sign is the
+            // negative of the simulation XY cross product.
+            const float visibleTurn = -simulationTurn;
+            const float expectedSign = static_cast<float>(static_cast<int>(expected.direction));
+            runtimeLandmarkFailures += visibleTurn * expectedSign < 0.08f ? 1u : 0u;
+        }
         const bool ok = finite && std::abs(track.totalLength() - catalog->targetLengthMeters) < 0.01f &&
                         std::abs(planarMeters - catalog->targetLengthMeters) < 2.0f &&
                         std::abs(relief - catalog->nominalElevationReliefMeters) < 0.10f &&
-                        minWidth >= 9.0f && maxWidth <= 17.0f && shape.ok();
+                        minWidth >= 9.0f && maxWidth <= 17.0f && shape.ok() &&
+                        runtimeLandmarkFailures == 0;
         std::cout << "track-catalog-audit name=" << catalog->displayName
                   << " target_m=" << catalog->targetLengthMeters
                   << " planar_m=" << planarMeters
@@ -856,6 +879,7 @@ bool runTrackCatalogAudit() {
                   << " aspect=" << shape.aspectRatio
                   << " intersections=" << shape.selfIntersections
                   << " landmark_failures=" << shape.landmarkFailures << "/" << shape.landmarkChecks
+                  << " visible_landmark_failures=" << runtimeLandmarkFailures << "/" << shape.landmarkChecks
                   << " finite=" << finite
                   << " ok=" << ok << "\n";
         allOk = allOk && ok;
@@ -927,8 +951,8 @@ bool runSpaGeometryAudit() {
     }
     const bool ok = lengthError <= 0.01f && std::abs(relief - kSpaElevationRelief) <= 0.03f &&
                     stationError <= 0.03f && std::abs(planarLength - kSpaTargetLength) <= 1.5f &&
-                    std::isfinite(surfaceLength) && maxGrade <= 0.25f && clearance.ok() && laSourceTurn < -0.5f &&
-                    eauRougeTurns[0] > 0.25f && eauRougeTurns[1] < -0.5f && eauRougeTurns[2] > 0.25f &&
+                    std::isfinite(surfaceLength) && maxGrade <= 0.25f && clearance.ok() && laSourceTurn > 0.5f &&
+                    eauRougeTurns[0] < -0.25f && eauRougeTurns[1] > 0.5f && eauRougeTurns[2] < -0.25f &&
                     maxEauRougeCurvature < 0.65f;
     std::cout << "spa-audit length_m=" << track.totalLength() << " planar_mesh_m=" << planarLength
               << " surface_mesh_m=" << surfaceLength << " relief_m=" << relief
