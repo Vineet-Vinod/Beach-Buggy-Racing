@@ -1089,14 +1089,15 @@ void applyAttackingAiSetup(ArcadeVehicleConfig& tuning) {
     tuning.brakeReleaseResponse *= 1.08f;
 }
 
-std::array<KartSpec3D, 4> makeKartSpecs() {
+std::array<KartSpec3D, 5> makeKartSpecs() {
     // All entries share one mechanical and collision specification. The
     // selection changes the authored appearance and livery only.
     return {{
-        {"TIDEBREAKER FX", {224, 57, 56, 255}, {255, 202, 63, 255}, {82, 205, 224, 255}, 198.0f, 258.0f, 214.0f, 1.05f, 0.98f, 34.4f, 83.6f, 18.4f, 0},
-        {"REEFRUNNER FA", {35, 151, 211, 255}, {255, 235, 90, 255}, {111, 222, 227, 255}, 198.0f, 258.0f, 214.0f, 1.05f, 0.98f, 34.4f, 83.6f, 18.4f, 1},
-        {"SUNSKIPPER F1", {240, 139, 45, 255}, {47, 61, 76, 255}, {95, 201, 217, 255}, 198.0f, 258.0f, 214.0f, 1.05f, 0.98f, 34.4f, 83.6f, 18.4f, 2},
-        {"BOARDWALK FORMULA", {61, 81, 103, 255}, {232, 67, 61, 255}, {91, 205, 217, 255}, 198.0f, 258.0f, 214.0f, 1.05f, 0.98f, 34.4f, 83.6f, 18.4f, 3},
+        {"FORMULA / MARC", {16, 20, 25, 255}, {0, 194, 169, 255}, {138, 153, 158, 255}, 198.0f, 258.0f, 214.0f, 1.05f, 0.98f, 34.4f, 83.6f, 18.4f, 0},
+        {"FORMULA / FIERY", {189, 3, 5, 255}, {255, 153, 4, 255}, {239, 230, 209, 255}, 198.0f, 258.0f, 214.0f, 1.05f, 0.98f, 34.4f, 83.6f, 18.4f, 1},
+        {"FORMULA / MACL", {255, 64, 3, 255}, {6, 77, 242, 255}, {14, 18, 25, 255}, 198.0f, 258.0f, 214.0f, 1.05f, 0.98f, 34.4f, 83.6f, 18.4f, 2},
+        {"FORMULA / RB", {3, 9, 41, 255}, {230, 2, 5, 255}, {255, 153, 3, 255}, 198.0f, 258.0f, 214.0f, 1.05f, 0.98f, 34.4f, 83.6f, 18.4f, 3},
+        {"FORMULA / DASH", {235, 237, 232, 255}, {4, 26, 138, 255}, {235, 2, 5, 255}, 198.0f, 258.0f, 214.0f, 1.05f, 0.98f, 34.4f, 83.6f, 18.4f, 4},
     }};
 }
 
@@ -3846,11 +3847,12 @@ private:
     }
 
     void loadGaragePreviewTextures() {
-        static constexpr std::array<const char*, 4> kCarPreviewPaths = {
-            "assets_src/vehicles/tidebreaker/tidebreaker_preview.png",
-            "assets_src/vehicles/reefrunner/reefrunner_preview.png",
-            "assets_src/vehicles/sunskipper/sunskipper_preview.png",
-            "assets_src/vehicles/boardwalk/boardwalk_preview.png",
+        static constexpr std::array<const char*, 5> kCarPreviewPaths = {
+            "assets_src/vehicles/formula_marc/formula_marc_preview.png",
+            "assets_src/vehicles/formula_fiery/formula_fiery_preview.png",
+            "assets_src/vehicles/formula_macl/formula_macl_preview.png",
+            "assets_src/vehicles/formula_rb/formula_rb_preview.png",
+            "assets_src/vehicles/formula_dash/formula_dash_preview.png",
         };
         static constexpr std::array<const char*, 6> kDriverPreviewPaths = {
             "assets_src/drivers/imani_reef/imani_reef_preview.png",
@@ -6205,7 +6207,7 @@ private:
     }
 
     Track3D track_;
-    std::array<KartSpec3D, 4> specs_;
+    std::array<KartSpec3D, 5> specs_;
     std::array<std::string, 6> racers_;
     std::vector<Kart3D> karts_;
     std::vector<Particle3D> particles_;
@@ -6214,7 +6216,7 @@ private:
     ArcadeAudio audio_;
     harbor::TrackRenderer trackRenderer_;
     Texture2D particleTexture_{};
-    std::array<Texture2D, 4> carPreviewTextures_{};
+    std::array<Texture2D, 5> carPreviewTextures_{};
     std::array<Texture2D, 6> driverPreviewTextures_{};
     Camera camera_{};
     Camera previousCamera_{};

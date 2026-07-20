@@ -604,7 +604,7 @@ struct ArcadeRender::Impl {
     Material material{};
     bool initialized = false;
 
-    std::array<Mesh, 4> bodies{};
+    std::array<Mesh, 5> bodies{};
     Mesh box{};
     Mesh cylinder{};
     Mesh cone{};
@@ -617,7 +617,7 @@ struct ArcadeRender::Impl {
     Mesh roof{};
     Mesh boatHull{};
     Mesh shadow{};
-    std::array<std::optional<formula_buggy::assets::GlbAsset>, 4> authoredCars{};
+    std::array<std::optional<formula_buggy::assets::GlbAsset>, 5> authoredCars{};
     std::array<std::optional<formula_buggy::assets::GlbAsset>, 6> authoredDrivers{};
     std::array<std::optional<formula_buggy::assets::GlbAsset>, 5> authoredTracks{};
 
@@ -645,11 +645,12 @@ struct ArcadeRender::Impl {
     }
 
     void loadAuthoredAssets() {
-        static constexpr std::array<const char*, 4> kCarPaths = {
-            "assets_src/vehicles/tidebreaker/tidebreaker.glb",
-            "assets_src/vehicles/reefrunner/reefrunner.glb",
-            "assets_src/vehicles/sunskipper/sunskipper.glb",
-            "assets_src/vehicles/boardwalk/boardwalk.glb",
+        static constexpr std::array<const char*, 5> kCarPaths = {
+            "assets_src/vehicles/formula_marc/formula_marc.glb",
+            "assets_src/vehicles/formula_fiery/formula_fiery.glb",
+            "assets_src/vehicles/formula_macl/formula_macl.glb",
+            "assets_src/vehicles/formula_rb/formula_rb.glb",
+            "assets_src/vehicles/formula_dash/formula_dash.glb",
         };
         static constexpr std::array<const char*, 6> kDriverPaths = {
             "assets_src/drivers/imani_reef/imani_reef.glb",
@@ -1417,6 +1418,7 @@ bool ArcadeRender::initialize() {
     impl_->bodies[1] = makeBody(BuggyBodyStyle::Rally);
     impl_->bodies[2] = makeBody(BuggyBodyStyle::Speedster);
     impl_->bodies[3] = makeBody(BuggyBodyStyle::Utility);
+    impl_->bodies[4] = makeBody(BuggyBodyStyle::Speedster);
     impl_->box = makeUnitBox();
     impl_->cylinder = makeCylinder(14);
     impl_->cone = makeCone(14);

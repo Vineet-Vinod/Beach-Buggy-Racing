@@ -78,9 +78,10 @@ them.
 - Staged driver, car, map, and 2/5/10/infinite-lap race selection
 - Formula Buggy startup screen, beach-themed selection flow, full race results, replay/home actions, and pause controls
 - 6-car racing pack with AI opponents
-- Four original Blender-authored open-wheel formula cars: Tidebreaker FX,
-  Sunskipper F1, Reefrunner FA, and Boardwalk Formula, each with front and rear
-  wings, exposed suspension and wheels, sidepods, an open cockpit, halo, and diffuser
+- One original Blender-authored open-wheel Formula model with five selectable,
+  logo-free liveries: Marc, Fiery, MacL, RB, and Dash. Every livery shares the
+  same front and rear wings, connected exposed suspension, sidepods, open
+  cockpit, halo, diffuser, dimensions, hard points, and gameplay specification
 - Six original Blender-authored drivers: Imani Reef, Dax Calder, Marina Quill,
   Niko Brass, Sol Vega, and Bea Torque
 - No powerups and no character super powers

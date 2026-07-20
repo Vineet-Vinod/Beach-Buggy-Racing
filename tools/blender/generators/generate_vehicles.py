@@ -1,4 +1,4 @@
-"""Generate four original arcade-realistic open-wheel formula cars."""
+"""Generate one Formula model in five original livery variants."""
 
 from __future__ import annotations
 
@@ -14,45 +14,91 @@ from asset_helpers import (ASSET_PROP, add_wheel, asset_objects, bar,
                            torus)
 
 
-# Dimensions are Blender X width, Y length and Z height in metres. Each car is
-# a separate original design, while the hard points stay close enough that the
-# runtime can share camera, collision and driver placement contracts.
+# Dimensions are Blender X width, Y length and Z height in metres. All five
+# entries share exactly one mesh recipe and mechanical contract; only material
+# roles and original geometric paint graphics vary.
 VEHICLES = {
-    "tidebreaker": {
-        "display_name": "Tidebreaker FX",
-        "family": "high-downforce formula",
-        "dimensions_target_m": [2.03, 4.92, 1.09],
-        "paint": (0.025, 0.52, 0.68, 1),
-        "accent": (1.00, 0.25, 0.035, 1),
-        "detail": (0.72, 0.91, 0.95, 1),
-        "aero": "high_downforce",
-    },
-    "sunskipper": {
-        "display_name": "Sunskipper F1",
-        "family": "low-drag formula",
-        "dimensions_target_m": [2.03, 4.92, 1.05],
-        "paint": (0.97, 0.62, 0.025, 1),
-        "accent": (0.035, 0.16, 0.42, 1),
-        "detail": (0.96, 0.91, 0.72, 1),
-        "aero": "low_drag",
-    },
-    "reefrunner": {
-        "display_name": "Reefrunner FA",
-        "family": "2026-inspired agile formula",
+    "formula_marc": {
+        "display_name": "Formula / Marc", "model_name": "Formula",
+        "livery_name": "Marc", "pattern": "marc",
+        "family": "Formula livery",
         "dimensions_target_m": [2.03, 4.92, 1.13],
-        "paint": (0.018, 0.045, 0.16, 1),
-        "accent": (0.02, 0.82, 0.78, 1),
-        "detail": (0.93, 0.89, 0.75, 1),
+        "paint": (0.008, 0.012, 0.018, 1),
+        "secondary": (0.54, 0.60, 0.62, 1),
+        "accent": (0.00, 0.76, 0.66, 1),
+        "detail": (0.90, 0.94, 0.92, 1),
         "aero": "agile",
+        "roles": {"nose": "secondary", "monocoque": "secondary",
+                  "sidepod": "paint", "engine": "paint",
+                  "airbox": "paint", "spear": "accent",
+                  "stripe": "accent", "fin": "secondary",
+                  "rail": "paint", "headrest": "accent",
+                  "front_upper": "secondary", "endplate": "paint",
+                  "rear_flap": "accent"},
     },
-    "boardwalk": {
-        "display_name": "Boardwalk Formula",
-        "family": "retro-modern formula",
-        "dimensions_target_m": [2.05, 4.92, 1.08],
-        "paint": (0.055, 0.48, 0.20, 1),
-        "accent": (0.98, 0.38, 0.035, 1),
-        "detail": (0.92, 0.78, 0.18, 1),
-        "aero": "retro",
+    "formula_fiery": {
+        "display_name": "Formula / Fiery", "model_name": "Formula",
+        "livery_name": "Fiery", "pattern": "fiery",
+        "family": "Formula livery", "dimensions_target_m": [2.03, 4.92, 1.13],
+        "paint": (0.74, 0.010, 0.018, 1),
+        "secondary": (0.94, 0.90, 0.82, 1),
+        "accent": (1.00, 0.60, 0.015, 1),
+        "detail": (0.11, 0.012, 0.018, 1), "aero": "agile",
+        "roles": {"nose": "paint", "monocoque": "paint",
+                  "sidepod": "paint", "engine": "secondary",
+                  "airbox": "secondary", "spear": "secondary",
+                  "stripe": "accent", "fin": "secondary",
+                  "rail": "paint", "headrest": "secondary",
+                  "front_upper": "secondary", "endplate": "paint",
+                  "rear_flap": "secondary"},
+    },
+    "formula_macl": {
+        "display_name": "Formula / MacL", "model_name": "Formula",
+        "livery_name": "MacL", "pattern": "macl",
+        "family": "Formula livery", "dimensions_target_m": [2.03, 4.92, 1.13],
+        "paint": (1.00, 0.25, 0.010, 1),
+        "secondary": (0.008, 0.012, 0.020, 1),
+        "accent": (0.025, 0.30, 0.95, 1),
+        "detail": (0.92, 0.94, 0.96, 1), "aero": "agile",
+        "roles": {"nose": "paint", "monocoque": "paint",
+                  "sidepod": "secondary", "engine": "secondary",
+                  "airbox": "paint", "spear": "accent",
+                  "stripe": "accent", "fin": "paint",
+                  "rail": "secondary", "headrest": "paint",
+                  "front_upper": "paint", "endplate": "paint",
+                  "rear_flap": "paint"},
+    },
+    "formula_rb": {
+        "display_name": "Formula / RB", "model_name": "Formula",
+        "livery_name": "RB", "pattern": "rb",
+        "family": "Formula livery", "dimensions_target_m": [2.03, 4.92, 1.13],
+        "paint": (0.010, 0.035, 0.16, 1),
+        "secondary": (0.015, 0.16, 0.58, 1),
+        "accent": (0.90, 0.008, 0.018, 1),
+        "detail": (1.00, 0.60, 0.010, 1), "aero": "agile",
+        "roles": {"nose": "paint", "monocoque": "paint",
+                  "sidepod": "paint", "engine": "paint",
+                  "airbox": "detail", "spear": "accent",
+                  "stripe": "accent", "fin": "accent",
+                  "rail": "paint", "headrest": "detail",
+                  "front_upper": "secondary", "endplate": "paint",
+                  "rear_flap": "accent"},
+    },
+    "formula_dash": {
+        "display_name": "Formula / Dash", "model_name": "Formula",
+        "livery_name": "Dash", "pattern": "dash",
+        "family": "Formula livery", "dimensions_target_m": [2.03, 4.92, 1.13],
+        "paint": (0.92, 0.93, 0.91, 1),
+        "secondary": (0.015, 0.10, 0.54, 1),
+        "accent": (0.92, 0.008, 0.020, 1),
+        "detail": (0.008, 0.025, 0.11, 1), "aero": "agile",
+        "roles": {"nose": "paint", "monocoque": "paint",
+                  "sidepod": "secondary", "engine": "paint",
+                  "airbox": "secondary", "spear": "accent",
+                  "stripe": "accent", "fin": "accent",
+                  "rail": "paint", "headrest": "secondary",
+                  "front_upper": "paint", "endplate": "secondary",
+                  "rear_flap": "paint"},
     },
 }
 
@@ -62,10 +108,12 @@ REQUIRED = ["car_root", "body", "wheel_FL", "wheel_FR", "wheel_RL",
 
 
 def common_materials(spec):
-    slug = spec["display_name"].split()[0].lower()
+    slug = spec["livery_name"].lower()
     return {
         "paint": material(f"{slug}_paint", spec["paint"], metallic=0.25,
                           roughness=0.25),
+        "secondary": material(f"{slug}_secondary", spec["secondary"],
+                              metallic=0.20, roughness=0.27),
         "accent": material(f"{slug}_accent", spec["accent"], metallic=0.12,
                            roughness=0.30),
         "detail": material(f"{slug}_detail", spec["detail"], metallic=0.18,
@@ -240,16 +288,23 @@ def detail_torus(name, location, major_radius, minor_radius, mat, owner,
     return obj
 
 
-def add_modern_agile_body(body, mats):
+def add_modern_agile_body(body, mats, spec):
     """Original compact formula body influenced by current rule-era proportions."""
+    roles = spec["roles"]
+
+    def livery_material(part, fallback="paint"):
+        return mats[roles.get(part, fallback)]
+
     # A broad floor lip and central keel keep the body visually planted while
     # the raised outer edge exposes the ground-effect tunnel exits.
     tapered_box("floor", -1.66, 1.83, 0.52, 1.27, 0.105, 0.17,
                 mats["carbon"], body, 0.016)
     tapered_box("floor_edge_left", -0.72, 1.62, 0.10, 0.14,
-                0.13, 0.23, mats["accent"], body, 0.012).location.x = -0.67
+                0.13, 0.23, livery_material("stripe", "accent"),
+                body, 0.012).location.x = -0.67
     tapered_box("floor_edge_right", -0.72, 1.62, 0.10, 0.14,
-                0.13, 0.23, mats["accent"], body, 0.012).location.x = 0.67
+                0.13, 0.23, livery_material("stripe", "accent"),
+                body, 0.012).location.x = 0.67
     cube("center_plank", (0, 0.03, 0.084), (0.17, 3.45, 0.028),
          mats["detail"], body, 0.006)
 
@@ -261,7 +316,7 @@ def add_modern_agile_body(body, mats):
         (-1.45, 0, 0.155, 0.355, 0.12),
         (-0.94, 0, 0.215, 0.445, 0.155),
         (-0.50, 0, 0.29, 0.505, 0.185),
-    ), mats["paint"], body, sides=14, bevel=0.008)
+    ), livery_material("nose"), body, sides=14, bevel=0.008)
     aero_loft("monocoque", (
         (-0.62, 0, 0.30, 0.47, 0.19),
         (-0.18, 0, 0.35, 0.50, 0.22),
@@ -269,7 +324,7 @@ def add_modern_agile_body(body, mats):
         (0.94, 0, 0.34, 0.45, 0.20),
         (1.46, 0, 0.22, 0.40, 0.15),
         (1.82, 0, 0.12, 0.36, 0.09),
-    ), mats["paint"], body, sides=14, bevel=0.006)
+    ), livery_material("monocoque"), body, sides=14, bevel=0.006)
 
     # A warm-white spear is the signature graphic; it is geometry, not a
     # borrowed sponsor mark, and remains legible at gameplay camera distance.
@@ -277,7 +332,7 @@ def add_modern_agile_body(body, mats):
         (-2.19, 0, 0.029, 0.320, 0.010),
         (-1.38, 0, 0.042, 0.466, 0.012),
         (-0.70, 0, 0.052, 0.625, 0.014),
-    ), mats["detail"], body, sides=8)
+    ), livery_material("spear", "detail"), body, sides=8)
 
     # Independent sidepod volumes pinch sharply beneath the inlets and taper
     # into a narrow coke-bottle tail, creating the modern high-waisted shape.
@@ -289,7 +344,7 @@ def add_modern_agile_body(body, mats):
             (0.74, side * 0.51, 0.24, 0.37, 0.15),
             (1.22, side * 0.40, 0.17, 0.34, 0.12),
             (1.55, side * 0.28, 0.10, 0.33, 0.08),
-        ), mats["paint"], body, sides=12, bevel=0.006)
+        ), livery_material("sidepod"), body, sides=12, bevel=0.006)
         aero_loft(f"sidepod_inlet_{side:+}", (
             (-0.58, side * 0.50, 0.22, 0.44, 0.135),
             (-0.525, side * 0.50, 0.22, 0.44, 0.135),
@@ -297,7 +352,8 @@ def add_modern_agile_body(body, mats):
         # Swept aqua shoulder blade gives the car its own graphic identity.
         bar(f"sidepod_stripe_{side:+}",
             (side * 0.63, -0.26, 0.575),
-            (side * 0.42, 1.15, 0.455), 0.026, mats["accent"], body)
+            (side * 0.42, 1.15, 0.455), 0.026,
+            livery_material("stripe", "accent"), body)
         vertical_fin(f"floor_fence_{side:+}",
                      ((-0.66, 0.18), (-0.24, 0.38), (-0.17, 0.18)),
                      0.025, mats["carbon"], body).location.x = side * 0.68
@@ -309,15 +365,15 @@ def add_modern_agile_body(body, mats):
         (0.72, 0, 0.29, 0.64, 0.24),
         (1.24, 0, 0.23, 0.56, 0.21),
         (1.72, 0, 0.12, 0.43, 0.10),
-    ), mats["paint"], body, sides=14, bevel=0.006)
+    ), livery_material("engine"), body, sides=14, bevel=0.006)
     aero_loft("airbox", (
         (0.38, 0, 0.14, 0.80, 0.13),
         (0.57, 0, 0.16, 0.84, 0.17),
         (0.83, 0, 0.11, 0.76, 0.12),
-    ), mats["accent"], body, sides=12)
+    ), livery_material("airbox", "accent"), body, sides=12)
     vertical_fin("engine_shark_fin",
                  ((0.68, 0.73), (1.64, 0.44), (1.19, 0.84)),
-                 0.035, mats["detail"], body)
+                 0.035, livery_material("fin", "detail"), body)
 
     cube("cockpit_cavity", (0, 0.03, 0.685), (0.43, 0.92, 0.19),
          mats["cockpit"], body, 0.09)
@@ -326,9 +382,10 @@ def add_modern_agile_body(body, mats):
             (-0.45, side * 0.285, 0.07, 0.675, 0.11),
             (0.05, side * 0.31, 0.075, 0.725, 0.12),
             (0.49, side * 0.27, 0.065, 0.69, 0.10),
-        ), mats["paint"], body, sides=10)
+        ), livery_material("rail"), body, sides=10)
         sphere(f"headrest_{side:+}", (side * 0.205, 0.35, 0.735),
-               (0.09, 0.20, 0.09), mats["detail"], body, 18, 10)
+               (0.09, 0.20, 0.09),
+               livery_material("headrest", "detail"), body, 18, 10)
 
     # Halo follows the safety cell but uses a satin dark finish to avoid
     # visually merging with the primary livery.
@@ -344,7 +401,7 @@ def add_modern_agile_body(body, mats):
         aero_loft(f"mirror_{side:+}", (
             (-0.35, side * 0.55, 0.065, 0.78, 0.042),
             (-0.24, side * 0.55, 0.065, 0.78, 0.042),
-        ), mats["accent"], body, sides=10)
+        ), livery_material("stripe", "accent"), body, sides=10)
 
     tapered_box("rear_diffuser", 1.43, 2.18, 0.70, 1.25,
                 0.10, 0.27, mats["carbon"], body, 0.010)
@@ -352,9 +409,68 @@ def add_modern_agile_body(body, mats):
         cube(f"diffuser_strake_{x:+}", (x, 1.89, 0.24),
              (0.022, 0.58, 0.27), mats["carbon"], body, 0.004)
 
+    add_livery_graphics(body, mats, spec)
 
-def add_modern_agile_wings(body, mats):
+
+def add_livery_graphics(body, mats, spec):
+    """Add original, logo-free paint sweeps unique to each Formula livery."""
+    pattern = spec["pattern"]
+    for side in (-1, 1):
+        if pattern == "marc":
+            # Silver body fade, black flank and a fine aqua horizon line.
+            bar(f"marc_silver_sweep_{side:+}",
+                (side * 0.67, -0.18, 0.535),
+                (side * 0.43, 0.98, 0.445), 0.050,
+                mats["secondary"], body)
+            bar(f"marc_aqua_pin_{side:+}",
+                (side * 0.66, -0.28, 0.585),
+                (side * 0.40, 1.24, 0.485), 0.014,
+                mats["accent"], body)
+        elif pattern == "fiery":
+            # Dark rising sill beneath the red body and pale engine cover.
+            bar(f"fiery_dark_sweep_{side:+}",
+                (side * 0.68, -0.30, 0.46),
+                (side * 0.39, 1.18, 0.39), 0.048,
+                mats["detail"], body)
+            bar(f"fiery_gold_pin_{side:+}",
+                (side * 0.64, -0.22, 0.555),
+                (side * 0.45, 0.88, 0.47), 0.014,
+                mats["accent"], body)
+        elif pattern == "macl":
+            # Papaya blade cuts upward through the dark sidepod field.
+            bar(f"macl_papaya_blade_{side:+}",
+                (side * 0.66, -0.24, 0.55),
+                (side * 0.42, 0.86, 0.43), 0.054,
+                mats["paint"], body)
+            bar(f"macl_blue_tick_{side:+}",
+                (side * 0.61, -0.34, 0.59),
+                (side * 0.51, 0.18, 0.53), 0.015,
+                mats["accent"], body)
+        elif pattern == "rb":
+            # Red speedline with a smaller warm highlight, no bull graphic.
+            bar(f"rb_red_sweep_{side:+}",
+                (side * 0.67, -0.24, 0.55),
+                (side * 0.40, 1.16, 0.43), 0.047,
+                mats["accent"], body)
+            bar(f"rb_gold_pin_{side:+}",
+                (side * 0.63, -0.20, 0.59),
+                (side * 0.49, 0.54, 0.52), 0.013,
+                mats["detail"], body)
+        else:
+            # White rising wave over the cobalt flank, edged in red.
+            bar(f"dash_white_wave_{side:+}",
+                (side * 0.67, -0.24, 0.50),
+                (side * 0.41, 1.02, 0.44), 0.056,
+                mats["paint"], body)
+            bar(f"dash_red_edge_{side:+}",
+                (side * 0.65, -0.22, 0.565),
+                (side * 0.45, 0.82, 0.49), 0.014,
+                mats["accent"], body)
+
+
+def add_modern_agile_wings(body, mats, spec):
     """Compact multi-element wings with an original swept planform."""
+    roles = spec["roles"]
     stations = ((-1.0, -2.50, -2.15), (-0.70, -2.47, -2.10),
                 (-0.30, -2.40, -2.07), (0.0, -2.37, -2.05),
                 (0.30, -2.40, -2.07), (0.70, -2.47, -2.10),
@@ -368,11 +484,13 @@ def add_modern_agile_wings(body, mats):
     upper_two = tuple((x * 0.78, leading + 0.17, trailing + 0.05)
                       for x, leading, trailing in upper)
     swept_wing("front_wing_upper_flap", upper_two, 0.272, 0.028,
-               mats["detail"], body, camber=0.022)
+               mats[roles.get("front_upper", "detail")], body,
+               camber=0.022)
     for side in (-1, 1):
         tapered_box(f"front_endplate_{side:+}", -2.53, -2.07,
                     0.045, 0.055, 0.11, 0.40,
-                    mats["paint"], body, 0.010).location.x = side * 0.985
+                    mats[roles.get("endplate", "paint")],
+                    body, 0.010).location.x = side * 0.985
         bar(f"front_wing_stay_{side:+}",
             (side * 0.11, -2.08, 0.32),
             (side * 0.26, -2.29, 0.18), 0.015, mats["carbon"], body)
@@ -388,11 +506,13 @@ def add_modern_agile_wings(body, mats):
     swept_wing("rear_wing_flap",
                tuple((x * 0.94, leading - 0.04, trailing - 0.06)
                      for x, leading, trailing in rear_stations),
-               1.035, 0.038, mats["detail"], body, camber=0.030)
+               1.035, 0.038, mats[roles.get("rear_flap", "detail")],
+               body, camber=0.030)
     for side in (-1, 1):
         tapered_box(f"rear_endplate_{side:+}", 1.98, 2.34,
                     0.045, 0.055, 0.72, 1.08,
-                    mats["paint"], body, 0.010).location.x = side * 0.72
+                    mats[roles.get("endplate", "paint")],
+                    body, 0.010).location.x = side * 0.72
         bar(f"rear_wing_mount_{side:+}",
             (side * 0.17, 1.67, 0.37),
             (side * 0.17, 2.06, 0.84), 0.021, mats["carbon"], body)
@@ -596,8 +716,8 @@ def build_vehicle(slug: str):
 
     style = spec["aero"]
     if style == "agile":
-        add_modern_agile_body(body, mats)
-        add_modern_agile_wings(body, mats)
+        add_modern_agile_body(body, mats, spec)
+        add_modern_agile_wings(body, mats, spec)
     else:
         add_formula_body(body, style, mats)
         add_wings(body, style, mats)
@@ -731,6 +851,9 @@ def main():
         metadata = {
             "type": "vehicle",
             "display_name": spec["display_name"],
+            "model_name": spec["model_name"],
+            "livery_name": spec["livery_name"],
+            "livery_policy": "original geometry; no logos or sponsorship marks",
             "family": spec["family"],
             "vehicle_class": "formula",
             "target_dimensions_m": {"width_x": spec["dimensions_target_m"][0],

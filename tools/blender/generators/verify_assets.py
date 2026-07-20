@@ -15,7 +15,8 @@ ASSETS = {
     "vehicles": {
         "joint_count": 9,
         "triangle_limit": 30_000,
-        "slugs": ("tidebreaker", "sunskipper", "reefrunner", "boardwalk"),
+        "slugs": ("formula_marc", "formula_fiery", "formula_macl",
+                  "formula_rb", "formula_dash"),
     },
     "drivers": {
         "joint_count": 7,
@@ -106,6 +107,10 @@ def validate_manifest(path: Path, kind: str, slug: str, triangle_limit: int) -> 
     if kind == "vehicles":
         require(manifest.get("vehicle_class") == "formula",
                 f"vehicle is not formula class: {path}")
+        require(manifest.get("model_name") == "Formula",
+                f"vehicle does not use shared Formula model name: {path}")
+        require(manifest.get("livery_name") in {"Marc", "Fiery", "MacL", "RB", "Dash"},
+                f"unexpected Formula livery name: {path}")
         width, length, height = dimensions
         require(1.90 <= width <= 2.15 and 4.70 <= length <= 5.20
                 and 0.90 <= height <= 1.20,
