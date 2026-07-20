@@ -74,31 +74,48 @@ def make_standard_driver(torso, head, arm_l, arm_r, leg_l, leg_r, mats):
             (side * 0.105, -0.123, 0.258), 0.022,
             mats["hans"], torso)
 
-    # Full-face carbon-style helmet. The curved smoke visor, narrow eyeport,
-    # deep chin section, pivot hardware and rear aero lip reproduce the modern
-    # Formula silhouette without copying a driver's personal graphics.
-    sphere("helmet_shell", (0, 0.004, 0.105), (0.150, 0.132, 0.178),
-           mats["helmet"], head, 28, 18)
-    sphere("helmet_chin_guard", (0, -0.037, 0.006),
-           (0.126, 0.116, 0.100), mats["helmet"], head, 22, 12)
-    sphere("helmet_visor", (0, -0.132, 0.113),
-           (0.126, 0.012, 0.055), mats["visor"], head, 24, 10)
-    bar("visor_reinforcement", (-0.112, -0.139, 0.161),
-        (0.112, -0.139, 0.161), 0.009, mats["visor_trim"], head)
-    cube("helmet_center_stripe", (0, 0.015, 0.273),
-         (0.038, 0.185, 0.014), mats["accent"], head, 0.006)
-    cube("helmet_rear_spoiler", (0, 0.128, 0.118),
-         (0.205, 0.035, 0.030), mats["helmet"], head, 0.008)
-    cube("helmet_chin_intake", (0, -0.151, 0.010),
-         (0.070, 0.010, 0.020), mats["visor_trim"], head, 0.004)
+    # Full-face Formula helmet based on the reference's construction: a glossy
+    # domed crown, a separate light lower shell, a broad wraparound visor and
+    # an angular chin bar. Graphics remain generic and sponsor-free.
+    sphere("helmet_shell", (0, 0.005, 0.115), (0.150, 0.132, 0.178),
+           mats["helmet_red"], head, 22, 14)
+    sphere("helmet_lower_shell", (0, -0.002, 0.018),
+           (0.138, 0.120, 0.122), mats["helmet_white"], head, 18, 10)
+    cube("helmet_chin_guard", (0, -0.112, -0.005),
+         (0.218, 0.072, 0.098), mats["helmet_white"], head, 0.022)
+    cube("helmet_chin_lip", (0, -0.153, -0.034),
+         (0.160, 0.025, 0.040), mats["helmet_white"], head, 0.010)
+
+    # A flat central pane plus angled side panes reads as one wide curved visor
+    # instead of the floating black eye mask used by the previous model.
+    front_visor = cube("helmet_visor", (0, -0.129, 0.112),
+                       (0.232, 0.012, 0.074), mats["visor"], head, 0.013)
+    front_visor.rotation_euler.x = math.radians(-3)
+    visor_strip = cube("visor_reinforcement", (0, -0.136, 0.154),
+                       (0.238, 0.010, 0.012), mats["helmet_white"], head, 0.003)
+    visor_strip.rotation_euler.x = math.radians(-3)
     for side in (-1, 1):
-        cylinder(f"helmet_hinge_{side:+}", (side * 0.143, -0.035, 0.113),
-                 0.025, 0.014, mats["accent"], head,
+        side_visor = cube(f"helmet_visor_side_{side:+}",
+                          (side * 0.126, -0.104, 0.111),
+                          (0.032, 0.082, 0.072), mats["visor"], head, 0.010)
+        side_visor.rotation_euler.z = side * math.radians(13)
+        cylinder(f"helmet_hinge_{side:+}", (side * 0.145, -0.050, 0.112),
+                 0.023, 0.014, mats["visor_trim"], head,
                  rotation=(0, math.pi / 2, 0), vertices=16, bevel=0.003)
         bar(f"helmet_cheek_line_{side:+}",
-            (side * 0.115, -0.112, 0.040),
-            (side * 0.090, -0.135, -0.040), 0.006,
-            mats["accent"], head)
+            (side * 0.118, -0.112, 0.050),
+            (side * 0.086, -0.144, -0.040), 0.006,
+            mats["helmet_blue"], head)
+    cube("helmet_center_stripe", (0, 0.020, 0.284),
+         (0.044, 0.185, 0.012), mats["helmet_white"], head, 0.005)
+    cube("helmet_crown_accent", (0.032, 0.020, 0.282),
+         (0.010, 0.180, 0.014), mats["helmet_blue"], head, 0.004)
+    cube("helmet_rear_spoiler", (0, 0.130, 0.125),
+         (0.205, 0.032, 0.026), mats["helmet_red"], head, 0.007)
+    cube("helmet_chin_intake", (0, -0.153, 0.004),
+         (0.070, 0.010, 0.016), mats["visor_trim"], head, 0.003)
+    cube("helmet_vent_bank", (0, -0.159, -0.024),
+         (0.074, 0.008, 0.012), mats["visor_trim"], head, 0.002)
 
     # Tapered sleeves, subtle elbow folds and gauntlet gloves. Hands converge
     # on the common steering-wheel hard point shared by all five cars.
@@ -179,8 +196,12 @@ def build_driver(slug: str):
                            metallic=0.38, roughness=0.34),
         "hans": material(f"{slug}_hans", (0.010, 0.012, 0.016, 1),
                          roughness=0.32),
-        "helmet": material(f"{slug}_helmet", (0.88, 0.90, 0.91, 1),
-                           metallic=0.08, roughness=0.19),
+        "helmet_red": material(f"{slug}_helmet_red", (0.72, 0.012, 0.020, 1),
+                               metallic=0.06, roughness=0.16),
+        "helmet_white": material(f"{slug}_helmet_white", (0.88, 0.90, 0.91, 1),
+                                 metallic=0.05, roughness=0.20),
+        "helmet_blue": material(f"{slug}_helmet_blue", (0.015, 0.24, 0.50, 1),
+                                metallic=0.08, roughness=0.22),
         "visor": material(f"{slug}_visor", (0.006, 0.012, 0.020, 1),
                           metallic=0.45, roughness=0.08),
         "visor_trim": material(f"{slug}_visor_trim", (0.025, 0.028, 0.032, 1),
