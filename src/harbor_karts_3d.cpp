@@ -6531,7 +6531,7 @@ int runHarborKarts3D(int argc, char** argv) {
     if (assetAudit) {
         const arcade_render::AuthoredAssetAuditResult result = game.auditAuthoredAssets();
         cleanupRuntime();
-        std::cout << "asset-audit cars=" << result.loadedCars << "/4"
+        std::cout << "asset-audit cars=" << result.loadedCars << "/5"
                   << " drivers=" << result.loadedDrivers << "/6"
                   << " tracks=" << result.loadedTracks << "/5"
                   << " dimension_checks=" << result.dimensionChecks

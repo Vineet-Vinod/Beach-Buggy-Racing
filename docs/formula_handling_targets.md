@@ -8,7 +8,7 @@ stronger contract.
 
 ## Grip model
 
-The Tidebreaker baseline is 1.87 g of mechanical lateral grip. At maximum
+The Formula baseline is 1.87 g of mechanical lateral grip. At maximum
 speed, its downforce raises the yaw-effective envelope to 4.80 g. The imported
 track outlines are deliberately compact and some fast bends are consequently
 tighter than their real counterparts, so the simulation applies a smooth,
