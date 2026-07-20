@@ -161,6 +161,10 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
     state.launchCooldown = std::max(0.0f, state.launchCooldown - dt);
     state.shiftTimer = std::max(0.0f, state.shiftTimer - dt);
     state.shiftRejectTimer = std::max(0.0f, state.shiftRejectTimer - dt);
+    state.manualShiftBufferTimer = std::max(0.0f, state.manualShiftBufferTimer - dt);
+    if (state.manualShiftBufferTimer <= 0.0f) {
+        state.queuedManualShifts = 0;
+    }
     state.landingImpulse = std::max(0.0f, state.landingImpulse - config.landingImpulseDecay * dt);
     state.boostTimer = std::max(0.0f, state.boostTimer - dt);
     if (state.boostTimer <= 0.0f) {
@@ -183,16 +187,22 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
     int requestedGear = state.gear;
     if (!control.automaticShift && control.shiftUpPressed != control.shiftDownPressed) {
         const int shiftRequest = control.shiftUpPressed ? 1 : -1;
-        state.queuedManualShifts = std::clamp(state.queuedManualShifts + shiftRequest, -7, 7);
+        state.queuedManualShifts = state.queuedManualShifts * shiftRequest < 0
+                                       ? shiftRequest
+                                       : std::clamp(state.queuedManualShifts + shiftRequest, -7, 7);
+        state.manualShiftBufferTimer = config.manualShiftBufferDuration;
     }
     if (control.automaticShift) {
         state.queuedManualShifts = 0;
+        state.manualShiftBufferTimer = 0.0f;
     }
     if (state.gear <= 1 && state.queuedManualShifts < 0) {
         state.queuedManualShifts = 0;
+        state.manualShiftBufferTimer = 0.0f;
     } else if (state.gear >= static_cast<int>(config.gearRedlineSpeedRatios.size()) &&
                state.queuedManualShifts > 0) {
         state.queuedManualShifts = 0;
+        state.manualShiftBufferTimer = 0.0f;
     }
     if (state.shiftTimer <= 0.0f && !control.automaticShift && state.queuedManualShifts != 0) {
         requestedGear += state.queuedManualShifts > 0 ? 1 : -1;
@@ -220,6 +230,9 @@ ArcadeVehicleTelemetry stepSingle(ArcadeVehicleState& state,
             gearboxRpm = requestedRpm;
             if (!control.automaticShift && state.queuedManualShifts != 0) {
                 state.queuedManualShifts += state.queuedManualShifts > 0 ? -1 : 1;
+                if (state.queuedManualShifts == 0) {
+                    state.manualShiftBufferTimer = 0.0f;
+                }
             }
         }
     }
@@ -631,6 +644,7 @@ void syncArcadeTransmissionToSpeed(ArcadeVehicleState& state, const ArcadeVehicl
     state.shiftTimer = 0.0f;
     state.shiftRejectTimer = 0.0f;
     state.queuedManualShifts = 0;
+    state.manualShiftBufferTimer = 0.0f;
 }
 
 ArcadeVehicleTelemetry stepArcadeVehicle(ArcadeVehicleState& state,
@@ -894,9 +908,27 @@ ArcadeVehicleAuditResult runArcadeVehicleUnitAudit() {
     ArcadeVehicleState cancelledQueue;
     cancelledQueue.gear = 5;
     cancelledQueue.queuedManualShifts = -1;
+    cancelledQueue.manualShiftBufferTimer = config.manualShiftBufferDuration;
     cancelledQueue.shiftTimer = 0.04f;
     stepArcadeVehicle(cancelledQueue, config, cancelDownshift, road, kInternalStep);
-    check(cancelledQueue.gear == 5 && cancelledQueue.queuedManualShifts == 0);
+    check(cancelledQueue.gear == 5 && cancelledQueue.queuedManualShifts == 1);
+    for (int frame = 0; frame < 20; ++frame) {
+        stepArcadeVehicle(cancelledQueue, config, manualCoast, road, kInternalStep);
+    }
+    check(cancelledQueue.gear == 6 && cancelledQueue.queuedManualShifts == 0);
+
+    ArcadeVehicleConfig shortBufferConfig = config;
+    shortBufferConfig.manualShiftBufferDuration = 0.10f;
+    ArcadeVehicleState expiredQueue;
+    expiredQueue.gear = 4;
+    expiredQueue.vel = {config.maxForwardSpeed * 0.34f, 0.0f};
+    expiredQueue.shiftTimer = 0.25f;
+    stepArcadeVehicle(expiredQueue, shortBufferConfig, downshift, road, kInternalStep);
+    for (int frame = 0; frame < 18; ++frame) {
+        stepArcadeVehicle(expiredQueue, shortBufferConfig, manualCoast, road, kInternalStep);
+    }
+    check(expiredQueue.gear == 4 && expiredQueue.queuedManualShifts == 0 &&
+          expiredQueue.manualShiftBufferTimer <= 0.0f);
 
     ArcadeVehicleState lowGearCoast;
     ArcadeVehicleState highGearCoast;
