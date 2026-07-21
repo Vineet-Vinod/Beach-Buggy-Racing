@@ -36,7 +36,7 @@ are only required when regenerating or validating Blender assets.
 ## What is this
 
 Formula Forge is an original, open-source, Linux-native 3D formula racing game
-written in C++20 with SDL3 and raylib. It supports full-grid races against AI
+written in C++ with SDL3 and raylib. It supports full-grid races against AI
 and solo Time Trial sessions across five real-world-inspired circuits.
 
 The project combines an arcade-accessible driving model with formula-specific
@@ -46,27 +46,22 @@ eight-speed manual sequential gearbox. A complete in-game flow covers loading,
 session and car selection, circuit and race-distance selection, racing, pause,
 results, replay, and returning home.
 
-Formula Forge is an unofficial original project. It is not affiliated with or
-endorsed by Formula 1, the FIA, any racing team, or another racing game.
-
 ## Inspiration
 
 Formula Forge began with two interests: the approachable racing of Beach Buggy
-Racing and the speed and racecraft of Formula racing. Beach Buggy Racing was
-not available natively on Linux, so the project became an experiment in
-building an original Linux racing game instead.
-
-It also became a broader challenge: how far could an AI coding agent help take
+Racing and the speed and racecraft of F1. Beach Buggy Racing is not
+available natively on Linux, so the project became an experiment in
+building an original Linux racing game instead. With OpenAI Build Week, it
+became a broader challenge: how far could an AI coding agent help take
 a 3D game when it was given ways to build, observe, measure, and verify its own
-work? That question shaped both the game and its unusually extensive set of
-development tools.
+work?
 
 ## Features
 
 ### Racing
 
 - Spa, Suzuka, Silverstone, Monza, and Interlagos-inspired circuits with
-  authored elevation, track limits, runoff, barriers, scenery, and pit areas
+  authored elevation, track limits, runoff, and barriers
 - Five logo-free car liveries sharing one Blender-authored formula car and
   driver specification
 - Six-car races and solo infinite-lap Time Trial sessions
@@ -81,9 +76,7 @@ development tools.
 
 ### Controls
 
-Formula Forge is designed for gamepads and steering wheels. A DragonRise Wired
-Wheel (`0079:189c`) is recognized automatically, and multiple SDL input devices
-can remain connected together.
+Formula Forge is designed for gamepads and steering wheels.
 
 - Left stick, D-pad, or wheel rim: steer and navigate menus
 - RT or accelerator pedal: accelerate
@@ -127,10 +120,10 @@ geometry, landmark order, and clearances. See the
 
 ## How Codex and GPT-5.6 were used
 
-Codex and GPT-5.6 were active engineering partners throughout Formula Forge,
-not just autocomplete. They helped implement and iterate on the physics, AI,
-race rules, renderer, interface, controller support, procedural audio, Blender
-assets, tests, and development tools.
+GPT-5.6 Sol High was an active engineering partner throughout Formula Forge.
+It helped implement and iterate on the physics, AI, race rules, renderer, 
+interface, controller support, procedural audio, Blender assets, tests,
+and development tools.
 
 The most useful workflow paired subjective playtesting with programmatic
 feedback. After playing a build, feedback such as “the car feels slow” or “the
@@ -154,7 +147,5 @@ verify.
 - Add more cars, customization, and session options
 - Explore Windows and macOS support
 
-Contributions are welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md) and run
-`make test` before submitting a change. Formula Forge is MIT licensed.
-Third-party code and fonts retain their own licenses, documented in
-[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+I am not accepting PR contributions at the moment. However, please open issues
+for any bugs!

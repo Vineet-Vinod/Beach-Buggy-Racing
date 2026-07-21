@@ -1,8 +1,7 @@
 # Formula Forge
 
-This project is an open-source formula racing game. Follow `CONTRIBUTING.md`
-for the public development workflow. The following parts of the game are
-complete and should not be altered without an explicit gameplay request:
+This project is an open-source formula racing game. The following parts
+of the game are not to be altered without an explicit request:
 - Drivability
 - Car handling
 - Speed
