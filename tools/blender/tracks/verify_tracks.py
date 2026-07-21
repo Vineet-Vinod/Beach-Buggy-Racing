@@ -22,7 +22,7 @@ from generate_tracks import (ASPHALT_MAX_LUMINANCE, ASPHALT_MIN_LUMINANCE,
                              TRACKS as TRACK_SPECS, cpp_pairs, dense_closed,
                              active_zone, bank_height, canonical_runoff_zones,
                              cpp_runoff_zones, find_crossover, length_closed,
-                             load_course_design, loop_pose, pair_digest,
+                             interpolated_track_frame, load_course_design, loop_pose, pair_digest,
                              resample_closed, sample_stations,
                              shoulder_ground_z, spa_road_width, track_frame,
                              transform_bounds_blender_to_gltf)
@@ -384,21 +384,31 @@ def verify(root: Path, slug: str):
     car_length = 83.6 / 17.0
     first_center_inset = car_length * 0.5 + 1.0
     row_spacing = car_length + 3.0
-    start_index = int(spec["start_phase"] * SAMPLES) % SAMPLES
+    start_progress = spec["start_phase"] * target_length
+    exact_grid_alignment = grid_slots.get("runtime_distance_alignment") == "exact_progress"
     max_grid_alignment_error = 0.0
     for slot in range(6):
         distance_behind = first_center_inset + slot * row_spacing
-        index = int(round(start_index - distance_behind * SAMPLES / target_length)) % SAMPLES
-        point = expected[index]
-        _, tangent = loop_pose(expected, index/SAMPLES)
-        normal = (-tangent[1], tangent[0])
-        lane = (-1 if slot % 2 == 0 else 1) * min(expected_widths[index]*0.5*0.28, 2.0)
+        if exact_grid_alignment:
+            point, _, normal, index, blend = interpolated_track_frame(
+                expected, start_progress - distance_behind, target_length)
+            nxt_index = (index + 1) % SAMPLES
+            width = expected_widths[index] + (expected_widths[nxt_index] - expected_widths[index]) * blend
+            lane = (-1 if slot % 2 == 0 else 1) * min(width*0.5*0.28, 2.0)
+        else:
+            start_index = int(spec["start_phase"] * SAMPLES) % SAMPLES
+            index = int(round(start_index - distance_behind * SAMPLES / target_length)) % SAMPLES
+            point = expected[index]
+            _, tangent = loop_pose(expected, index/SAMPLES)
+            normal = (-tangent[1], tangent[0])
+            lane = (-1 if slot % 2 == 0 else 1) * min(expected_widths[index]*0.5*0.28, 2.0)
         wanted = (point[0] + normal[0]*lane, point[1] + normal[1]*lane)
         authored = grid_slots.data.vertices[slot*16:(slot+1)*16]
         actual = (sum(vertex.co.x for vertex in authored)/len(authored),
                   sum(vertex.co.y for vertex in authored)/len(authored))
         max_grid_alignment_error = max(max_grid_alignment_error, math.dist(actual,wanted))
-    if max_grid_alignment_error > 0.002:
+    grid_alignment_tolerance = 0.05 if exact_grid_alignment else 0.002
+    if max_grid_alignment_error > grid_alignment_tolerance:
         raise ValueError(f"{slug}: starting grid slots miss runtime spawn centers by "
                          f"{max_grid_alignment_error:.6f}")
     if not presentation["barriers_continuous"] or presentation["barrier_samples_per_side"] != SAMPLES:
@@ -493,6 +503,12 @@ def verify(root: Path, slug: str):
                                        expected_banks[index])
         if abs(expected_z-instance["base_z"]) > tolerance:
             raise ValueError(f"{slug}: stale grounded {instance['kind']} metadata at station {index}")
+        if (instance["kind"] == "vegetation" and
+                "vegetation_canopy_clearance_asset_units" in grounding and
+                instance.get("road_edge_clearance", -1.0) + tolerance <
+                grounding["vegetation_canopy_clearance_asset_units"]):
+            raise ValueError(
+                f"{slug}: vegetation canopy intrudes on the road near station {index}")
         _, tangent = loop_pose(expected, index/SAMPLES)
         normal = (-tangent[1], tangent[0])
         expected_x = point[0] + normal[0]*side*lateral

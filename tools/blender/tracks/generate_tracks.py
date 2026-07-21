@@ -94,6 +94,8 @@ TRACKS = {
         "runtime_mirror_y": True,
         "cpp_layout_id": "TrackLayoutId::Silverstone",
         "start_phase": 0.0,
+        "vegetation_setback_m": 29.0,
+        "vegetation_canopy_clearance_m": 22.0,
         "cpp_simulation_units_per_asset_unit": 17.0,
         "coordinate_unit": "meter",
     },
@@ -134,6 +136,8 @@ TRACKS = {
         "runtime_mirror_y": True,
         "cpp_layout_id": "TrackLayoutId::Interlagos",
         "start_phase": 0.0,
+        "vegetation_setback_m": 29.0,
+        "vegetation_canopy_clearance_m": 22.0,
         "cpp_simulation_units_per_asset_unit": 17.0,
         "coordinate_unit": "meter",
     },
@@ -431,6 +435,54 @@ def track_frame(samples, index):
     inv = 1.0 / max(0.001, math.hypot(dx, dy))
     tangent = (dx * inv, dy * inv)
     return point, tangent, (-tangent[1], tangent[0])
+
+
+def interpolated_track_frame(samples, progress, target_length):
+    """Match Track3D::sample at an exact distance rather than a rounded station."""
+    count = len(samples)
+    u = (progress % target_length) / target_length * count
+    index = int(math.floor(u)) % count
+    blend = u - math.floor(u)
+    nxt_index = (index + 1) % count
+    point = tuple(samples[index][axis] +
+                  (samples[nxt_index][axis] - samples[index][axis]) * blend
+                  for axis in range(3))
+
+    def station_tangent(station):
+        # The runtime derives its sample tangent from stations three samples
+        # either side, then interpolates adjacent tangents in sample().
+        prev = samples[(station - 3) % count]
+        nxt = samples[(station + 3) % count]
+        dx, dy = nxt[0] - prev[0], nxt[1] - prev[1]
+        inv = 1.0 / max(0.001, math.hypot(dx, dy))
+        return dx * inv, dy * inv
+
+    first = station_tangent(index)
+    second = station_tangent(nxt_index)
+    tx = first[0] + (second[0] - first[0]) * blend
+    ty = first[1] + (second[1] - first[1]) * blend
+    inv = 1.0 / max(0.001, math.hypot(tx, ty))
+    tangent = (tx * inv, ty * inv)
+    return point, tangent, (-tangent[1], tangent[0]), index, blend
+
+
+def nearest_road_edge_clearance(x, y, samples, half_widths):
+    """Return planar clearance from a point to the closest asphalt edge."""
+    best = float("inf")
+    count = len(samples)
+    for index, point in enumerate(samples):
+        nxt_index = (index + 1) % count
+        nxt = samples[nxt_index]
+        dx, dy = nxt[0] - point[0], nxt[1] - point[1]
+        length_squared = max(0.000001, dx * dx + dy * dy)
+        blend = max(0.0, min(1.0, ((x - point[0]) * dx + (y - point[1]) * dy) /
+                                  length_squared))
+        center_x = point[0] + dx * blend
+        center_y = point[1] + dy * blend
+        half_width = half_widths[index] + (
+            half_widths[nxt_index] - half_widths[index]) * blend
+        best = min(best, math.hypot(x - center_x, y - center_y) - half_width)
+    return best
 
 
 def shoulder_ground_z(point_z, half_width, lateral_distance, detail_scale,
@@ -803,44 +855,53 @@ def make_starting_grid_slots(samples, half_widths, bank_angles, start_phase, tar
     first_center_inset = car_length * 0.5 + 1.0
     slot_length, slot_width, line_width, spacing = car_length + 0.68, 2.25, 0.16, car_length + 3.0
 
-    def add_marking(center, tangent, normal, half_forward, half_lateral, z):
+    def track_values(progress):
+        point, tangent, normal, index, blend = interpolated_track_frame(
+            samples, progress, target_length)
+        nxt_index = (index + 1) % count
+        half_width = half_widths[index] + (half_widths[nxt_index] - half_widths[index]) * blend
+        bank_angle = bank_angles[index] + (bank_angles[nxt_index] - bank_angles[index]) * blend
+        return point, tangent, normal, half_width, bank_angle
+
+    def road_point(progress, lane):
+        point, _, normal, _, bank_angle = track_values(progress)
+        return (point[0] + normal[0] * lane,
+                point[1] + normal[1] * lane,
+                point[2] + surface_offset + 0.038 + bank_height(lane, bank_angle))
+
+    def add_surface_marking(progress_a, progress_b, lane_a, lane_b):
         base = len(vertices)
         vertices.extend((
-            (center[0] - tangent[0]*half_forward - normal[0]*half_lateral,
-             center[1] - tangent[1]*half_forward - normal[1]*half_lateral, z),
-            (center[0] + tangent[0]*half_forward - normal[0]*half_lateral,
-             center[1] + tangent[1]*half_forward - normal[1]*half_lateral, z),
-            (center[0] + tangent[0]*half_forward + normal[0]*half_lateral,
-             center[1] + tangent[1]*half_forward + normal[1]*half_lateral, z),
-            (center[0] - tangent[0]*half_forward + normal[0]*half_lateral,
-             center[1] - tangent[1]*half_forward + normal[1]*half_lateral, z),
+            road_point(progress_a, lane_a), road_point(progress_b, lane_a),
+            road_point(progress_b, lane_b), road_point(progress_a, lane_b),
         ))
         faces.append((base, base + 1, base + 2, base + 3))
 
-    start_index = int(start_phase * count) % count
+    start_progress = start_phase * target_length
     for slot in range(slot_count):
         distance_behind = first_center_inset + slot * spacing
-        index = int(round(start_index - distance_behind * count / target_length)) % count
-        point, tangent, normal = track_frame(samples, index)
+        center_progress = start_progress - distance_behind
+        _, _, _, half_width, _ = track_values(center_progress)
         side = -1 if slot % 2 == 0 else 1
-        lane = side * min(half_widths[index] * 0.28, 2.0)
-        center = (point[0] + normal[0] * lane, point[1] + normal[1] * lane)
-        z = point[2] + surface_offset + 0.038 + bank_height(lane, bank_angles[index])
+        lane = side * min(half_width * 0.28, 2.0)
         # Two long and two short strokes form an open, highly legible grid box.
         for lateral in (-slot_width * 0.5, slot_width * 0.5):
-            stripe_center = (center[0] + normal[0] * lateral,
-                             center[1] + normal[1] * lateral)
-            add_marking(stripe_center, tangent, normal, slot_length * 0.5,
-                        line_width * 0.5, z + bank_height(lateral, bank_angles[index]))
+            stripe_lane = lane + lateral
+            add_surface_marking(center_progress - slot_length * 0.5,
+                                center_progress + slot_length * 0.5,
+                                stripe_lane - line_width * 0.5,
+                                stripe_lane + line_width * 0.5)
         for forward in (-slot_length * 0.5, slot_length * 0.5):
-            stripe_center = (center[0] + tangent[0] * forward,
-                             center[1] + tangent[1] * forward)
-            add_marking(stripe_center, tangent, normal, line_width * 0.5,
-                        slot_width * 0.5, z)
+            stripe_progress = center_progress + forward
+            add_surface_marking(stripe_progress - line_width * 0.5,
+                                stripe_progress + line_width * 0.5,
+                                lane - slot_width * 0.5,
+                                lane + slot_width * 0.5)
     obj = mesh_object("starting_grid_slots", vertices, faces, [material], parent=parent)
     obj["slot_count"] = slot_count
     obj["staggered"] = True
     obj["before_start_finish"] = True
+    obj["runtime_distance_alignment"] = "exact_progress"
     return obj
 
 
@@ -1108,7 +1169,7 @@ def combined_formula_infrastructure(placements, materials, parent, detail_scale)
 
 def combined_park_trees(locations, materials, parent):
     verts, faces, indices = [], [], []
-    sides = 7
+    sides = 8
     for x, y, z, scale in locations:
         base = len(verts)
         trunk_height = 4.0 * scale
@@ -1122,16 +1183,30 @@ def combined_park_trees(locations, materials, parent):
             faces.append((base + index, base + (index + 1) % sides,
                           base + sides + (index + 1) % sides, base + sides + index))
             indices.append(0)
+        # A few compact rings produce a rounded low-poly crown. The previous
+        # four-sided pyramid read as a floating green triangle from the T-cam.
         crown = len(verts)
-        verts.extend(((x, y, z + trunk_height + 4.0 * scale),
-                      (x - 2.8 * scale, y - 2.4 * scale, z + trunk_height),
-                      (x + 2.8 * scale, y - 2.4 * scale, z + trunk_height),
-                      (x + 2.8 * scale, y + 2.4 * scale, z + trunk_height),
-                      (x - 2.8 * scale, y + 2.4 * scale, z + trunk_height)))
-        faces.extend(((crown, crown+1, crown+2), (crown, crown+2, crown+3),
-                      (crown, crown+3, crown+4), (crown, crown+4, crown+1),
-                      (crown+1, crown+4, crown+3, crown+2)))
-        indices.extend([1] * 5)
+        rings = ((0.45, 1.25), (1.25, 2.55), (2.30, 2.90),
+                 (3.35, 1.85), (4.00, 0.45))
+        for ring_index, (height, radius) in enumerate(rings):
+            angle_offset = (ring_index % 2) * math.pi / sides
+            for index in range(sides):
+                angle = math.tau * index / sides + angle_offset
+                verts.append((x + math.cos(angle) * radius * scale,
+                              y + math.sin(angle) * radius * scale,
+                              z + trunk_height + height * scale))
+        for ring_index in range(len(rings) - 1):
+            first = crown + ring_index * sides
+            second = first + sides
+            for index in range(sides):
+                faces.append((first + index, first + (index + 1) % sides,
+                              second + (index + 1) % sides, second + index))
+                indices.append(1)
+        faces.append(tuple(crown + index for index in reversed(range(sides))))
+        indices.append(1)
+        top = crown + (len(rings) - 1) * sides
+        faces.append(tuple(top + index for index in range(sides)))
+        indices.append(1)
     obj = mesh_object("park_trees", verts, faces, materials, indices, parent)
     obj["grounding_contract"] = "shoulder_grade"
     return obj
@@ -1305,21 +1380,43 @@ def make_world(slug, spec):
 
     # Every prop base samples the same sloped shoulder function as track_embankment.
     palms, trees, rocks, infrastructure, grounded_instances = [], [], [], [], []
+    vegetation_setback = spec.get("vegetation_setback_m", 13.0) * detail_scale
+    vegetation_clearance = spec.get("vegetation_canopy_clearance_m", 6.0) * detail_scale
     for index in range(36):
         i = int((index + 0.37) * SAMPLES / 36) % SAMPLES
         p, tangent, normal = track_frame(center, i)
         side = -1 if index % 2 else 1
-        lateral = half_widths[i] + (13.0 + rng.uniform(0, 11))*detail_scale
+        is_palm = index % 3 == 0
+        lateral = half_widths[i] + vegetation_setback + rng.uniform(0, 6) * detail_scale
+        scale = rng.uniform(0.8, 1.25) * detail_scale if is_palm else rng.uniform(0.85, 1.35) * detail_scale
+        canopy_radius = (4.8 if is_palm else 2.9) * scale
+        position = None
+        # Check every circuit branch, not only the station that authored the
+        # prop. This keeps foliage out of nearby straights and tight corners.
+        while lateral <= half_widths[i] + TERRAIN_REACH_METERS * detail_scale:
+            candidate_x = p[0] + normal[0] * side * lateral
+            candidate_y = p[1] + normal[1] * side * lateral
+            if (nearest_road_edge_clearance(candidate_x, candidate_y, center, half_widths) -
+                    canopy_radius >= vegetation_clearance):
+                base_z = shoulder_ground_z(p[2], half_widths[i], side * lateral, detail_scale,
+                                            bank_angles[i])
+                position = (candidate_x, candidate_y, base_z)
+                break
+            lateral += 1.0 * detail_scale
+        if position is None:
+            continue
         base_z = shoulder_ground_z(p[2], half_widths[i], side * lateral, detail_scale,
                                     bank_angles[i])
-        position = (p[0] + normal[0]*side*lateral,
-                    p[1] + normal[1]*side*lateral, base_z)
         grounded_instances.append({"kind": "vegetation", "station": i, "side": side,
-                                   "lateral": round(lateral, 6), "base_z": round(base_z, 6)})
-        if index % 3 == 0:
-            palms.append((*position, rng.uniform(0.8,1.25)*detail_scale))
+                                   "lateral": round(lateral, 6), "base_z": round(base_z, 6),
+                                   "canopy_radius": round(canopy_radius, 6),
+                                   "road_edge_clearance": round(
+                                       nearest_road_edge_clearance(position[0], position[1], center,
+                                                                   half_widths) - canopy_radius, 6)})
+        if is_palm:
+            palms.append((*position, scale))
         else:
-            trees.append((*position, rng.uniform(0.85,1.35)*detail_scale))
+            trees.append((*position, scale))
         if index % 7 == 3:
             rocks.append((*position, rng.uniform(0.7,1.25)*detail_scale))
 
@@ -1416,6 +1513,8 @@ def make_world(slug, spec):
                                     "verge": sand_z,
                                     "infield": infield_z},
         "grounded_instances": grounded_instances,
+        "vegetation_setback": vegetation_setback,
+        "vegetation_canopy_clearance": vegetation_clearance,
         "barrier_grounding": barrier_grounding,
         "bridge": ({"lower_station": crossing["lower_station"],
                     "upper_station": crossing["upper_station"],
@@ -1632,6 +1731,8 @@ def export_track(slug, spec, output_root):
             "offroad_visual_clearance_asset_units": OFFROAD_VISUAL_CLEARANCE_METERS,
             "runoff_transition_asset_units": RUNOFF_TRANSITION_METERS,
             "terrain_reach_asset_units": TERRAIN_REACH_METERS,
+            "vegetation_setback_asset_units": info["vegetation_setback"],
+            "vegetation_canopy_clearance_asset_units": info["vegetation_canopy_clearance"],
             "outer_edge_follows_local_centerline": True,
             "tolerance_asset_units": 0.002,
             "instances": info["grounded_instances"],
