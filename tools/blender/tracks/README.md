@@ -13,10 +13,10 @@ uv run python tools/blender/tracks/verify_tracks.py --track all
 
 Each output directory contains the editable `.blend`, runtime `.glb`, rendered
 preview PNG, and JSON integration metadata. Worlds use readable medium-gray
-tarmac, continuous track-limit lines, curbs, two-sided safety barriers and
-catch fencing. Grounded combined meshes provide grandstands and spectators,
-pit facilities, marshal posts, park trees, palms and rocks while keeping the
-runtime draw-call count bounded.
+tarmac, continuous track-limit lines, bank-following curbs, profiled grass,
+gravel and asphalt runoff, concrete/Tecpro safety barriers, and catch fencing.
+Grounded combined meshes provide grandstands and spectators, pit facilities,
+marshal posts and vegetation while keeping the runtime draw-call count bounded.
 
 `verify_tracks.py` treats those presentation details as runtime contracts. It
 checks opaque material parity between BLEND and GLB, asphalt luminance,
@@ -37,12 +37,12 @@ origin with zero yaw. Use the per-asset
 all meter-based circuits). The GLB centerline datum then maps to C++ world
 coordinates exactly; the visible asphalt is 0.06 meters above that datum. Spa
 reproduces its procedural 14-16 meter phase-based width.
-Opaque world layers are strictly separated rather than coplanar: ocean, sand,
-vegetation, embankment, runoff, and asphalt rise in that order. The exact
+Opaque world layers are strictly separated rather than coplanar: outer terrain,
+verge, infield, embankment, runoff, and asphalt rise in that order. The exact
 numeric levels are recorded in `runtime_alignment.opaque_layer_elevations_asset_units`.
-The kilometer-scale base layers do not overlap: vegetation is an inner triangle
-fan, sand is only the beach ring outside it, and ocean is only the water ring
-outside the coast. Rings use explicit shared-edge triangles. Do not convert
+The kilometer-scale base layers do not overlap: infield is an inner triangle
+fan, with successively darker grass/ground rings beyond it. Rings use explicit
+shared-edge triangles. Do not convert
 these layers back to overlapping n-gons; their depth precision is insufficient
 at the full metric-circuit scale.
 

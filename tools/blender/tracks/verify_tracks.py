@@ -15,7 +15,8 @@ import bpy
 
 from generate_tracks import (ASPHALT_MAX_LUMINANCE, ASPHALT_MIN_LUMINANCE, SAMPLES,
                              TRACKS as TRACK_SPECS, cpp_pairs, dense_closed,
-                             find_crossover, length_closed, loop_pose, pair_digest,
+                             active_zone, bank_height, find_crossover, length_closed,
+                             load_course_design, loop_pose, pair_digest,
                              resample_closed, sample_stations,
                              shoulder_ground_z, spa_road_width,
                              transform_bounds_blender_to_gltf)
@@ -47,14 +48,16 @@ def expected_centerline(slug: str):
     runtime_plan = resample_closed([(x*scale,y*scale) for x,y in dense], SAMPLES)
     elevations = cpp_pairs(source, spec["elevation"]) if spec.get("elevation") else []
     widths = cpp_pairs(source, spec["width_profile"]) if spec.get("width_profile") else []
-    centerline, road_widths = [], []
+    banks = cpp_pairs(source, spec["bank_profile"]) if spec.get("bank_profile") else []
+    centerline, road_widths, bank_angles = [], [], []
     for index,(x,y) in enumerate(runtime_plan):
         distance = target*index/SAMPLES
         elevation = sample_stations(elevations,distance,target,0.0)
         centerline.append((x,-y,elevation))
         road_widths.append(spa_road_width(index/SAMPLES) if slug == "spa" else
                            sample_stations(widths,distance,target,spec.get("width",13.0)))
-    return centerline, road_widths, raw_controls, elevations, widths
+        bank_angles.append(sample_stations(banks,distance,target,0.0))
+    return centerline, road_widths, bank_angles, raw_controls, elevations, widths, banks
 
 
 def glb_json(path: Path):
@@ -105,7 +108,7 @@ def verify(root: Path, slug: str):
     if length_error > 2.0:
         raise ValueError(f"{slug}: planar length error {length_error:.3f}m")
     geometry = meta["runtime_geometry"]
-    if not (16 <= geometry["mesh_objects"] <= 30 and geometry["vertices"] < 60000 and geometry["materials"] >= 24):
+    if not (16 <= geometry["mesh_objects"] <= 36 and geometry["vertices"] < 70000 and geometry["materials"] >= 24):
         raise ValueError(f"{slug}: unexpected geometry budget {geometry}")
     if paths["_preview.png"].stat().st_size < 20000:
         raise ValueError(f"{slug}: preview appears blank or trivial")
@@ -126,20 +129,21 @@ def verify(root: Path, slug: str):
     root = bpy.data.objects["map_root"]
     if math.dist(tuple(root.location),(0.0,0.0,0.0)) > 1e-8 or any(abs(v) > 1e-8 for v in root.rotation_euler):
         raise ValueError(f"{slug}: map_root must remain at catalog origin with zero rotation")
-    expected, expected_widths, raw_controls, elevations, widths = expected_centerline(slug)
+    expected, expected_widths, expected_banks, raw_controls, elevations, widths, banks = expected_centerline(slug)
     spec = TRACK_SPECS[slug]
     source = REPO / spec["source_file"]
     source_meta = meta["source_centerline"]
     hashes = (("control_sha256",pair_digest(raw_controls)),
               ("elevation_sha256",pair_digest(elevations) if elevations else None),
-              ("width_sha256",pair_digest(widths) if widths else None))
+              ("width_sha256",pair_digest(widths) if widths else None),
+              ("bank_sha256",pair_digest(banks) if banks else None))
     for key,value in hashes:
         if source_meta[key] != value:
             raise ValueError(f"{slug}: stale source hash {key}")
     surface = bpy.data.objects["track_surface"]
     if len(surface.data.vertices) != SAMPLES*2:
         raise ValueError(f"{slug}: track_surface vertex contract changed")
-    max_error, max_width_error = 0.0, 0.0
+    max_error, max_width_error, max_bank_error = 0.0, 0.0, 0.0
     surface_offset = meta["runtime_alignment"]["road_surface_offset_above_centerline_asset_units"]
     for index,wanted in enumerate(expected):
         left = surface.data.vertices[index*2].co
@@ -147,11 +151,16 @@ def verify(root: Path, slug: str):
         actual = ((left.x+right.x)*0.5,(left.y+right.y)*0.5,
                   (left.z+right.z)*0.5-surface_offset)
         max_error = max(max_error,math.dist(actual,wanted))
-        max_width_error = max(max_width_error,abs(math.dist(left,right)-expected_widths[index]))
+        planar_width = math.hypot(left.x-right.x,left.y-right.y)
+        max_width_error = max(max_width_error,abs(planar_width-expected_widths[index]))
+        wanted_crossfall = bank_height(expected_widths[index], expected_banks[index])
+        max_bank_error = max(max_bank_error, abs((left.z-right.z)-wanted_crossfall))
     if max_error > 0.002:
         raise ValueError(f"{slug}: road centerline/catalog error {max_error:.6f}")
     if max_width_error > 0.002:
         raise ValueError(f"{slug}: road width/catalog error {max_width_error:.6f}")
+    if max_bank_error > 0.002:
+        raise ValueError(f"{slug}: road bank/catalog error {max_bank_error:.6f}")
 
     presentation = meta["presentation_contract"]
     asphalt = bpy.data.materials["asphalt"]
@@ -169,6 +178,7 @@ def verify(root: Path, slug: str):
     barrier = bpy.data.objects["continuous_safety_barriers"]
     fence = bpy.data.objects["continuous_catch_fence"]
     limits = bpy.data.objects["track_limit_lines"]
+    grid_slots = bpy.data.objects["starting_grid_slots"]
     if (len(barrier.data.vertices), len(barrier.data.polygons)) != (SAMPLES*8, SAMPLES*6):
         raise ValueError(f"{slug}: continuous barrier topology changed")
     fence_posts = (SAMPLES//16)*2
@@ -178,6 +188,30 @@ def verify(root: Path, slug: str):
         raise ValueError(f"{slug}: continuous fence topology changed")
     if (len(limits.data.vertices), len(limits.data.polygons)) != (SAMPLES*4, SAMPLES*2):
         raise ValueError(f"{slug}: track-limit line topology changed")
+    if (len(grid_slots.data.vertices), len(grid_slots.data.polygons)) != (6*16, 6*4):
+        raise ValueError(f"{slug}: starting grid slot topology changed")
+    if grid_slots.get("slot_count") != 6 or not grid_slots.get("before_start_finish"):
+        raise ValueError(f"{slug}: starting grid slot contract is stale")
+    car_length = 83.6 / 17.0
+    first_center_inset = car_length * 0.5 + 1.0
+    row_spacing = car_length + 3.0
+    start_index = int(spec["start_phase"] * SAMPLES) % SAMPLES
+    max_grid_alignment_error = 0.0
+    for slot in range(6):
+        distance_behind = first_center_inset + slot * row_spacing
+        index = int(round(start_index - distance_behind * SAMPLES / target_length)) % SAMPLES
+        point = expected[index]
+        _, tangent = loop_pose(expected, index/SAMPLES)
+        normal = (-tangent[1], tangent[0])
+        lane = (-1 if slot % 2 == 0 else 1) * min(expected_widths[index]*0.5*0.28, 2.0)
+        wanted = (point[0] + normal[0]*lane, point[1] + normal[1]*lane)
+        authored = grid_slots.data.vertices[slot*16:(slot+1)*16]
+        actual = (sum(vertex.co.x for vertex in authored)/len(authored),
+                  sum(vertex.co.y for vertex in authored)/len(authored))
+        max_grid_alignment_error = max(max_grid_alignment_error, math.dist(actual,wanted))
+    if max_grid_alignment_error > 0.002:
+        raise ValueError(f"{slug}: starting grid slots miss runtime spawn centers by "
+                         f"{max_grid_alignment_error:.6f}")
     if not presentation["barriers_continuous"] or presentation["barrier_samples_per_side"] != SAMPLES:
         raise ValueError(f"{slug}: barrier continuity metadata is stale")
     for side in range(2):
@@ -200,12 +234,16 @@ def verify(root: Path, slug: str):
     if grounding["barrier_samples"] != SAMPLES*2:
         raise ValueError(f"{slug}: barrier grounding sample count changed")
     max_barrier_ground_error = 0.0
+    course_design = load_course_design(slug)
     for side_index, side in enumerate((-1, 1)):
         side_start = side_index * SAMPLES * 4
         for index, point in enumerate(expected):
-            lateral = expected_widths[index]*0.5 + 6.0*detail_scale
+            distance = target_length * index / SAMPLES
+            zone = active_zone(course_design["barrier_zones"], distance, side, target_length)
+            offset = float(zone.get("offset_m", 6.0)) if zone else 6.0
+            lateral = expected_widths[index]*0.5 + offset*detail_scale
             wanted_z = shoulder_ground_z(point[2], expected_widths[index]*0.5,
-                                         lateral, detail_scale)
+                                         side*lateral, detail_scale, expected_banks[index])
             actual_z = barrier.data.vertices[side_start + index*4].co.z
             max_barrier_ground_error = max(max_barrier_ground_error, abs(actual_z-wanted_z))
     if max_barrier_ground_error > tolerance:
@@ -223,12 +261,13 @@ def verify(root: Path, slug: str):
         point = expected[index]
         half_width = expected_widths[index]*0.5
         lateral = instance["lateral"]
-        expected_z = shoulder_ground_z(point[2], half_width, lateral, detail_scale)
+        side = instance["side"]
+        expected_z = shoulder_ground_z(point[2], half_width, side*lateral, detail_scale,
+                                       expected_banks[index])
         if abs(expected_z-instance["base_z"]) > tolerance:
             raise ValueError(f"{slug}: stale grounded {instance['kind']} metadata at station {index}")
         _, tangent = loop_pose(expected, index/SAMPLES)
         normal = (-tangent[1], tangent[0])
-        side = instance["side"]
         expected_x = point[0] + normal[0]*side*lateral
         expected_y = point[1] + normal[1]*side*lateral
         candidate_errors = []
@@ -304,16 +343,16 @@ def verify(root: Path, slug: str):
     if alignment["blender_to_gltf_matrix_row_major"] != [[1,0,0,0],[0,0,1,0],[0,-1,0,0],[0,0,0,1]]:
         raise ValueError(f"{slug}: Blender/glTF basis contract changed")
     layers = alignment["opaque_layer_elevations_asset_units"]
-    layer_values = [layers[name] for name in ("ocean","sand","vegetation","embankment_outer")]
+    layer_values = [layers[name] for name in ("outskirts","verge","infield","embankment_outer")]
     if not all(a < b for a,b in zip(layer_values,layer_values[1:])):
         raise ValueError(f"{slug}: opaque terrain layers are not strictly separated")
-    for object_name,layer_name in (("ocean","ocean"),("sand_island","sand"),
-                                   ("island_vegetation","vegetation")):
+    for object_name,layer_name in (("terrain_outskirts","outskirts"),("terrain_verge","verge"),
+                                   ("terrain_infield","infield")):
         layer_mesh = bpy.data.objects[object_name].data
         z_values = [vertex.co.z for vertex in layer_mesh.vertices]
         if max(abs(value-layers[layer_name]) for value in z_values) > 0.002:
             raise ValueError(f"{slug}: {object_name} elevation differs from layer contract")
-        expected_topology = (9,8) if object_name == "island_vegetation" else (16,16)
+        expected_topology = (9,8) if object_name == "terrain_infield" else (16,16)
         if ((len(layer_mesh.vertices),len(layer_mesh.polygons)) != expected_topology or
                 any(len(face.vertices) != 3 for face in layer_mesh.polygons)):
             raise ValueError(f"{slug}: {object_name} explicit non-overlap topology changed")

@@ -119,7 +119,7 @@ them.
 - Circuit-specific AI pace with deterministic braking, track-limit, and
   progress-stability audits
 - Metric lap-length, elevation, road-width, and grade-separation contracts for
-  Spa Coast, Suzuka, Silverstone, Monza, and Interlagos
+  Spa-Francorchamps, Suzuka, Silverstone, Monza, and Interlagos
 - Race and Time Trial sessions: full-grid finite races or solo infinite-lap
   running with current and best lap timing
 - Grid countdown, ordered checkpoints, shortcut-resistant laps, wrong-way
@@ -224,7 +224,7 @@ The smoke render verifies SDL startup and framebuffer presentation.
 for visual inspection.
 `race-audit-3d` runs the 3D scripted player against live AI and validates lap
 pace, pack pressure, contact rate, overtakes, and every car's progress stability.
-`spa-audit-3d` verifies Spa Coast's lap length, sampled FIA elevation stations,
+`spa-audit-3d` verifies Spa-Francorchamps' lap length, sampled FIA elevation stations,
 overall relief, mesh length, road width, two-kart passing room, and non-local
 branch clearance without opening a window.
 `track-catalog-audit-3d` verifies lap length, travel direction, turn landmarks,
@@ -270,7 +270,7 @@ which helps with USB receivers that expose a partial or unusual mapping.
 - `src/formula_forge.cpp`: raylib 3D renderer, simulation, controller input,
   capture harness, and 3D race loop
 - `src/formula_forge.hpp`: primary entry-point declaration
-- `src/track_layout.hpp`: Spa Coast centerline/elevation data
+- `src/track_layout.hpp`: Spa-Francorchamps centerline/elevation data
 - `src/track_catalog.*`: Suzuka, Silverstone, Monza, and Interlagos geometry contracts
 - `tools/build_assets.py`: manifest-driven Blender source/export/validation CLI
 - `tools/blender/generators/`: production vehicle, driver, UI-garage generators and verifier

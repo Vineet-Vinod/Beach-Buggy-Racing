@@ -20,6 +20,13 @@ struct TrackElevationPoint {
     float elevationMeters = 0.0f;
 };
 
+// Signed road crossfall. Positive angles raise the driver's left edge and
+// therefore provide positive camber through a right-hand corner.
+struct TrackBankPoint {
+    float distanceMeters = 0.0f;
+    float angleDegrees = 0.0f;
+};
+
 inline constexpr float kSpaTargetLength = 7004.0f;
 inline constexpr float kSpaSimulationUnitsPerMeter = 17.0f;
 inline constexpr float kSpaElevationRelief = 102.2f;
@@ -97,4 +104,17 @@ inline constexpr std::array<TrackElevationPoint, 18> kSpaElevationProfile = {{
     {6000.0f, 24.7758f},
     {6540.0f, 39.2283f},
     {7004.0f, 47.4869f},
+}};
+
+// Modest crossfall follows the major corner complexes while retaining Spa's
+// defining off-camber downhill Pouhon. Values are intentionally conservative:
+// the large vertical character comes from the surveyed elevation profile.
+inline constexpr std::array<TrackBankPoint, 25> kSpaBankProfile = {{
+    {0.0f, 0.0f},     {120.0f, 0.0f},   {220.0f, 3.0f},   {360.0f, 0.0f},
+    {650.0f, -1.5f},  {760.0f, 2.2f},   {930.0f, -1.2f},  {1130.0f, 0.0f},
+    {2070.0f, 0.0f},  {2200.0f, 2.0f},  {2370.0f, -1.6f}, {2520.0f, 0.0f},
+    {2870.0f, 3.2f},  {3110.0f, -1.4f}, {3440.0f, 0.0f},  {3600.0f, 1.8f},
+    {3980.0f, 0.0f},  {4280.0f, 1.8f},  {4470.0f, -1.8f}, {4740.0f, 1.5f},
+    {5100.0f, 0.8f},  {5700.0f, -1.8f}, {6250.0f, 0.0f},  {6540.0f, 2.0f},
+    {7004.0f, 0.0f},
 }};

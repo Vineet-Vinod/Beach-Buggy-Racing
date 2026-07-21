@@ -51,6 +51,17 @@ constexpr TrackWidthPoint kSuzukaWidth[] = {
     {5300.0f, 15.0f}, {5807.0f, 14.0f},
 };
 
+// Positive angles raise the driver's left edge. The alternating signs mirror
+// Suzuka's opening esses; Turn 7 deliberately reverses the expected camber.
+constexpr TrackBankPoint kSuzukaBank[] = {
+    {0.0f, 0.0f},     {420.0f, 0.0f},   {565.0f, 2.8f},   {730.0f, 2.2f},
+    {820.0f, -2.4f},  {930.0f, 2.2f},   {1040.0f, -2.0f}, {1180.0f, 1.7f},
+    {1320.0f, 2.0f},  {1510.0f, 0.0f},  {1700.0f, 2.5f},  {1940.0f, 2.0f},
+    {2250.0f, 0.0f},  {2660.0f, -3.6f}, {2920.0f, 0.0f},  {3470.0f, -3.0f},
+    {3820.0f, -3.4f}, {4170.0f, 0.0f},  {4760.0f, -3.5f}, {5010.0f, 0.0f},
+    {5140.0f, 2.1f},  {5270.0f, -1.8f}, {5440.0f, 0.0f},  {5807.0f, 0.0f},
+};
+
 // The Spoon-to-130R back straight is the bridge; the Degner-to-hairpin branch
 // passes beneath it. These stations match the sole plan-view intersection.
 constexpr TrackGradeSeparation kSuzukaCrossings[] = {{2315.7f, 4660.5f, 10.0f}};
@@ -94,6 +105,20 @@ constexpr TrackWidthPoint kSilverstoneWidth[] = {
     {5540.0f, 14.0f}, {5891.0f, 15.0f},
 };
 
+// Positive angles raise the driver's left edge. Silverstone is an airfield
+// circuit, so this intentionally stays subtle: the profile follows the real
+// corner sequence without turning its fast sweepers into artificial bowls.
+constexpr TrackBankPoint kSilverstoneBank[] = {
+    {0.0f, 0.0f},     {150.0f, 0.0f},   {247.0f, 1.8f},   {390.0f, 0.0f},
+    {620.0f, 0.0f},   {736.0f, 2.0f},   {820.0f, 0.0f},   {901.0f, -2.0f},
+    {1040.0f, 0.0f},  {1710.0f, 0.0f},  {1856.0f, -1.7f}, {1945.0f, 0.0f},
+    {2044.0f, 2.1f},  {2200.0f, 0.0f},  {2780.0f, 0.0f},  {2946.0f, 2.4f},
+    {3130.0f, 0.0f},  {3350.0f, 0.0f},  {3434.0f, -2.0f}, {3515.0f, 0.0f},
+    {3599.0f, 2.1f},  {3680.0f, 0.0f},  {3765.0f, -1.8f}, {3900.0f, 0.0f},
+    {4750.0f, 0.0f},  {4907.0f, 2.2f},  {5070.0f, 0.0f},  {5319.0f, -2.0f},
+    {5420.0f, 0.0f},  {5567.0f, 2.2f},  {5760.0f, 0.0f},  {5891.0f, 0.0f},
+};
+
 constexpr TrackControlPoint kMonzaCenterline[] = {
     {54.576f, -241.388f}, {18.926f, -241.927f}, {-16.724f, -242.397f},
     {-52.375f, -242.832f}, {-88.026f, -243.263f}, {-118.985f, -235.531f},
@@ -133,6 +158,20 @@ constexpr TrackWidthPoint kMonzaWidth[] = {
     {5793.0f, 12.0f},
 };
 
+// The current road course uses restrained crossfall; this does not reproduce
+// the disused 1955 high-speed oval's extreme banking. Signs follow the real
+// right-left chicanes and the long clockwise Biassono/Alboreto curves.
+constexpr TrackBankPoint kMonzaBank[] = {
+    {0.0f, 0.0f},     {220.0f, 0.0f},   {324.0f, 2.2f},   {405.0f, 0.0f},
+    {481.0f, -2.1f},  {610.0f, 0.0f},   {760.0f, 0.0f},   {886.0f, 2.5f},
+    {1120.0f, 0.0f},  {1500.0f, 0.0f},  {1610.0f, -2.2f}, {1650.0f, 0.0f},
+    {1692.0f, 2.1f},  {1810.0f, 0.0f},  {2010.0f, 2.3f},  {2190.0f, 0.0f},
+    {2390.0f, 0.0f},  {2491.0f, 2.4f},  {2700.0f, 0.0f},  {3260.0f, 0.0f},
+    {3377.0f, -2.2f}, {3460.0f, 0.0f},  {3540.0f, 2.1f},  {3580.0f, 0.0f},
+    {3621.0f, -2.2f}, {3770.0f, 0.0f},  {4430.0f, 0.0f},  {4669.0f, 2.8f},
+    {5050.0f, 1.4f},  {5260.0f, 0.0f},  {5793.0f, 0.0f},
+};
+
 constexpr TrackControlPoint kInterlagosCenterline[] = {
     {-286.034f, -112.307f}, {-272.632f, -168.521f}, {-259.229f, -224.736f},
     {-245.827f, -280.950f}, {-232.425f, -337.165f}, {-219.022f, -393.379f},
@@ -161,15 +200,36 @@ constexpr TrackControlPoint kInterlagosCenterline[] = {
 };
 
 constexpr TrackElevationPoint kInterlagosElevation[] = {
-    {0.0f, 38.0f},   {430.0f, 34.0f},  {820.0f, 19.0f},  {1230.0f, 0.0f},
-    {1740.0f, 4.0f}, {2230.0f, 12.0f}, {2720.0f, 7.0f},  {3160.0f, 18.0f},
-    {3520.0f, 27.0f}, {3890.0f, 43.0f}, {4309.0f, 38.0f},
+    // Interlagos sits in a natural bowl.  The line is already high, the
+    // circuit crests on the approach to the Senna S, then falls continuously
+    // through Curva do Sol to the Turn 4/5 Descida do Lago low point.  The
+    // infield undulates before the sustained climb from Juncao through the
+    // banked final corner and back to the line.  The 43 m relief matches the
+    // published circuit figure while the additional stations keep the road
+    // grade continuous through each named section.
+    {0.0f, 41.0f},    {160.0f, 43.0f},  {430.0f, 35.0f},  {820.0f, 18.0f},
+    {1180.0f, 5.0f},  {1480.0f, 0.0f},  {1740.0f, 3.0f},  {1980.0f, 8.0f},
+    {2230.0f, 12.0f}, {2500.0f, 10.0f}, {2720.0f, 7.0f},  {2960.0f, 11.0f},
+    {3160.0f, 17.0f}, {3520.0f, 27.0f}, {3760.0f, 35.0f}, {3970.0f, 39.0f},
+    {4309.0f, 41.0f},
 };
 
 constexpr TrackWidthPoint kInterlagosWidth[] = {
     {0.0f, 13.0f},    {480.0f, 15.0f},  {950.0f, 12.0f},  {1540.0f, 11.0f},
-    {2190.0f, 10.0f}, {2820.0f, 9.5f},  {3400.0f, 11.0f}, {3840.0f, 14.0f},
+    {2190.0f, 10.0f}, {2820.0f, 10.0f}, {3400.0f, 11.0f}, {3840.0f, 14.0f},
     {4309.0f, 13.0f},
+};
+
+// Interlagos combines visibly banked historic-oval sections with rapid
+// crossfall changes through the infield.  Negative values support its long
+// left-hand climb and the left-hand Senna-S entry; positive values support
+// the right-hand exits and hairpins.  The adverse-camber Descida do Lago
+// station deliberately raises the inside (driver-left) edge of its left turn.
+constexpr TrackBankPoint kInterlagosBank[] = {
+    {0.0f, -3.5f},    {180.0f, -4.0f},  {360.0f, -3.0f}, {540.0f, 2.0f},
+    {720.0f, -2.0f},  {1120.0f, 0.0f},  {1450.0f, 1.2f}, {1700.0f, 2.0f},
+    {2150.0f, 2.4f},  {2500.0f, -2.0f}, {2870.0f, 2.2f}, {3250.0f, -2.4f},
+    {3600.0f, -4.0f}, {4050.0f, -3.5f}, {4309.0f, -3.5f},
 };
 
 // Named race-order landmarks make a mirrored outline fail independently of
@@ -235,13 +295,14 @@ constexpr std::array<TrackCatalogEntry, 4> kCatalog = {{
      kSuzukaCenterline,
      kSuzukaElevation,
      kSuzukaWidth,
+     kSuzukaBank,
      kSuzukaCrossings},
     {CatalogCircuitId::Silverstone,
      "Silverstone",
      "Silverstone Circuit",
      "United Kingdom",
      "Fast airfield sweepers with the Arena loop, Copse, Maggotts-Becketts, Hangar Straight and Club.",
-     "coastal-airfield",
+     "historic-airfield",
      5891.0f,
      18,
      0.0f,
@@ -250,13 +311,14 @@ constexpr std::array<TrackCatalogEntry, 4> kCatalog = {{
      kSilverstoneCenterline,
      kSilverstoneElevation,
      kSilverstoneWidth,
+     kSilverstoneBank,
      {}},
     {CatalogCircuitId::Monza,
      "Monza",
      "Autodromo Nazionale Monza",
      "Italy",
      "Long parkland straights broken by Rettifilo, Roggia and Ascari before the broad final curve.",
-     "coastal-parkland",
+     "royal-parkland",
      5793.0f,
      11,
      0.0f,
@@ -265,6 +327,7 @@ constexpr std::array<TrackCatalogEntry, 4> kCatalog = {{
      kMonzaCenterline,
      kMonzaElevation,
      kMonzaWidth,
+     kMonzaBank,
      {}},
     {CatalogCircuitId::Interlagos,
      "Interlagos",
@@ -280,6 +343,7 @@ constexpr std::array<TrackCatalogEntry, 4> kCatalog = {{
      kInterlagosCenterline,
      kInterlagosElevation,
      kInterlagosWidth,
+     kInterlagosBank,
      {}},
 }};
 
@@ -331,6 +395,11 @@ float sampleTrackElevationMeters(const TrackCatalogEntry& track, float distanceM
 float sampleTrackWidthMeters(const TrackCatalogEntry& track, float distanceMeters) noexcept {
     return sampleStations(track.widthProfile, distanceMeters, track.targetLengthMeters,
                           [](const TrackWidthPoint& point) { return point.roadWidthMeters; });
+}
+
+float sampleTrackBankDegrees(const TrackCatalogEntry& track, float distanceMeters) noexcept {
+    return sampleStations(track.bankProfile, distanceMeters, track.targetLengthMeters,
+                          [](const TrackBankPoint& point) { return point.angleDegrees; });
 }
 
 std::span<const TrackTurnExpectation> trackTurnExpectations(CatalogCircuitId id) noexcept {

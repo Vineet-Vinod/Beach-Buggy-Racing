@@ -108,16 +108,16 @@ struct MapSpec3D {
 };
 
 constexpr std::array<MapSpec3D, 5> kMaps = {{
-    {TrackLayoutId::SpaCoast, "SPA COAST", "SPA COAST GRAND PRIX", "7.004 KM / 19 TURNS / 102.2 M RELIEF",
-     "A legendary Ardennes-shaped challenge reimagined beside the sea, from a tidal Eau Rouge to the high Kemmel ridge."},
+    {TrackLayoutId::SpaCoast, "SPA-FRANCORCHAMPS", "BELGIAN GRAND PRIX", "7.004 KM / 19 TURNS / 102.2 M RELIEF",
+     "An Ardennes classic that climbs steeply from Eau Rouge to Raidillon and the Kemmel Straight before descending home."},
     {TrackLayoutId::Suzuka, "SUZUKA", "SUZUKA GRAND PRIX", "5.807 KM / 18 TURNS / FIGURE EIGHT",
-     "A flowing coastal figure-eight with rhythmic esses, a climbing crossover and a committed final sector."},
+     "A flowing figure-eight with rhythmic esses, a climbing crossover and a committed final sector."},
     {TrackLayoutId::Silverstone, "SILVERSTONE", "SILVERSTONE GRAND PRIX", "5.891 KM / 18 TURNS / FAST SWEEPERS",
-     "A windswept shoreline airfield circuit built around fast direction changes and long, open straights."},
+     "A historic airfield circuit built around fast direction changes, broad sweepers and long, open straights."},
     {TrackLayoutId::Monza, "MONZA", "MONZA GRAND PRIX", "5.793 KM / 11 TURNS / HIGH SPEED",
-     "Long palm-lined parkland straights broken by heavy braking zones, chicanes and one broad final curve."},
+     "Long royal-park straights broken by heavy braking zones, chicanes and the broad Curva Alboreto."},
     {TrackLayoutId::Interlagos, "INTERLAGOS", "INTERLAGOS GRAND PRIX", "4.309 KM / 15 TURNS / ANTI-CLOCKWISE",
-     "A compact bowl-shaped coastal lap that drops through an opening S and climbs hard back to the line."},
+     "A compact Sao Paulo bowl that drops through the Senna S and climbs hard from Juncao back to the line."},
 }};
 
 struct RaceResult3D {
@@ -677,21 +677,23 @@ private:
             p.grade = (elevationNext.elevation - elevationPrev.elevation) / horizontalSpan;
         }
 
-        std::array<float, kSampleCount> smoothedBank{};
-        constexpr int kBankSmoothingRadius = 24;
-        for (int i = 0; i < kSampleCount; ++i) {
-            float weightedBank = 0.0f;
-            float totalWeight = 0.0f;
-            for (int offset = -kBankSmoothingRadius; offset <= kBankSmoothingRadius; ++offset) {
-                const int index = (i + offset + kSampleCount) % kSampleCount;
-                const float weight = static_cast<float>(kBankSmoothingRadius + 1 - std::abs(offset));
-                weightedBank += samples_[static_cast<size_t>(index)].bank * weight;
-                totalWeight += weight;
+        if (!isMetricCircuit(layout_)) {
+            std::array<float, kSampleCount> smoothedBank{};
+            constexpr int kBankSmoothingRadius = 24;
+            for (int i = 0; i < kSampleCount; ++i) {
+                float weightedBank = 0.0f;
+                float totalWeight = 0.0f;
+                for (int offset = -kBankSmoothingRadius; offset <= kBankSmoothingRadius; ++offset) {
+                    const int index = (i + offset + kSampleCount) % kSampleCount;
+                    const float weight = static_cast<float>(kBankSmoothingRadius + 1 - std::abs(offset));
+                    weightedBank += samples_[static_cast<size_t>(index)].bank * weight;
+                    totalWeight += weight;
+                }
+                smoothedBank[static_cast<size_t>(i)] = weightedBank / totalWeight;
             }
-            smoothedBank[static_cast<size_t>(i)] = weightedBank / totalWeight;
-        }
-        for (int i = 0; i < kSampleCount; ++i) {
-            samples_[static_cast<size_t>(i)].bank = smoothedBank[static_cast<size_t>(i)];
+            for (int i = 0; i < kSampleCount; ++i) {
+                samples_[static_cast<size_t>(i)].bank = smoothedBank[static_cast<size_t>(i)];
+            }
         }
 
         buildProps();
@@ -1111,7 +1113,7 @@ std::array<KartSpec3D, 5> makeKartSpecs() {
 }
 
 std::array<std::string, 6> makeRacers() {
-    return {"DARK", "MAX", "CHARLES", "LEWIS", "OSCAR", "GEORGE"};
+    return {"Dark", "Max", "Charles", "Lewis", "Oscar", "George"};
 }
 
 std::uint8_t racerAssetVariant(std::string_view racer) {

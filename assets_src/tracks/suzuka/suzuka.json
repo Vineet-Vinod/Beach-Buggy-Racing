@@ -3,7 +3,7 @@
   "asset": "suzuka",
   "type": "track_world",
   "display_name": "Suzuka",
-  "venue": "Suzuka International Racing Course inspired coastal circuit",
+  "venue": "Suzuka International Racing Course inspired circuit",
   "country": "Japan",
   "units": "meter",
   "coordinate_unit": "meter",
@@ -42,15 +42,148 @@
     "elevation_sha256": "8a260458f420258a1e8602fea06f90b55b39ebd8a83ea46f6dd2c861cf6bd503",
     "width_symbol": "kSuzukaWidth",
     "width_sha256": "1666c1aeb0463e8959d35db5e0aa985cc857744ef71d3d341f8e46b37bb710e0",
+    "bank_symbol": "kSuzukaBank",
+    "bank_sha256": "88f57b084a20d23ea86a4789f22279888a243a8ee62d2980da95dbce412998bc",
     "catmull_rom_steps_per_control_segment": 32,
     "closed_loop_arc_length_resampling": true
   },
+  "bank_profile": {
+    "min_angle_degrees": -3.597,
+    "max_angle_degrees": 2.792,
+    "sign_convention": "positive raises driver-left edge",
+    "follows_runtime_contact_plane": true
+  },
+  "course_design_profile": {
+    "sources": [
+      {
+        "title": "Suzuka Circuit official course guide",
+        "url": "https://www.suzukacircuit.jp/eng/course_s/"
+      },
+      {
+        "title": "Suzuka Circuit official racing course PDF",
+        "url": "https://www.suzukacircuit.jp/course_s/pdf/suzuka_courseguide.pdf"
+      },
+      {
+        "title": "Formula 1 Suzuka circuit guide",
+        "url": "https://www.formula1.com/en/latest/article/circuit-guide-everything-you-need-to-know-about-the-suzuka-circuit.2BbgsRdkeux78UBGbmYiZV"
+      }
+    ],
+    "runoff_zones": [
+      {
+        "start_m": 420,
+        "end_m": 790,
+        "side": "left",
+        "surface": "gravel",
+        "width_m": 18
+      },
+      {
+        "start_m": 760,
+        "end_m": 1450,
+        "side": "both",
+        "surface": "grass",
+        "width_m": 9
+      },
+      {
+        "start_m": 1570,
+        "end_m": 2070,
+        "side": "left",
+        "surface": "gravel",
+        "width_m": 14
+      },
+      {
+        "start_m": 2480,
+        "end_m": 2850,
+        "side": "right",
+        "surface": "gravel",
+        "width_m": 18
+      },
+      {
+        "start_m": 3260,
+        "end_m": 4010,
+        "side": "right",
+        "surface": "gravel",
+        "width_m": 19
+      },
+      {
+        "start_m": 4560,
+        "end_m": 4940,
+        "side": "right",
+        "surface": "gravel",
+        "width_m": 17
+      },
+      {
+        "start_m": 5000,
+        "end_m": 5360,
+        "side": "both",
+        "surface": "asphalt",
+        "width_m": 12
+      },
+      {
+        "start_m": 5370,
+        "end_m": 5710,
+        "side": "right",
+        "surface": "gravel",
+        "width_m": 11
+      }
+    ],
+    "barrier_zones": [
+      {
+        "start_m": 430,
+        "end_m": 790,
+        "side": "left",
+        "type": "tecpro",
+        "offset_m": 23
+      },
+      {
+        "start_m": 1580,
+        "end_m": 2050,
+        "side": "left",
+        "type": "tecpro",
+        "offset_m": 19
+      },
+      {
+        "start_m": 2490,
+        "end_m": 2840,
+        "side": "right",
+        "type": "tecpro",
+        "offset_m": 23
+      },
+      {
+        "start_m": 3280,
+        "end_m": 3990,
+        "side": "right",
+        "type": "tecpro",
+        "offset_m": 24
+      },
+      {
+        "start_m": 4580,
+        "end_m": 4930,
+        "side": "right",
+        "type": "tecpro",
+        "offset_m": 22
+      },
+      {
+        "start_m": 5020,
+        "end_m": 5350,
+        "side": "both",
+        "type": "tecpro",
+        "offset_m": 17
+      },
+      {
+        "start_m": 5380,
+        "end_m": 5690,
+        "side": "right",
+        "type": "tecpro",
+        "offset_m": 16
+      }
+    ]
+  },
   "runtime_geometry": {
     "centerline_samples": 1024,
-    "mesh_objects": 20,
-    "vertices": 41327,
-    "triangles": 46910,
-    "materials": 27
+    "mesh_objects": 24,
+    "vertices": 44759,
+    "triangles": 48626,
+    "materials": 32
   },
   "measured_bounds_blender": {
     "min": [
@@ -61,12 +194,12 @@
     "max": [
       1520.533,
       880.044,
-      39.745
+      40.214
     ],
     "dimensions": [
       3045.11,
       1759.783,
-      44.745
+      45.214
     ]
   },
   "measured_bounds_gltf_y_up": {
@@ -77,12 +210,12 @@
     ],
     "max": [
       1520.533,
-      39.745,
+      40.214,
       879.739
     ],
     "dimensions": [
       3045.11,
-      44.745,
+      45.214,
       1759.783
     ]
   },
@@ -94,12 +227,12 @@
     ],
     "max": [
       2197.17,
-      57.432,
+      58.109,
       1271.223
     ],
     "dimensions": [
       4400.184,
-      64.657,
+      65.334,
       2542.886
     ]
   },
@@ -150,9 +283,9 @@
     "mapping": "cppWorld = gltfPosition * recommended_glb_uniform_scale",
     "road_surface_offset_above_centerline_asset_units": 0.06,
     "opaque_layer_elevations_asset_units": {
-      "ocean": -5.0,
-      "sand": -0.8,
-      "vegetation": -0.4,
+      "outskirts": -5.0,
+      "verge": -0.8,
+      "infield": -0.4,
       "embankment_outer": -0.2
     },
     "visual_replacement_scope": [
@@ -163,13 +296,13 @@
       "barriers",
       "fencing",
       "terrain",
-      "ocean",
       "grandstands",
       "spectators",
       "marshal_posts",
       "pit_buildings",
       "props",
-      "start_gantry"
+      "start_gantry",
+      "starting_grid_slots"
     ],
     "authoritative_runtime_system": "Track3D remains authoritative for physics, progress, elevation and width",
     "start": {
@@ -201,9 +334,9 @@
     "runoff": "runoff",
     "curb_primary": "curb_red",
     "curb_secondary": "curb_white",
-    "sand": "beach_sand",
-    "vegetation": "island_vegetation",
-    "ocean": "ocean_water",
+    "verge": "terrain_verge",
+    "infield": "infield_grass",
+    "outskirts": "terrain_outskirts",
     "palm_trunk": "palm_trunk",
     "palm_fronds": "palm_fronds",
     "tree_canopy": "tree_canopy",
@@ -212,6 +345,8 @@
     "start_banner": "start_banner",
     "barrier_primary": "barrier_white",
     "barrier_secondary": "barrier_red",
+    "barrier_tecpro_primary": "tecpro_blue",
+    "barrier_tecpro_secondary": "tecpro_red",
     "catch_fence": "catch_fence",
     "grandstand": "grandstand_concrete",
     "grandstand_canopy": "grandstand_canopy",
@@ -223,6 +358,9 @@
     "marshal_roof": "marshal_roof",
     "pit_wall": "pit_building_wall",
     "pit_roof": "pit_building_roof",
+    "runoff_gravel": "runoff_gravel",
+    "runoff_grass": "runoff_grass",
+    "runoff_asphalt": "runoff_asphalt",
     "bridge": "bridge_concrete"
   },
   "presentation_contract": {
@@ -239,6 +377,13 @@
     ],
     "barriers_continuous": true,
     "barrier_samples_per_side": 1024,
+    "tecpro_barrier_samples": 566,
+    "profiled_runoff_objects": [
+      "gravel_runoff_zones",
+      "grass_runoff_zones",
+      "asphalt_runoff_zones"
+    ],
+    "starting_grid_slots": 6,
     "opaque_materials_only": true
   },
   "grounding_contract": {
@@ -250,336 +395,336 @@
         "station": 10,
         "side": 1,
         "lateral": 29.838495,
-        "base_z": 3.446899
+        "base_z": 3.511101
       },
       {
         "kind": "vegetation",
         "station": 38,
         "side": -1,
         "lateral": 27.037405,
-        "base_z": 4.116336
+        "base_z": 4.207697
       },
       {
         "kind": "vegetation",
         "station": 67,
         "side": 1,
         "lateral": 27.297901,
-        "base_z": 3.217849
+        "base_z": 3.309372
       },
       {
         "kind": "vegetation",
         "station": 95,
         "side": -1,
         "lateral": 26.282901,
-        "base_z": 2.65861
+        "base_z": 2.54813
       },
       {
         "kind": "vegetation",
         "station": 124,
         "side": 1,
         "lateral": 21.070163,
-        "base_z": 3.797149
+        "base_z": 4.230028
       },
       {
         "kind": "vegetation",
         "station": 152,
         "side": -1,
         "lateral": 23.489105,
-        "base_z": 5.276102
+        "base_z": 5.452459
       },
       {
         "kind": "vegetation",
         "station": 181,
         "side": 1,
         "lateral": 23.944318,
-        "base_z": 6.853602
+        "base_z": 6.843208
       },
       {
         "kind": "vegetation",
         "station": 209,
         "side": -1,
         "lateral": 21.060006,
-        "base_z": 10.886606
+        "base_z": 10.858118
       },
       {
         "kind": "vegetation",
         "station": 238,
         "side": 1,
         "lateral": 28.313882,
-        "base_z": 7.032795
+        "base_z": 7.168422
       },
       {
         "kind": "vegetation",
         "station": 266,
         "side": -1,
         "lateral": 25.803791,
-        "base_z": 11.890762
+        "base_z": 11.972888
       },
       {
         "kind": "vegetation",
         "station": 294,
         "side": 1,
         "lateral": 25.920073,
-        "base_z": 13.422232
+        "base_z": 13.618847
       },
       {
         "kind": "vegetation",
         "station": 323,
         "side": -1,
         "lateral": 21.125836,
-        "base_z": 17.047684
+        "base_z": 16.981537
       },
       {
         "kind": "vegetation",
         "station": 351,
         "side": 1,
         "lateral": 21.628779,
-        "base_z": 13.422414
+        "base_z": 13.688261
       },
       {
         "kind": "vegetation",
         "station": 380,
         "side": -1,
         "lateral": 25.252759,
-        "base_z": 7.455608
+        "base_z": 7.506267
       },
       {
         "kind": "vegetation",
         "station": 408,
         "side": 1,
         "lateral": 25.964764,
-        "base_z": 5.251279
+        "base_z": 5.302228
       },
       {
         "kind": "vegetation",
         "station": 437,
         "side": -1,
         "lateral": 23.444587,
-        "base_z": 7.506639
+        "base_z": 7.789363
       },
       {
         "kind": "vegetation",
         "station": 465,
         "side": 1,
         "lateral": 28.276491,
-        "base_z": 5.091874
+        "base_z": 4.97835
       },
       {
         "kind": "vegetation",
         "station": 494,
         "side": -1,
         "lateral": 23.240493,
-        "base_z": 7.751719
+        "base_z": 8.014725
       },
       {
         "kind": "vegetation",
         "station": 522,
         "side": 1,
         "lateral": 24.916182,
-        "base_z": 5.644117
+        "base_z": 5.727999
       },
       {
         "kind": "vegetation",
         "station": 550,
         "side": -1,
         "lateral": 21.048791,
-        "base_z": 6.122915
+        "base_z": 6.377271
       },
       {
         "kind": "vegetation",
         "station": 579,
         "side": 1,
         "lateral": 26.535885,
-        "base_z": 2.806096
+        "base_z": 2.757539
       },
       {
         "kind": "vegetation",
         "station": 607,
         "side": -1,
         "lateral": 26.794069,
-        "base_z": 1.806242
+        "base_z": 2.07255
       },
       {
         "kind": "vegetation",
         "station": 636,
         "side": 1,
         "lateral": 22.880755,
-        "base_z": 1.350627
+        "base_z": 1.187872
       },
       {
         "kind": "vegetation",
         "station": 664,
         "side": -1,
         "lateral": 20.206575,
-        "base_z": 0.204798
+        "base_z": 0.688496
       },
       {
         "kind": "vegetation",
         "station": 693,
         "side": 1,
         "lateral": 29.020986,
-        "base_z": 0.802913
+        "base_z": 0.761017
       },
       {
         "kind": "vegetation",
         "station": 721,
         "side": -1,
         "lateral": 26.87065,
-        "base_z": 3.053949
+        "base_z": 3.173765
       },
       {
         "kind": "vegetation",
         "station": 750,
         "side": 1,
         "lateral": 21.923705,
-        "base_z": 8.161361
+        "base_z": 8.238859
       },
       {
         "kind": "vegetation",
         "station": 778,
         "side": -1,
         "lateral": 20.567333,
-        "base_z": 12.415334
+        "base_z": 12.690702
       },
       {
         "kind": "vegetation",
         "station": 806,
         "side": 1,
         "lateral": 27.149495,
-        "base_z": 8.865062
+        "base_z": 8.806212
       },
       {
         "kind": "vegetation",
         "station": 835,
         "side": -1,
         "lateral": 27.679998,
-        "base_z": 9.040727
+        "base_z": 9.296973
       },
       {
         "kind": "vegetation",
         "station": 863,
         "side": 1,
         "lateral": 24.372355,
-        "base_z": 12.383783
+        "base_z": 12.359618
       },
       {
         "kind": "vegetation",
         "station": 892,
         "side": -1,
         "lateral": 30.132549,
-        "base_z": 6.21121
+        "base_z": 6.232407
       },
       {
         "kind": "vegetation",
         "station": 920,
         "side": 1,
         "lateral": 25.042517,
-        "base_z": 10.581594
+        "base_z": 10.669309
       },
       {
         "kind": "vegetation",
         "station": 949,
         "side": -1,
         "lateral": 22.069627,
-        "base_z": 11.797629
+        "base_z": 12.006075
       },
       {
         "kind": "vegetation",
         "station": 977,
         "side": 1,
         "lateral": 28.437595,
-        "base_z": 5.868449
+        "base_z": 5.946519
       },
       {
         "kind": "vegetation",
         "station": 1006,
         "side": -1,
         "lateral": 23.790442,
-        "base_z": 7.680018
+        "base_z": 7.797762
       },
       {
         "kind": "grandstand",
         "station": 81,
         "side": -1,
         "lateral": 23.778547,
-        "base_z": 3.833007
+        "base_z": 3.872751
       },
       {
         "kind": "grandstand",
         "station": 245,
         "side": 1,
         "lateral": 21.279021,
-        "base_z": 15.165879
+        "base_z": 15.400473
       },
       {
         "kind": "grandstand",
         "station": 440,
         "side": -1,
         "lateral": 22.080253,
-        "base_z": 8.435948
+        "base_z": 8.763845
       },
       {
         "kind": "grandstand",
         "station": 634,
         "side": 1,
         "lateral": 22.026224,
-        "base_z": 1.545127
+        "base_z": 1.3725
       },
       {
         "kind": "grandstand",
         "station": 839,
         "side": -1,
         "lateral": 21.917427,
-        "base_z": 15.446525
+        "base_z": 15.895815
       },
       {
         "kind": "marshal",
         "station": 30,
         "side": -1,
         "lateral": 17.288351,
-        "base_z": 8.641843
+        "base_z": 8.818766
       },
       {
         "kind": "marshal",
         "station": 143,
         "side": 1,
         "lateral": 16.872763,
-        "base_z": 7.03451
+        "base_z": 6.928595
       },
       {
         "kind": "marshal",
         "station": 317,
         "side": -1,
         "lateral": 15.029957,
-        "base_z": 25.548573
+        "base_z": 25.446935
       },
       {
         "kind": "marshal",
         "station": 501,
         "side": 1,
         "lateral": 16.302,
-        "base_z": 11.49899
+        "base_z": 11.524834
       },
       {
         "kind": "marshal",
         "station": 716,
         "side": -1,
         "lateral": 15.531528,
-        "base_z": 6.532572
+        "base_z": 6.845801
       },
       {
         "kind": "marshal",
         "station": 931,
         "side": 1,
         "lateral": 17.425389,
-        "base_z": 16.740943
+        "base_z": 16.657285
       },
       {
         "kind": "pit",
         "station": 988,
         "side": 1,
         "lateral": 20.201334,
-        "base_z": 10.873163
+        "base_z": 11.023548
       }
     ],
     "barrier_samples": 2048,
@@ -631,7 +776,6 @@
     "asphalt",
     "barrier_red",
     "barrier_white",
-    "beach_sand",
     "bridge_concrete",
     "catch_fence",
     "coastal_stone",
@@ -640,20 +784,26 @@
     "gantry_metal",
     "grandstand_canopy",
     "grandstand_concrete",
-    "island_vegetation",
+    "infield_grass",
     "marshal_orange",
     "marshal_roof",
-    "ocean_water",
     "palm_fronds",
     "palm_trunk",
     "pit_building_roof",
     "pit_building_wall",
     "runoff",
+    "runoff_asphalt",
+    "runoff_grass",
+    "runoff_gravel",
     "spectator_blue",
     "spectator_red",
     "spectator_white",
     "spectator_yellow",
     "start_banner",
+    "tecpro_blue",
+    "tecpro_red",
+    "terrain_outskirts",
+    "terrain_verge",
     "tree_canopy"
   ],
   "required_nodes": [
@@ -668,8 +818,9 @@
     "track_embankment",
     "continuous_safety_barriers",
     "continuous_catch_fence",
-    "sand_island",
-    "ocean",
+    "terrain_verge",
+    "terrain_infield",
+    "terrain_outskirts",
     "palm_groves",
     "park_trees",
     "coastal_rocks",
@@ -679,6 +830,10 @@
     "pit_buildings",
     "start_gantry",
     "start_finish_line",
+    "starting_grid_slots",
+    "gravel_runoff_zones",
+    "grass_runoff_zones",
+    "asphalt_runoff_zones",
     "suzuka_bridge_structure"
   ],
   "source": "suzuka.blend",

@@ -1,4 +1,4 @@
-"""Build the five Formula Forge coastal circuit world assets with bpy.
+"""Build the five Formula Forge circuit world assets with bpy.
 
 Run from the repository root:
     uv run python tools/blender/tracks/generate_tracks.py --track all
@@ -24,14 +24,15 @@ SAMPLES = 1024
 
 TRACKS = {
     "spa": {
-        "display_name": "Spa Coast",
-        "venue": "Spa-Francorchamps inspired coastal circuit",
+        "display_name": "Spa-Francorchamps",
+        "venue": "Circuit de Spa-Francorchamps inspired Ardennes circuit",
         "country": "Belgium",
         "source_file": "src/track_layout.hpp",
         "centerline": "kSpaControlPoints",
         "source_scale": 1.0,
         "target_length": 7004.0,
         "elevation": "kSpaElevationProfile",
+        "bank_profile": "kSpaBankProfile",
         "width": 13.0,
         "width_formula": "spaRoadWidthMetersForPhase",
         "turns": 19,
@@ -45,12 +46,13 @@ TRACKS = {
     },
     "suzuka": {
         "display_name": "Suzuka",
-        "venue": "Suzuka International Racing Course inspired coastal circuit",
+        "venue": "Suzuka International Racing Course inspired circuit",
         "country": "Japan",
         "source_file": "src/track_catalog.cpp",
         "centerline": "kSuzukaCenterline",
         "target_length": 5807.0,
         "elevation": "kSuzukaElevation",
+        "bank_profile": "kSuzukaBank",
         "width_profile": "kSuzukaWidth",
         "turns": 18,
         "clockwise": True,
@@ -70,12 +72,13 @@ TRACKS = {
     },
     "silverstone": {
         "display_name": "Silverstone",
-        "venue": "Silverstone Circuit inspired coastal airfield",
+        "venue": "Silverstone Circuit inspired historic airfield",
         "country": "United Kingdom",
         "source_file": "src/track_catalog.cpp",
         "centerline": "kSilverstoneCenterline",
         "target_length": 5891.0,
         "elevation": "kSilverstoneElevation",
+        "bank_profile": "kSilverstoneBank",
         "width_profile": "kSilverstoneWidth",
         "turns": 18,
         "clockwise": True,
@@ -88,12 +91,13 @@ TRACKS = {
     },
     "monza": {
         "display_name": "Monza",
-        "venue": "Autodromo Nazionale Monza inspired coastal parkland",
+        "venue": "Autodromo Nazionale Monza inspired royal parkland",
         "country": "Italy",
         "source_file": "src/track_catalog.cpp",
         "centerline": "kMonzaCenterline",
         "target_length": 5793.0,
         "elevation": "kMonzaElevation",
+        "bank_profile": "kMonzaBank",
         "width_profile": "kMonzaWidth",
         "turns": 11,
         "clockwise": True,
@@ -106,13 +110,14 @@ TRACKS = {
     },
     "interlagos": {
         "display_name": "Interlagos",
-        "venue": "Autodromo Jose Carlos Pace inspired coastal hillside",
+        "venue": "Autodromo Jose Carlos Pace inspired Sao Paulo hillside",
         "country": "Brazil",
         "source_file": "src/track_catalog.cpp",
         "centerline": "kInterlagosCenterline",
         "target_length": 4309.0,
         "elevation": "kInterlagosElevation",
         "width_profile": "kInterlagosWidth",
+        "bank_profile": "kInterlagosBank",
         "turns": 15,
         "clockwise": False,
         "palette": "hillside",
@@ -281,6 +286,46 @@ def sample_stations(stations, distance, total, fallback):
     return stations[-1][1]
 
 
+def load_course_design(slug):
+    """Load presentation-only runoff and barrier placement for one circuit."""
+    path = Path(__file__).with_name("profiles") / f"{slug}.json"
+    if not path.exists():
+        return {"sources": [], "runoff_zones": [], "barrier_zones": []}
+    profile = json.loads(path.read_text(encoding="utf-8"))
+    for key in ("sources", "runoff_zones", "barrier_zones"):
+        if not isinstance(profile.get(key, []), list):
+            raise ValueError(f"{path}: {key} must be an array")
+    return profile
+
+
+def distance_in_zone(distance, start, end, total):
+    distance %= total
+    start %= total
+    if end == total:
+        end = total
+    else:
+        end %= total
+    return start <= distance <= end if start <= end else distance >= start or distance <= end
+
+
+def side_matches(zone_side, side):
+    return zone_side == "both" or zone_side == ("left" if side > 0 else "right")
+
+
+def active_zone(zones, distance, side, total):
+    """Return the last matching zone, allowing specific entries to override broad ones."""
+    result = None
+    for zone in zones:
+        if side_matches(zone.get("side", "both"), side) and distance_in_zone(
+                distance, float(zone["start_m"]), float(zone["end_m"]), total):
+            result = zone
+    return result
+
+
+def bank_height(lateral, angle_degrees):
+    return math.tan(math.radians(angle_degrees)) * lateral
+
+
 def smoothstep(value):
     value = max(0.0, min(1.0, value))
     return value * value * (3.0 - 2.0 * value)
@@ -322,7 +367,7 @@ def loop_pose(samples, phase):
     return position, (dx*inv,dy*inv,0.0)
 
 
-def make_strip(name, samples, half_widths, z_offset, material, parent):
+def make_strip(name, samples, half_widths, z_offset, material, parent, bank_angles=None):
     verts = []
     count = len(samples)
     for i, point in enumerate(samples):
@@ -332,8 +377,11 @@ def make_strip(name, samples, half_widths, z_offset, material, parent):
         inv = 1.0 / max(0.001, math.hypot(dx, dy))
         nx, ny = -dy * inv, dx * inv
         width = half_widths[i]
-        verts.extend([(point[0] + nx * width, point[1] + ny * width, point[2] + z_offset),
-                      (point[0] - nx * width, point[1] - ny * width, point[2] + z_offset)])
+        bank = bank_angles[i] if bank_angles else 0.0
+        verts.extend([(point[0] + nx * width, point[1] + ny * width,
+                       point[2] + z_offset + bank_height(width, bank)),
+                      (point[0] - nx * width, point[1] - ny * width,
+                       point[2] + z_offset + bank_height(-width, bank))])
     faces = [(i*2, ((i+1) % count)*2, ((i+1) % count)*2+1, i*2+1) for i in range(count)]
     return mesh_object(name, verts, faces, [material], parent=parent)
 
@@ -350,18 +398,24 @@ def track_frame(samples, index):
     return point, tangent, (-tangent[1], tangent[0])
 
 
-def shoulder_ground_z(point_z, half_width, lateral_distance, detail_scale):
+def shoulder_ground_z(point_z, half_width, lateral_distance, detail_scale,
+                      bank_angle=0.0, runoff_width=4.0):
     """Match make_embankment's shoulder grade at a lateral track offset."""
-    inner_distance = half_width + 4.0 * detail_scale
+    signed_lateral = lateral_distance
+    lateral_distance = abs(lateral_distance)
+    inner_distance = half_width + runoff_width * detail_scale
     outer_distance = half_width + 30.0 * detail_scale
-    inner_z = max(-0.15 * detail_scale, point_z - 0.35 * detail_scale)
+    inner_z = max(-0.15 * detail_scale,
+                  point_z + bank_height(math.copysign(inner_distance, signed_lateral), bank_angle) -
+                  0.12 * detail_scale)
     outer_z = -0.20 * detail_scale
     blend = max(0.0, min(1.0, (lateral_distance - inner_distance) /
                               max(0.001, outer_distance - inner_distance)))
     return inner_z + (outer_z - inner_z) * blend
 
 
-def make_track_limits(samples, half_widths, material, parent, detail_scale, surface_offset):
+def make_track_limits(samples, half_widths, material, parent, detail_scale, surface_offset,
+                      bank_angles):
     """Author continuous white edge lines inside both circuit boundaries."""
     vertices, faces = [], []
     line_width = 0.18 * detail_scale
@@ -372,12 +426,15 @@ def make_track_limits(samples, half_widths, material, parent, detail_scale, surf
             _, _, normal = track_frame(samples, index)
             outer = side * (half_widths[index] - 0.08 * detail_scale)
             inner = side * (half_widths[index] - line_width)
+            bank = bank_angles[index]
             vertices.extend(((point[0] + normal[0] * outer,
                               point[1] + normal[1] * outer,
-                              point[2] + surface_offset + 0.025 * detail_scale),
+                              point[2] + surface_offset + 0.025 * detail_scale +
+                              bank_height(outer, bank)),
                              (point[0] + normal[0] * inner,
                               point[1] + normal[1] * inner,
-                              point[2] + surface_offset + 0.025 * detail_scale)))
+                              point[2] + surface_offset + 0.025 * detail_scale +
+                              bank_height(inner, bank))))
         for index in range(count):
             base = side_start + index * 2
             next_base = side_start + ((index + 1) % count) * 2
@@ -385,11 +442,11 @@ def make_track_limits(samples, half_widths, material, parent, detail_scale, surf
     return mesh_object("track_limit_lines", vertices, faces, [material], parent=parent)
 
 
-def make_safety_barriers(samples, half_widths, materials, parent, detail_scale):
-    """Build continuous concrete barriers and catch fencing around both sides."""
+def make_safety_barriers(samples, half_widths, bank_angles, barrier_offsets,
+                         barrier_types, materials, parent, detail_scale):
+    """Build grounded continuous concrete/Tecpro barriers and catch fencing."""
     wall_vertices, wall_faces, wall_indices = [], [], []
     fence_vertices, fence_faces = [], []
-    wall_offset = 6.0 * detail_scale
     wall_height = 1.15 * detail_scale
     wall_thickness = 0.34 * detail_scale
     fence_height = 2.70 * detail_scale
@@ -399,8 +456,11 @@ def make_safety_barriers(samples, half_widths, materials, parent, detail_scale):
         wall_side_start = len(wall_vertices)
         for index, point in enumerate(samples):
             _, _, normal = track_frame(samples, index)
+            wall_offset = barrier_offsets[side][index] * detail_scale
             lateral = half_widths[index] + wall_offset
-            base_z = shoulder_ground_z(point[2], half_widths[index], lateral, detail_scale)
+            signed_lateral = side * lateral
+            base_z = shoulder_ground_z(point[2], half_widths[index], signed_lateral,
+                                        detail_scale, bank_angles[index])
             grounding.append((side, index, round(base_z, 6)))
             outer = side * (lateral + wall_thickness * 0.5)
             inner = side * (lateral - wall_thickness * 0.5)
@@ -418,7 +478,11 @@ def make_safety_barriers(samples, half_widths, materials, parent, detail_scale):
             wall_faces.extend(((base, nxt, nxt + 2, base + 2),
                                (base + 1, base + 3, nxt + 3, nxt + 1),
                                (base + 2, nxt + 2, nxt + 3, base + 3)))
-            wall_indices.extend((((index // 12) + (1 if side > 0 else 0)) % 2,) * 3)
+            if barrier_types[side][index] == "tecpro":
+                material_index = 2 + ((index // 10) + (1 if side > 0 else 0)) % 2
+            else:
+                material_index = ((index // 12) + (1 if side > 0 else 0)) % 2
+            wall_indices.extend((material_index,) * 3)
         # Three uninterrupted rails read as fencing without relying on alpha blending.
         for rail in range(3):
             rail_start = len(fence_vertices)
@@ -426,9 +490,11 @@ def make_safety_barriers(samples, half_widths, materials, parent, detail_scale):
             rail_thickness = 0.10 * detail_scale
             for index, point in enumerate(samples):
                 _, _, normal = track_frame(samples, index)
+                wall_offset = barrier_offsets[side][index] * detail_scale
                 lateral = half_widths[index] + wall_offset + wall_thickness * 0.5
                 base_z = shoulder_ground_z(point[2], half_widths[index],
-                                            half_widths[index] + wall_offset, detail_scale)
+                                            side * (half_widths[index] + wall_offset), detail_scale,
+                                            bank_angles[index])
                 fence_lateral = side * lateral
                 fence_vertices.extend(((point[0] + normal[0] * fence_lateral,
                                         point[1] + normal[1] * fence_lateral,
@@ -442,9 +508,11 @@ def make_safety_barriers(samples, half_widths, materials, parent, detail_scale):
                 fence_faces.append((base, nxt, nxt + 1, base + 1))
         for index in range(0, count, 16):
             point, tangent, normal = track_frame(samples, index)
+            wall_offset = barrier_offsets[side][index] * detail_scale
             lateral = half_widths[index] + wall_offset + wall_thickness * 0.5
             base_z = shoulder_ground_z(point[2], half_widths[index],
-                                        half_widths[index] + wall_offset, detail_scale)
+                                        side * (half_widths[index] + wall_offset), detail_scale,
+                                        bank_angles[index])
             center = (point[0] + normal[0] * side * lateral,
                       point[1] + normal[1] * side * lateral,
                       base_z + wall_height + fence_height * 0.5)
@@ -452,9 +520,9 @@ def make_safety_barriers(samples, half_widths, materials, parent, detail_scale):
                                       (0.14 * detail_scale, 0.14 * detail_scale, fence_height),
                                       tangent, normal)
     wall = mesh_object("continuous_safety_barriers", wall_vertices, wall_faces,
-                       materials[:2], wall_indices, parent)
+                       materials[:4], wall_indices, parent)
     fence = mesh_object("continuous_catch_fence", fence_vertices, fence_faces,
-                        [materials[2]], parent=parent)
+                        [materials[4]], parent=parent)
     wall["sample_count_per_side"] = count
     wall["grounding_contract"] = "shoulder_grade"
     fence["sample_count_per_side"] = count
@@ -463,7 +531,7 @@ def make_safety_barriers(samples, half_widths, materials, parent, detail_scale):
     return wall, fence, grounding
 
 
-def make_curbs(samples, half_widths, materials, parent, curb_width=0.85):
+def make_curbs(samples, half_widths, bank_angles, materials, parent, curb_width=0.85):
     verts, faces, indices = [], [], []
     count = len(samples)
     for side in (-1, 1):
@@ -474,9 +542,12 @@ def make_curbs(samples, half_widths, materials, parent, curb_width=0.85):
             nx, ny = -dy * inv, dx * inv
             inner = side * half_widths[i]
             outer = side * (half_widths[i] + curb_width)
+            bank = bank_angles[i]
             base = len(verts)
-            verts.extend([(point[0] + nx*inner, point[1] + ny*inner, point[2]+0.09),
-                          (point[0] + nx*outer, point[1] + ny*outer, point[2]+0.09)])
+            verts.extend([(point[0] + nx*inner, point[1] + ny*inner,
+                           point[2]+0.09+bank_height(inner, bank)),
+                          (point[0] + nx*outer, point[1] + ny*outer,
+                           point[2]+0.09+bank_height(outer, bank))])
             j = (i + 1) % count
             next_base = (base + 2) if i + 1 < count else (0 if side == -1 else count * 2)
             faces.append((base, next_base, next_base+1, base+1))
@@ -484,7 +555,108 @@ def make_curbs(samples, half_widths, materials, parent, curb_width=0.85):
     return mesh_object("track_curbs", verts, faces, materials, indices, parent)
 
 
-def make_embankment(samples, half_widths, material, parent, detail_scale=1.0,
+def make_surface_runoff_zones(samples, half_widths, bank_angles, zones, materials,
+                              parent, target_length, surface_offset):
+    """Place gravel/grass/asphalt runoff ribbons only where the circuit profile calls for them."""
+    objects = []
+    count = len(samples)
+    for surface in ("gravel", "grass", "asphalt"):
+        vertices, faces = [], []
+        for side in (-1, 1):
+            for index, point in enumerate(samples):
+                nxt_index = (index + 1) % count
+                distance = target_length * index / count
+                next_distance = target_length * nxt_index / count
+                zone = active_zone(zones, distance, side, target_length)
+                next_zone = active_zone(zones, next_distance, side, target_length)
+                if (zone is None or next_zone is None or zone.get("surface") != surface or
+                        next_zone.get("surface") != surface):
+                    continue
+                inner = half_widths[index] + 0.95
+                outer = inner + float(zone.get("width_m", 6.0))
+                next_inner = half_widths[nxt_index] + 0.95
+                next_outer = next_inner + float(next_zone.get("width_m", 6.0))
+                _, _, normal = track_frame(samples, index)
+                _, _, next_normal = track_frame(samples, nxt_index)
+                signed = (side * inner, side * outer)
+                next_signed = (side * next_inner, side * next_outer)
+                base = len(vertices)
+                vertices.extend((
+                    (point[0] + normal[0] * signed[0], point[1] + normal[1] * signed[0],
+                     point[2] + surface_offset + 0.018 + bank_height(signed[0], bank_angles[index])),
+                    (point[0] + normal[0] * signed[1], point[1] + normal[1] * signed[1],
+                     point[2] + surface_offset + 0.018 + bank_height(signed[1], bank_angles[index])),
+                    (samples[nxt_index][0] + next_normal[0] * next_signed[1],
+                     samples[nxt_index][1] + next_normal[1] * next_signed[1],
+                     samples[nxt_index][2] + surface_offset + 0.018 +
+                     bank_height(next_signed[1], bank_angles[nxt_index])),
+                    (samples[nxt_index][0] + next_normal[0] * next_signed[0],
+                     samples[nxt_index][1] + next_normal[1] * next_signed[0],
+                     samples[nxt_index][2] + surface_offset + 0.018 +
+                     bank_height(next_signed[0], bank_angles[nxt_index])),
+                ))
+                faces.append((base, base + 1, base + 2, base + 3))
+        if faces:
+            obj = mesh_object(f"{surface}_runoff_zones", vertices, faces,
+                              [materials[surface]], parent=parent)
+            obj["profiled_surface"] = surface
+            objects.append(obj)
+    return objects
+
+
+def make_starting_grid_slots(samples, half_widths, bank_angles, start_phase, target_length,
+                             material, parent, surface_offset, slot_count=6):
+    """Author six staggered F1-style grid boxes immediately before the line."""
+    vertices, faces = [], []
+    count = len(samples)
+    # Mirrors initializeRace(): 83.6 simulation-unit car length, 17 units/m,
+    # a 1 m first-row clearance and 3 m between consecutive rows.
+    car_length = 83.6 / 17.0
+    first_center_inset = car_length * 0.5 + 1.0
+    slot_length, slot_width, line_width, spacing = car_length + 0.68, 2.25, 0.16, car_length + 3.0
+
+    def add_marking(center, tangent, normal, half_forward, half_lateral, z):
+        base = len(vertices)
+        vertices.extend((
+            (center[0] - tangent[0]*half_forward - normal[0]*half_lateral,
+             center[1] - tangent[1]*half_forward - normal[1]*half_lateral, z),
+            (center[0] + tangent[0]*half_forward - normal[0]*half_lateral,
+             center[1] + tangent[1]*half_forward - normal[1]*half_lateral, z),
+            (center[0] + tangent[0]*half_forward + normal[0]*half_lateral,
+             center[1] + tangent[1]*half_forward + normal[1]*half_lateral, z),
+            (center[0] - tangent[0]*half_forward + normal[0]*half_lateral,
+             center[1] - tangent[1]*half_forward + normal[1]*half_lateral, z),
+        ))
+        faces.append((base, base + 1, base + 2, base + 3))
+
+    start_index = int(start_phase * count) % count
+    for slot in range(slot_count):
+        distance_behind = first_center_inset + slot * spacing
+        index = int(round(start_index - distance_behind * count / target_length)) % count
+        point, tangent, normal = track_frame(samples, index)
+        side = -1 if slot % 2 == 0 else 1
+        lane = side * min(half_widths[index] * 0.28, 2.0)
+        center = (point[0] + normal[0] * lane, point[1] + normal[1] * lane)
+        z = point[2] + surface_offset + 0.038 + bank_height(lane, bank_angles[index])
+        # Two long and two short strokes form an open, highly legible grid box.
+        for lateral in (-slot_width * 0.5, slot_width * 0.5):
+            stripe_center = (center[0] + normal[0] * lateral,
+                             center[1] + normal[1] * lateral)
+            add_marking(stripe_center, tangent, normal, slot_length * 0.5,
+                        line_width * 0.5, z + bank_height(lateral, bank_angles[index]))
+        for forward in (-slot_length * 0.5, slot_length * 0.5):
+            stripe_center = (center[0] + tangent[0] * forward,
+                             center[1] + tangent[1] * forward)
+            add_marking(stripe_center, tangent, normal, line_width * 0.5,
+                        slot_width * 0.5, z)
+    obj = mesh_object("starting_grid_slots", vertices, faces, [material], parent=parent)
+    obj["slot_count"] = slot_count
+    obj["staggered"] = True
+    obj["before_start_finish"] = True
+    return obj
+
+
+def make_embankment(samples, half_widths, bank_angles, material, parent, detail_scale=1.0,
                     skip_indices=None):
     """Create sloped terrain shoulders from the road grade to the island datum."""
     verts, faces = [], []
@@ -499,7 +671,8 @@ def make_embankment(samples, half_widths, material, parent, detail_scale=1.0,
             nx, ny = -dy*inv, dx*inv
             inner = side*(half_widths[i]+4.0*detail_scale)
             outer = side*(half_widths[i]+30.0*detail_scale)
-            inner_z = max(-0.15*detail_scale, point[2]-0.35*detail_scale)
+            inner_z = shoulder_ground_z(point[2], half_widths[i], inner, detail_scale,
+                                         bank_angles[i])
             verts.extend([(point[0]+nx*inner, point[1]+ny*inner, inner_z),
                           (point[0]+nx*outer, point[1]+ny*outer, -0.20*detail_scale)])
         for i in range(count):
@@ -530,7 +703,7 @@ def find_crossover(samples):
     return {"planar_distance": best[0], "lower_station": lower, "upper_station": upper}
 
 
-def make_bridge_structure(samples, half_widths, crossing, material, parent,
+def make_bridge_structure(samples, half_widths, bank_angles, crossing, material, parent,
                           surface_offset, detail_scale):
     """Build Suzuka's elevated crossover as an open bridge deck and side fascia."""
     upper = crossing["upper_station"]
@@ -543,12 +716,13 @@ def make_bridge_structure(samples, half_widths, crossing, material, parent,
         point, _, normal = track_frame(samples, index)
         width = half_widths[index] + 1.35 * detail_scale
         for side in (-1, 1):
+            crossfall = bank_height(side * width, bank_angles[index])
             vertices.extend(((point[0] + normal[0]*side*width,
                               point[1] + normal[1]*side*width,
-                              point[2] + surface_offset - slab_depth),
+                              point[2] + surface_offset + crossfall - slab_depth),
                              (point[0] + normal[0]*side*width,
                               point[1] + normal[1]*side*width,
-                              point[2] + surface_offset)))
+                              point[2] + surface_offset + crossfall)))
     # Each station contributes lower/upper fascia vertices for right then left.
     for local in range(len(stations)-1):
         base, nxt = local*4, (local+1)*4
@@ -769,6 +943,7 @@ def make_world(slug, spec):
     seed_index = {"spa": 1, "suzuka": 2, "silverstone": 3, "monza": 4, "interlagos": 5}[slug]
     rng = random.Random(7901 + seed_index * 101)
     palette = PALETTES[spec["palette"]]
+    course_design = load_course_design(slug)
     source = REPO / spec["source_file"]
     controls = cpp_pairs(source, spec["centerline"])
     scale = spec.get("source_scale", 1.0)
@@ -782,8 +957,10 @@ def make_world(slug, spec):
     runtime_center2 = resample_closed(dense, SAMPLES)
     elevations = cpp_pairs(source, spec["elevation"]) if spec.get("elevation") else []
     widths = cpp_pairs(source, spec["width_profile"]) if spec.get("width_profile") else []
+    banks = cpp_pairs(source, spec["bank_profile"]) if spec.get("bank_profile") else []
     center = []
     half_widths = []
+    bank_angles = []
     detail_scale = 1.0
     surface_offset = 0.06
     for i, (runtime_x, runtime_y) in enumerate(runtime_center2):
@@ -791,12 +968,23 @@ def make_world(slug, spec):
         z = sample_stations(elevations, distance, target_length, 0.0)
         width = (spa_road_width(i/SAMPLES) if slug == "spa" else
                  sample_stations(widths, distance, target_length, spec.get("width", 13.0)))
+        bank_angle = sample_stations(banks, distance, target_length, 0.0)
         # glTF Y-up conversion maps Blender (x, y, z) to (x, z, -y).
         # Negating runtime Y here therefore makes raylib GLB Z equal C++ track Y.
         # runtime_mirror_y corrects the handedness reversal introduced when the
         # Cartesian source plan is driven in raylib's Y-up XZ ground plane.
         center.append((runtime_x, -runtime_y, z))
         half_widths.append(width * 0.5)
+        bank_angles.append(bank_angle)
+
+    barrier_offsets = {-1: [], 1: []}
+    barrier_types = {-1: [], 1: []}
+    for side in (-1, 1):
+        for index in range(SAMPLES):
+            distance = target_length * index / SAMPLES
+            zone = active_zone(course_design["barrier_zones"], distance, side, target_length)
+            barrier_offsets[side].append(float(zone.get("offset_m", 6.0)) if zone else 6.0)
+            barrier_types[side].append(zone.get("type", "concrete") if zone else "concrete")
 
     min_x, max_x = min(p[0] for p in center), max(p[0] for p in center)
     min_y, max_y = min(p[1] for p in center), max(p[1] for p in center)
@@ -809,11 +997,14 @@ def make_world(slug, spec):
     materials = {
         "asphalt": mat("asphalt", ASPHALT_COLOR, 0.87),
         "shoulder": mat("runoff", (0.30, 0.33, 0.31, 1), 0.92),
+        "gravel": mat("runoff_gravel", (0.52, 0.40, 0.24, 1), 0.98),
+        "runoff_grass": mat("runoff_grass", palette["grass"], 0.98),
+        "runoff_asphalt": mat("runoff_asphalt", (0.24, 0.255, 0.265, 1), 0.94),
         "red": mat("curb_red", (0.72, 0.035, 0.025, 1), 0.60),
         "white": mat("curb_white", (0.90, 0.88, 0.78, 1), 0.65),
-        "sand": mat("beach_sand", palette["sand"], 0.96),
-        "grass": mat("island_vegetation", palette["grass"], 0.96),
-        "water": mat("ocean_water", (0.018, 0.22, 0.34, 1), 0.20, 0.12),
+        "sand": mat("terrain_verge", tuple(min(1.0, channel * 1.18) for channel in palette["grass"][:3]) + (1,), 0.98),
+        "grass": mat("infield_grass", palette["grass"], 0.98),
+        "water": mat("terrain_outskirts", tuple(channel * 0.62 for channel in palette["grass"][:3]) + (1,), 0.99),
         "trunk": mat("palm_trunk", (0.30, 0.13, 0.045, 1), 0.90),
         "leaf": mat("palm_fronds", (0.025, 0.29, 0.10, 1), 0.88),
         "rock": mat("coastal_stone", (0.25, 0.27, 0.25, 1), 0.96),
@@ -821,6 +1012,8 @@ def make_world(slug, spec):
         "banner": mat("start_banner", (0.94, 0.35, 0.025, 1), 0.45),
         "barrier_white": mat("barrier_white", (0.78, 0.80, 0.78, 1), 0.72),
         "barrier_red": mat("barrier_red", (0.62, 0.035, 0.025, 1), 0.68),
+        "tecpro_blue": mat("tecpro_blue", (0.025, 0.16, 0.52, 1), 0.70),
+        "tecpro_red": mat("tecpro_red", (0.78, 0.035, 0.025, 1), 0.70),
         "fence": mat("catch_fence", (0.17, 0.21, 0.23, 1), 0.38, 0.55),
         "stand": mat("grandstand_concrete", (0.30, 0.32, 0.32, 1), 0.86),
         "canopy": mat("grandstand_canopy", (0.82, 0.84, 0.80, 1), 0.62),
@@ -844,7 +1037,7 @@ def make_world(slug, spec):
     terrain = empty("terrain_root", root)
     scenery = empty("scenery_root", root)
 
-    # Octagonal island leaves ocean visible on every side without a costly terrain grid.
+    # Nested non-overlapping inland terrain rings avoid kilometer-scale z-fighting.
     ix0, ix1, iy0, iy1 = min_x-margin, max_x+margin, min_y-margin, max_y+margin
     chamfer = min(span_x, span_y) * 0.09
     sand_z = -0.80*detail_scale
@@ -852,37 +1045,45 @@ def make_world(slug, spec):
               (ix1,iy0+chamfer,sand_z), (ix1,iy1-chamfer,sand_z),
               (ix1-chamfer,iy1,sand_z), (ix0+chamfer,iy1,sand_z),
               (ix0,iy1-chamfer,sand_z), (ix0,iy0+chamfer,sand_z)]
-    # Slightly smaller green interior defines the inner edge of the beach ring.
+    # Slightly smaller infield defines a contrasting close-cut verge ring.
     green = [(cx+(x-cx)*0.90, cy+(y-cy)*0.90, -0.40*detail_scale) for x,y,_ in island]
     sand_inner = [(x,y,sand_z) for x,y,_ in green]
-    planar_ring("sand_island", island, sand_inner, materials["sand"], terrain)
-    planar_fan("island_vegetation", green, materials["grass"], terrain)
-    ocean_scale = 1.28
-    ocean = [(cx+(x-cx)*ocean_scale, cy+(y-cy)*ocean_scale, -5.0*detail_scale) for x,y,_ in island]
-    ocean_inner = [(x,y,-5.0*detail_scale) for x,y,_ in island]
-    planar_ring("ocean", ocean, ocean_inner, materials["water"], terrain)
+    planar_ring("terrain_verge", island, sand_inner, materials["sand"], terrain)
+    planar_fan("terrain_infield", green, materials["grass"], terrain)
+    outskirts_scale = 1.28
+    outskirts = [(cx+(x-cx)*outskirts_scale, cy+(y-cy)*outskirts_scale, -5.0*detail_scale) for x,y,_ in island]
+    outskirts_inner = [(x,y,-5.0*detail_scale) for x,y,_ in island]
+    planar_ring("terrain_outskirts", outskirts, outskirts_inner, materials["water"], terrain)
 
     bridge_skip = set()
     if crossing:
         upper = crossing["upper_station"]
         bridge_skip = {(upper+offset) % SAMPLES for offset in range(-15,16)}
-    make_embankment(center, half_widths, materials["grass"], terrain, detail_scale,
+    make_embankment(center, half_widths, bank_angles, materials["grass"], terrain, detail_scale,
                     bridge_skip)
-    make_strip("track_runoff", center, [w+4.0*detail_scale for w in half_widths], 0.00, materials["shoulder"], circuit)
-    make_strip("track_surface", center, half_widths, surface_offset, materials["asphalt"], circuit)
-    make_curbs(center, half_widths, [materials["red"], materials["white"]], circuit,
+    make_strip("track_runoff", center, [w+4.0*detail_scale for w in half_widths], 0.00,
+               materials["shoulder"], circuit, bank_angles)
+    make_strip("track_surface", center, half_widths, surface_offset, materials["asphalt"],
+               circuit, bank_angles)
+    runoff_objects = make_surface_runoff_zones(
+        center, half_widths, bank_angles, course_design["runoff_zones"],
+        {"gravel": materials["gravel"], "grass": materials["runoff_grass"],
+         "asphalt": materials["runoff_asphalt"]},
+        circuit, target_length, surface_offset)
+    make_curbs(center, half_widths, bank_angles, [materials["red"], materials["white"]], circuit,
                0.85*detail_scale)
     make_track_limits(center, half_widths, materials["white"], circuit, detail_scale,
-                      surface_offset)
+                      surface_offset, bank_angles)
     _, _, barrier_grounding = make_safety_barriers(
-        center, half_widths,
-        [materials["barrier_white"], materials["barrier_red"], materials["fence"]],
+        center, half_widths, bank_angles, barrier_offsets, barrier_types,
+        [materials["barrier_white"], materials["barrier_red"],
+         materials["tecpro_blue"], materials["tecpro_red"], materials["fence"]],
         circuit, detail_scale)
     bridge_clearance = None
     bridge_stations = []
     if crossing:
         _, bridge_clearance, bridge_stations = make_bridge_structure(
-            center, half_widths, crossing, materials["bridge"], circuit,
+            center, half_widths, bank_angles, crossing, materials["bridge"], circuit,
             surface_offset, detail_scale)
 
     # Every prop base samples the same sloped shoulder function as track_embankment.
@@ -892,7 +1093,8 @@ def make_world(slug, spec):
         p, tangent, normal = track_frame(center, i)
         side = -1 if index % 2 else 1
         lateral = half_widths[i] + (13.0 + rng.uniform(0, 11))*detail_scale
-        base_z = shoulder_ground_z(p[2], half_widths[i], lateral, detail_scale)
+        base_z = shoulder_ground_z(p[2], half_widths[i], side * lateral, detail_scale,
+                                    bank_angles[i])
         position = (p[0] + normal[0]*side*lateral,
                     p[1] + normal[1]*side*lateral, base_z)
         grounded_instances.append({"kind": "vegetation", "station": i, "side": side,
@@ -916,7 +1118,8 @@ def make_world(slug, spec):
             side = -1 if (ordinal + (0 if kind == "pit" else 1)) % 2 else 1
             extra = {"grandstand": 16.0, "marshal": 10.0, "pit": 13.0}[kind]
             lateral = half_widths[i] + extra * detail_scale
-            base_z = shoulder_ground_z(p[2], half_widths[i], lateral, detail_scale)
+            base_z = shoulder_ground_z(p[2], half_widths[i], side * lateral, detail_scale,
+                                        bank_angles[i])
             position = (p[0] + normal[0]*side*lateral,
                         p[1] + normal[1]*side*lateral, base_z)
             infrastructure.append({"kind": kind, "position": position,
@@ -961,6 +1164,8 @@ def make_world(slug, spec):
                   (0.8*detail_scale,start_half_width,surface_offset+0.10*detail_scale),
                   (-0.8*detail_scale,start_half_width,surface_offset+0.10*detail_scale)]
     line = mesh_object("start_finish_line", line_verts, [(0,1,2,3)], [materials["white"]], parent=gantry)
+    make_starting_grid_slots(center, half_widths, bank_angles, start_phase, target_length,
+                             materials["white"], circuit, surface_offset)
 
     planar = length_closed([(p[0],p[1]) for p in center])
     surface = length_closed(center)
@@ -979,13 +1184,20 @@ def make_world(slug, spec):
         "control_sha256": pair_digest(controls),
         "elevation_sha256": pair_digest(elevations) if elevations else None,
         "width_sha256": pair_digest(widths) if widths else None,
+        "bank_sha256": pair_digest(banks) if banks else None,
+        "bank_angle_min_degrees": round(min(bank_angles), 3),
+        "bank_angle_max_degrees": round(max(bank_angles), 3),
+        "course_design": course_design,
+        "profiled_runoff_objects": [obj.name for obj in runoff_objects],
+        "tecpro_samples": sum(kind == "tecpro" for side in (-1, 1)
+                              for kind in barrier_types[side]),
         "start_phase": start_phase,
         "start_position_blender": [round(v, 6) for v in p],
         "start_forward_blender": [round(v, 8) for v in start_forward],
         "surface_offset": surface_offset,
-        "opaque_layer_elevations": {"ocean": -5.0*detail_scale,
-                                    "sand": sand_z,
-                                    "vegetation": -0.40*detail_scale,
+        "opaque_layer_elevations": {"outskirts": -5.0*detail_scale,
+                                    "verge": sand_z,
+                                    "infield": -0.40*detail_scale,
                                     "embankment_outer": -0.20*detail_scale},
         "grounded_instances": grounded_instances,
         "barrier_grounding": barrier_grounding,
@@ -1080,12 +1292,13 @@ def export_track(slug, spec, output_root):
     forward_gltf = [forward_b[0], forward_b[2], -forward_b[1]]
     material_roles = {
         "road": "asphalt", "runoff": "runoff", "curb_primary": "curb_red",
-        "curb_secondary": "curb_white", "sand": "beach_sand",
-        "vegetation": "island_vegetation", "ocean": "ocean_water",
+        "curb_secondary": "curb_white", "verge": "terrain_verge",
+        "infield": "infield_grass", "outskirts": "terrain_outskirts",
         "palm_trunk": "palm_trunk", "palm_fronds": "palm_fronds",
         "tree_canopy": "tree_canopy", "rocks": "coastal_stone",
         "gantry": "gantry_metal", "start_banner": "start_banner",
         "barrier_primary": "barrier_white", "barrier_secondary": "barrier_red",
+        "barrier_tecpro_primary": "tecpro_blue", "barrier_tecpro_secondary": "tecpro_red",
         "catch_fence": "catch_fence", "grandstand": "grandstand_concrete",
         "grandstand_canopy": "grandstand_canopy", "spectator_red": "spectator_red",
         "spectator_blue": "spectator_blue", "spectator_yellow": "spectator_yellow",
@@ -1096,9 +1309,14 @@ def export_track(slug, spec, output_root):
     required_nodes = ["map_root", "circuit_root", "terrain_root", "scenery_root",
                       "track_surface", "track_runoff", "track_limit_lines", "track_curbs",
                       "track_embankment", "continuous_safety_barriers", "continuous_catch_fence",
-                      "sand_island", "ocean", "palm_groves", "park_trees", "coastal_rocks",
+                      "terrain_verge", "terrain_infield", "terrain_outskirts",
+                      "palm_groves", "park_trees", "coastal_rocks",
                       "formula_grandstands", "grandstand_spectators", "marshal_posts", "pit_buildings",
-                      "start_gantry", "start_finish_line"]
+                      "start_gantry", "start_finish_line", "starting_grid_slots"]
+    for object_name in info["profiled_runoff_objects"]:
+        required_nodes.append(object_name)
+        surface = object_name.removesuffix("_runoff_zones")
+        material_roles[f"runoff_{surface}"] = f"runoff_{surface}"
     if info["bridge"]:
         material_roles["bridge"] = "bridge_concrete"
         required_nodes.append("suzuka_bridge_structure")
@@ -1132,8 +1350,15 @@ def export_track(slug, spec, output_root):
                               "elevation_sha256": info["elevation_sha256"],
                               "width_symbol": spec.get("width_profile"),
                               "width_sha256": info["width_sha256"],
+                              "bank_symbol": spec.get("bank_profile"),
+                              "bank_sha256": info["bank_sha256"],
                               "catmull_rom_steps_per_control_segment": 32,
                               "closed_loop_arc_length_resampling": True},
+        "bank_profile": {"min_angle_degrees": info["bank_angle_min_degrees"],
+                          "max_angle_degrees": info["bank_angle_max_degrees"],
+                          "sign_convention": "positive raises driver-left edge",
+                          "follows_runtime_contact_plane": True},
+        "course_design_profile": info["course_design"],
         "runtime_geometry": {"centerline_samples": info["sample_count"],
                              "mesh_objects": len(meshes),
                              "vertices": sum(len(obj.data.vertices) for obj in meshes),
@@ -1157,8 +1382,9 @@ def export_track(slug, spec, output_root):
             "road_surface_offset_above_centerline_asset_units": info["surface_offset"],
             "opaque_layer_elevations_asset_units": info["opaque_layer_elevations"],
             "visual_replacement_scope": ["road", "runoff", "track_limits", "curbs", "barriers",
-                                         "fencing", "terrain", "ocean", "grandstands", "spectators",
-                                         "marshal_posts", "pit_buildings", "props", "start_gantry"],
+                                         "fencing", "terrain", "grandstands", "spectators",
+                                         "marshal_posts", "pit_buildings", "props", "start_gantry",
+                                         "starting_grid_slots"],
             "authoritative_runtime_system": "Track3D remains authoritative for physics, progress, elevation and width",
             "start": {"phase": info["start_phase"],
                       "position_blender": start_b, "forward_blender": forward_b,
@@ -1174,6 +1400,9 @@ def export_track(slug, spec, output_root):
             "asphalt_luminance_range": [ASPHALT_MIN_LUMINANCE, ASPHALT_MAX_LUMINANCE],
             "barriers_continuous": True,
             "barrier_samples_per_side": SAMPLES,
+            "tecpro_barrier_samples": info["tecpro_samples"],
+            "profiled_runoff_objects": info["profiled_runoff_objects"],
+            "starting_grid_slots": 6,
             "opaque_materials_only": True,
         },
         "grounding_contract": {

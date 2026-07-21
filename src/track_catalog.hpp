@@ -42,6 +42,7 @@ struct TrackCatalogEntry {
     std::span<const TrackControlPoint> centerline;
     std::span<const TrackElevationPoint> elevationProfile;
     std::span<const TrackWidthPoint> widthProfile;
+    std::span<const TrackBankPoint> bankProfile;
     std::span<const TrackGradeSeparation> gradeSeparations;
 };
 
@@ -50,6 +51,7 @@ const TrackCatalogEntry* findTrackCatalogEntry(CatalogCircuitId id) noexcept;
 
 float sampleTrackElevationMeters(const TrackCatalogEntry& track, float distanceMeters) noexcept;
 float sampleTrackWidthMeters(const TrackCatalogEntry& track, float distanceMeters) noexcept;
+float sampleTrackBankDegrees(const TrackCatalogEntry& track, float distanceMeters) noexcept;
 
 enum class TrackTurnDirection : int {
     Right = -1,
