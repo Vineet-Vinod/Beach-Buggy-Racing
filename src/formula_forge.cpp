@@ -67,6 +67,13 @@ constexpr float kTcamTargetHeightMeters = 0.38f;
 constexpr float kTcamFovDegrees = 80.0f;
 constexpr float kGridFirstRowClearanceMeters = 1.0f;
 constexpr float kGridSlotGapMeters = 3.0f;
+constexpr std::array<float, kKartCount> kAuthoredGridSide = {-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f};
+
+float runtimeGridSideForSlot(int slot) {
+    // Blender's plan-Y axis becomes the opposite lateral direction after the
+    // authored glTF track is transformed into raylib world space.
+    return -kAuthoredGridSide[static_cast<size_t>(slot)];
+}
 
 bool isMetricCircuit(TrackLayoutId layout) {
     (void)layout;
@@ -2466,8 +2473,6 @@ public:
             const float firstRowInsetMeters = longestCar / unitsPerMeter * 0.5f + kGridFirstRowClearanceMeters;
             const float slotSpacingMeters = longestCar / unitsPerMeter + kGridSlotGapMeters;
             const float columnOffset = std::max(widestCar * 0.95f, 2.0f * unitsPerMeter);
-            static constexpr std::array<float, kKartCount> kGridSide = {-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f};
-
             std::array<float, kKartCount> distanceBehindStartMeters{};
             for (int i = 0; i < kKartCount; ++i) {
                 const int gridSlot = i == 0 ? kKartCount - 1 : i - 1;
@@ -2475,7 +2480,7 @@ public:
                                                static_cast<float>(gridSlot) * slotSpacingMeters;
                 const TrackPoint3D expectedPoint = track_.sample(expectedProgress);
                 const Kart3D& kart = karts_[static_cast<size_t>(i)];
-                const float expectedLane = std::clamp(kGridSide[static_cast<size_t>(gridSlot)] * columnOffset,
+                const float expectedLane = std::clamp(runtimeGridSideForSlot(gridSlot) * columnOffset,
                                                       -roadCenterLimit(kart, expectedPoint),
                                                       roadCenterLimit(kart, expectedPoint));
                 const Vec2 expectedPosition = expectedPoint.pos + expectedPoint.normal * expectedLane;
@@ -4391,7 +4396,6 @@ private:
         const float firstRowInsetMeters = longestCar / unitsPerMeter * 0.5f + kGridFirstRowClearanceMeters;
         const float rowSpacingMeters = longestCar / unitsPerMeter + kGridSlotGapMeters;
         const float columnOffset = std::max(widestCar * 0.95f, 2.0f * unitsPerMeter);
-        static constexpr std::array<float, kKartCount> kGridSide = {-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f};
         for (int i = 0; i < kKartCount; ++i) {
             Kart3D kart;
             kart.spec = specs_[static_cast<size_t>(i == 0 ? selectedCar_ : i % static_cast<int>(specs_.size()))];
@@ -4410,7 +4414,7 @@ private:
             const TrackPoint3D grid = track_.sample(stagger);
             const float lane = isTimeTrial() && i == 0
                                    ? 0.0f
-                                   : std::clamp(kGridSide[static_cast<size_t>(gridSlot)] * columnOffset,
+                                   : std::clamp(runtimeGridSideForSlot(gridSlot) * columnOffset,
                                                 -roadCenterLimit(kart, grid), roadCenterLimit(kart, grid));
             kart.pos = grid.pos + grid.normal * lane;
             kart.heading = angleOf(grid.tangent);
