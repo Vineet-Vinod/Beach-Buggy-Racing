@@ -111,11 +111,11 @@ them.
 - Eight-speed manual sequential transmission with paddle edge detection,
   downshift over-rev protection, shift torque interruption, gear-dependent
   engine braking, rolling resistance, and speed-squared aerodynamic drag
-- Formula-aware AI that scans upcoming curvature, brakes before turn-in,
-  coasts at the tire limit, accelerates from the apex, and does not drift
+- Formula-aware AI that plans an outside-apex-exit racing line, scans upcoming
+  curvature, brakes before turn-in, commits to corner exits, and does not drift
 - Procedural engine, drivetrain, road, wind, tire-scrub, and landing audio
-- Circuit-specific AI pace with deterministic braking, track-limit, and
-  progress-stability audits
+- Circuit-specific AI pace with persistent passing moves, safe following gaps,
+  modest player-pace adaptation, and deterministic Monza pace/track-limit audits
 - Metric lap-length, elevation, road-width, and grade-separation contracts for
   Spa-Francorchamps, Suzuka, Silverstone, Monza, and Interlagos
 - Race and Time Trial sessions: full-grid finite races or solo infinite-lap
@@ -211,7 +211,9 @@ manual shifting, engine braking, drag, surfaces, jumping, landing, and fixed-ste
 without opening a window. `--race-flow-audit` runs 20 checks for countdowns, checkpoints,
 wrong-way state, finish ordering, infinite races, and discontinuity handling.
 `--race-audit` runs a longer headless simulation and reports progress jumps,
-pack balance, contacts, track-limit excursions, and lap pace.
+pack balance, contacts, track-limit excursions, and lap pace. `--ai-pace-audit`
+runs two deterministic Monza laps and validates the second, flying lap against
+the 75-second player benchmark.
 `--capture-playtest` writes deterministic loading, selection, pause, result, and race frames to
 `build/playtest_frames` so visual and camera changes can be inspected without a
 working video device.
