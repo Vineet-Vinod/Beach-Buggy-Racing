@@ -22,8 +22,8 @@ constexpr TrackControlPoint kSuzukaCenterline[] = {
     {16.798f, 136.056f}, {1.031f, 98.783f}, {-0.295f, 58.230f},
     {7.131f, 18.156f}, {14.434f, -21.928f}, {-6.264f, -56.451f},
     {-31.367f, -87.974f}, {-68.538f, -74.272f}, {-104.382f, -54.869f},
-    {-140.120f, -35.272f}, {-174.264f, -13.734f}, {-195.590f, 20.956f},
-    {-221.583f, 36.301f}, {-211.746f, -2.856f}, {-200.482f, -41.988f},
+    {-140.120f, -35.272f}, {-174.264f, -13.734f}, {-210.000f, 18.000f},
+    {-275.000f, 28.000f}, {-260.000f, -8.000f}, {-230.000f, -48.000f},
     {-199.552f, -82.429f}, {-216.696f, -119.058f}, {-245.161f, -148.073f},
     {-279.145f, -170.550f}, {-316.298f, -186.896f}, {-356.721f, -190.088f},
     {-396.542f, -181.661f}, {-435.652f, -170.187f}, {-475.138f, -169.136f},
@@ -47,7 +47,8 @@ constexpr TrackElevationPoint kSuzukaElevation[] = {
 
 constexpr TrackWidthPoint kSuzukaWidth[] = {
     {0.0f, 14.0f},    {590.0f, 16.0f},  {1080.0f, 11.0f}, {1780.0f, 10.0f},
-    {2370.0f, 12.0f}, {3150.0f, 13.0f}, {4090.0f, 11.0f}, {4890.0f, 12.0f},
+    {2370.0f, 12.0f}, {2480.0f, 11.0f}, {2520.0f, 10.0f}, {2780.0f, 10.0f},
+    {2860.0f, 11.5f}, {3150.0f, 13.0f}, {4090.0f, 11.0f}, {4890.0f, 12.0f},
     {5300.0f, 15.0f}, {5807.0f, 14.0f},
 };
 
@@ -75,7 +76,7 @@ constexpr TrackRunoffZone kSuzukaRunoff[] = {
 
 // The Spoon-to-130R back straight is the bridge; the Degner-to-hairpin branch
 // passes beneath it. These stations match the sole plan-view intersection.
-constexpr TrackGradeSeparation kSuzukaCrossings[] = {{2315.7f, 4660.5f, 10.0f}};
+constexpr TrackGradeSeparation kSuzukaCrossings[] = {{2268.4f, 4684.2f, 10.0f}};
 
 constexpr TrackControlPoint kSilverstoneCenterline[] = {
     {69.383f, -231.257f}, {36.068f, -193.943f}, {2.221f, -157.113f},

@@ -17,31 +17,31 @@
     "unit": "meter"
   },
   "target_lap_length_m": 5807.0,
-  "measured_planar_centerline_asset_units": 5805.9514,
-  "measured_surface_centerline_asset_units": 5807.9745,
+  "measured_planar_centerline_asset_units": 5806.7363,
+  "measured_surface_centerline_asset_units": 5808.7627,
   "turn_count": 18,
   "clockwise": true,
   "road_width_asset_units": {
-    "min": 10.002,
+    "min": 10.0,
     "max": 15.999,
     "unit": "meter",
     "profile": "kSuzukaWidth",
     "formula": null
   },
   "road_width_cpp_world_units": {
-    "min": 14.453,
+    "min": 14.45,
     "max": 23.119
   },
   "source_centerline": {
     "file": "src/track_catalog.cpp",
     "symbol": "kSuzukaCenterline",
     "control_points": 72,
-    "normalization_scale": 2.00745164,
-    "control_sha256": "b480bc823fb2808d5bbafe3089e4eb236444ec8263198512a7f8c5dc9759b730",
+    "normalization_scale": 1.96741502,
+    "control_sha256": "659b3a908d6873bab21508f090e3d091e3663c9762d5a23e16cf6b6a3a033ab0",
     "elevation_symbol": "kSuzukaElevation",
     "elevation_sha256": "8a260458f420258a1e8602fea06f90b55b39ebd8a83ea46f6dd2c861cf6bd503",
     "width_symbol": "kSuzukaWidth",
-    "width_sha256": "1666c1aeb0463e8959d35db5e0aa985cc857744ef71d3d341f8e46b37bb710e0",
+    "width_sha256": "1f2849c6a5ca1a64cabe83c43969f2e3099eba800c8bfbb8f02cbb1a63ae6ee3",
     "bank_symbol": "kSuzukaBank",
     "bank_sha256": "88f57b084a20d23ea86a4789f22279888a243a8ee62d2980da95dbce412998bc",
     "catmull_rom_steps_per_control_segment": 32,
@@ -179,61 +179,61 @@
     ]
   },
   "runtime_geometry": {
-    "centerline_samples": 1024,
+    "centerline_samples": 2048,
     "mesh_objects": 24,
-    "vertices": 44759,
-    "triangles": 48626,
+    "vertices": 314319,
+    "triangles": 413694,
     "materials": 32
   },
   "measured_bounds_blender": {
     "min": [
-      -1524.577,
-      -879.739,
+      -1498.784,
+      -866.802,
       -5.0
     ],
     "max": [
-      1520.533,
-      880.044,
-      48.366
+      1494.801,
+      867.089,
+      48.256
     ],
     "dimensions": [
-      3045.11,
-      1759.783,
-      53.366
+      2993.585,
+      1733.892,
+      53.256
     ]
   },
   "measured_bounds_gltf_y_up": {
     "min": [
-      -1524.577,
+      -1498.784,
       -5.0,
-      -880.044
+      -867.089
     ],
     "max": [
-      1520.533,
-      48.366,
-      879.739
+      1494.801,
+      48.256,
+      866.802
     ],
     "dimensions": [
-      3045.11,
-      53.366,
-      1759.783
+      2993.585,
+      53.256,
+      1733.891
     ]
   },
   "expected_bounds_cpp_world": {
     "min": [
-      -2203.014,
+      -2165.743,
       -7.225,
-      -1271.664
+      -1252.944
     ],
     "max": [
-      2197.17,
-      69.889,
-      1271.223
+      2159.987,
+      69.73,
+      1252.529
     ],
     "dimensions": [
-      4400.184,
-      77.114,
-      2542.886
+      4325.73,
+      76.955,
+      2505.472
     ]
   },
   "runtime_alignment": {
@@ -284,8 +284,8 @@
     "road_surface_offset_above_centerline_asset_units": 0.06,
     "opaque_layer_elevations_asset_units": {
       "outskirts": -5.0,
-      "verge": -0.8,
-      "infield": -0.4
+      "verge": -1.117860145878593,
+      "infield": -0.7178601458785929
     },
     "visual_replacement_scope": [
       "road",
@@ -307,24 +307,24 @@
     "start": {
       "phase": 0.0,
       "position_blender": [
-        523.453051,
-        506.357593,
+        513.013305,
+        496.258798,
         14.0
       ],
       "forward_blender": [
         0.99999848,
-        0.00174156,
+        0.00174174,
         0.0
       ],
       "position_gltf_raylib": [
-        523.453051,
+        513.013305,
         14.0,
-        -506.357593
+        -496.258798
       ],
       "forward_gltf_raylib": [
         0.99999848,
         0.0,
-        -0.00174156
+        -0.00174174
       ]
     }
   },
@@ -375,8 +375,8 @@
       0.42
     ],
     "barriers_continuous": true,
-    "barrier_samples_per_side": 1024,
-    "tecpro_barrier_samples": 566,
+    "barrier_samples_per_side": 2048,
+    "tecpro_barrier_samples": 1130,
     "profiled_runoff_objects": [
       "gravel_runoff_zones",
       "grass_runoff_zones",
@@ -388,6 +388,11 @@
   "grounding_contract": {
     "terrain_function": "shoulder_ground_z",
     "profiled_runoff_surface_offset_asset_units": 0.06,
+    "nearest_section_projection": true,
+    "nearest_branch_bisector_clipping": true,
+    "branch_reach_probe_step_asset_units": 0.25,
+    "radial_step_asset_units": 1.0,
+    "offroad_visual_clearance_asset_units": 0.1,
     "runoff_transition_asset_units": 4.0,
     "terrain_reach_asset_units": 36.0,
     "outer_edge_follows_local_centerline": true,
@@ -395,384 +400,384 @@
     "instances": [
       {
         "kind": "vegetation",
-        "station": 10,
+        "station": 21,
         "side": 1,
-        "lateral": 29.838495,
-        "base_z": 13.214799
+        "lateral": 29.843301,
+        "base_z": 13.175539
       },
       {
         "kind": "vegetation",
-        "station": 38,
+        "station": 77,
         "side": -1,
-        "lateral": 27.037405,
-        "base_z": 11.016235
+        "lateral": 27.042211,
+        "base_z": 10.976975
       },
       {
         "kind": "vegetation",
-        "station": 67,
+        "station": 134,
         "side": 1,
         "lateral": 27.297901,
         "base_z": 8.739151
       },
       {
         "kind": "vegetation",
-        "station": 95,
+        "station": 191,
         "side": -1,
-        "lateral": 26.282901,
-        "base_z": 6.265772
+        "lateral": 26.287707,
+        "base_z": 6.219828
       },
       {
         "kind": "vegetation",
-        "station": 124,
+        "station": 248,
         "side": 1,
         "lateral": 21.070163,
         "base_z": 6.863842
       },
       {
         "kind": "vegetation",
-        "station": 152,
+        "station": 305,
         "side": -1,
-        "lateral": 23.489105,
-        "base_z": 11.076296
+        "lateral": 23.474639,
+        "base_z": 11.142302
       },
       {
         "kind": "vegetation",
-        "station": 181,
+        "station": 362,
         "side": 1,
         "lateral": 23.944318,
         "base_z": 15.505747
       },
       {
         "kind": "vegetation",
-        "station": 209,
+        "station": 419,
         "side": -1,
-        "lateral": 21.060006,
-        "base_z": 20.019521
+        "lateral": 21.057981,
+        "base_z": 20.136505
       },
       {
         "kind": "vegetation",
-        "station": 238,
+        "station": 476,
         "side": 1,
         "lateral": 28.313882,
         "base_z": 27.138581
       },
       {
         "kind": "vegetation",
-        "station": 266,
+        "station": 533,
         "side": -1,
-        "lateral": 25.803791,
-        "base_z": 33.626327
+        "lateral": 25.801766,
+        "base_z": 33.743906
       },
       {
         "kind": "vegetation",
-        "station": 294,
+        "station": 589,
         "side": 1,
-        "lateral": 25.920073,
-        "base_z": 38.96488
+        "lateral": 25.918048,
+        "base_z": 38.854734
       },
       {
         "kind": "vegetation",
-        "station": 323,
+        "station": 646,
         "side": -1,
         "lateral": 21.125836,
         "base_z": 32.028234
       },
       {
         "kind": "vegetation",
-        "station": 351,
+        "station": 703,
         "side": 1,
-        "lateral": 21.628779,
-        "base_z": 26.133751
+        "lateral": 21.633585,
+        "base_z": 26.018997
       },
       {
         "kind": "vegetation",
-        "station": 380,
+        "station": 760,
         "side": -1,
         "lateral": 25.252759,
         "base_z": 19.267425
       },
       {
         "kind": "vegetation",
-        "station": 408,
+        "station": 817,
         "side": 1,
-        "lateral": 25.964764,
-        "base_z": 14.360991
+        "lateral": 25.96957,
+        "base_z": 14.386625
       },
       {
         "kind": "vegetation",
-        "station": 437,
+        "station": 874,
         "side": -1,
-        "lateral": 23.444587,
-        "base_z": 16.240477
+        "lateral": 22.8835,
+        "base_z": 16.228269
       },
       {
         "kind": "vegetation",
-        "station": 465,
+        "station": 931,
         "side": 1,
-        "lateral": 28.276491,
-        "base_z": 17.335428
+        "lateral": 27.105358,
+        "base_z": 17.389593
       },
       {
         "kind": "vegetation",
-        "station": 494,
+        "station": 988,
         "side": -1,
-        "lateral": 23.240493,
-        "base_z": 16.198141
+        "lateral": 22.164788,
+        "base_z": 16.178389
       },
       {
         "kind": "vegetation",
-        "station": 522,
+        "station": 1045,
         "side": 1,
-        "lateral": 24.916182,
-        "base_z": 13.383831
+        "lateral": 24.554337,
+        "base_z": 13.336599
       },
       {
         "kind": "vegetation",
-        "station": 550,
+        "station": 1101,
         "side": -1,
-        "lateral": 21.048791,
-        "base_z": 10.951266
+        "lateral": 20.995812,
+        "base_z": 10.906133
       },
       {
         "kind": "vegetation",
-        "station": 579,
+        "station": 1158,
         "side": 1,
         "lateral": 26.535885,
         "base_z": 7.931095
       },
       {
         "kind": "vegetation",
-        "station": 607,
+        "station": 1215,
         "side": -1,
-        "lateral": 26.794069,
-        "base_z": 5.941231
+        "lateral": 26.791052,
+        "base_z": 5.899661
       },
       {
         "kind": "vegetation",
-        "station": 636,
+        "station": 1272,
         "side": 1,
         "lateral": 22.880755,
         "base_z": 2.863581
       },
       {
         "kind": "vegetation",
-        "station": 664,
+        "station": 1329,
         "side": -1,
-        "lateral": 20.206575,
-        "base_z": 1.255558
+        "lateral": 20.203558,
+        "base_z": 1.213047
       },
       {
         "kind": "vegetation",
-        "station": 693,
+        "station": 1386,
         "side": 1,
         "lateral": 29.020986,
         "base_z": 3.935618
       },
       {
         "kind": "vegetation",
-        "station": 721,
+        "station": 1443,
         "side": -1,
-        "lateral": 26.87065,
-        "base_z": 10.0096
+        "lateral": 26.870257,
+        "base_z": 10.112622
       },
       {
         "kind": "vegetation",
-        "station": 750,
+        "station": 1500,
         "side": 1,
         "lateral": 21.923705,
         "base_z": 15.988124
       },
       {
         "kind": "vegetation",
-        "station": 778,
+        "station": 1557,
         "side": -1,
-        "lateral": 20.567333,
-        "base_z": 22.001154
+        "lateral": 20.569105,
+        "base_z": 22.102763
       },
       {
         "kind": "vegetation",
-        "station": 806,
+        "station": 1613,
         "side": 1,
-        "lateral": 27.149495,
-        "base_z": 27.216764
+        "lateral": 27.151267,
+        "base_z": 27.314961
       },
       {
         "kind": "vegetation",
-        "station": 835,
+        "station": 1670,
         "side": -1,
         "lateral": 27.679998,
         "base_z": 29.608988
       },
       {
         "kind": "vegetation",
-        "station": 863,
+        "station": 1727,
         "side": 1,
-        "lateral": 24.372355,
-        "base_z": 28.088968
+        "lateral": 24.382729,
+        "base_z": 28.072909
       },
       {
         "kind": "vegetation",
-        "station": 892,
+        "station": 1784,
         "side": -1,
         "lateral": 30.132549,
         "base_z": 25.810325
       },
       {
         "kind": "vegetation",
-        "station": 920,
+        "station": 1841,
         "side": 1,
-        "lateral": 25.042517,
-        "base_z": 23.187453
+        "lateral": 25.05289,
+        "base_z": 23.130182
       },
       {
         "kind": "vegetation",
-        "station": 949,
+        "station": 1898,
         "side": -1,
         "lateral": 22.069627,
         "base_z": 20.563206
       },
       {
         "kind": "vegetation",
-        "station": 977,
+        "station": 1955,
         "side": 1,
-        "lateral": 28.437595,
-        "base_z": 18.028195
+        "lateral": 28.434798,
+        "base_z": 17.985342
       },
       {
         "kind": "vegetation",
-        "station": 1006,
+        "station": 2012,
         "side": -1,
         "lateral": 23.790442,
         "base_z": 15.542713
       },
       {
         "kind": "grandstand",
-        "station": 81,
+        "station": 163,
         "side": -1,
-        "lateral": 23.778547,
-        "base_z": 7.5331
+        "lateral": 23.783353,
+        "base_z": 7.486097
       },
       {
         "kind": "grandstand",
-        "station": 245,
+        "station": 491,
         "side": 1,
-        "lateral": 21.279021,
-        "base_z": 28.827231
+        "lateral": 21.276996,
+        "base_z": 28.941536
       },
       {
         "kind": "grandstand",
-        "station": 440,
+        "station": 880,
         "side": -1,
-        "lateral": 22.080253,
-        "base_z": 16.447238
+        "lateral": 21.310059,
+        "base_z": 16.427446
       },
       {
         "kind": "grandstand",
-        "station": 634,
+        "station": 1269,
         "side": 1,
-        "lateral": 22.026224,
-        "base_z": 3.014567
+        "lateral": 22.023207,
+        "base_z": 2.971493
       },
       {
         "kind": "grandstand",
-        "station": 839,
+        "station": 1679,
         "side": -1,
-        "lateral": 21.917427,
-        "base_z": 29.620994
+        "lateral": 21.9192,
+        "base_z": 29.601465
       },
       {
         "kind": "marshal",
-        "station": 30,
+        "station": 61,
         "side": -1,
-        "lateral": 17.288351,
-        "base_z": 11.644396
+        "lateral": 17.293157,
+        "base_z": 11.605136
       },
       {
         "kind": "marshal",
-        "station": 143,
+        "station": 286,
         "side": 1,
         "lateral": 16.872763,
         "base_z": 9.221106
       },
       {
         "kind": "marshal",
-        "station": 317,
+        "station": 634,
         "side": -1,
         "lateral": 15.029957,
         "base_z": 33.294435
       },
       {
         "kind": "marshal",
-        "station": 501,
+        "station": 1003,
         "side": 1,
-        "lateral": 16.302,
-        "base_z": 15.180409
+        "lateral": 15.599583,
+        "base_z": 15.152055
       },
       {
         "kind": "marshal",
-        "station": 716,
+        "station": 1433,
         "side": -1,
-        "lateral": 15.531528,
-        "base_z": 9.063188
+        "lateral": 15.528512,
+        "base_z": 9.163995
       },
       {
         "kind": "marshal",
-        "station": 931,
+        "station": 1863,
         "side": 1,
-        "lateral": 17.425389,
-        "base_z": 21.865733
+        "lateral": 17.435763,
+        "base_z": 21.82364
       },
       {
         "kind": "pit",
-        "station": 988,
+        "station": 1976,
         "side": 1,
         "lateral": 20.201334,
         "base_z": 17.085426
       }
     ],
-    "barrier_samples": 2048,
+    "barrier_samples": 4096,
     "barrier_max_authored_error": 0.0
   },
   "bridge_contract": {
-    "lower_station": 408,
-    "upper_station": 822,
-    "lower_distance_m": 2315.7,
+    "lower_station": 800,
+    "upper_station": 1652,
+    "lower_distance_m": 2268.4,
     "lower_section": "Degner to Hairpin",
-    "upper_distance_m": 4660.5,
+    "upper_distance_m": 4684.2,
     "upper_section": "Spoon to 130R",
     "minimum_clearance_m": 10.0,
-    "planar_separation_asset_units": 2.084476,
-    "clearance_asset_units": 14.855277,
+    "planar_separation_asset_units": 1.318983,
+    "clearance_asset_units": 14.939695,
     "embankment_open_stations": [
-      808,
-      809,
-      810,
-      811,
-      812,
-      813,
-      814,
-      815,
-      816,
-      817,
-      818,
-      819,
-      820,
-      821,
-      822,
-      823,
-      824,
-      825,
-      826,
-      827,
-      828,
-      829,
-      830,
-      831,
-      832,
-      833,
-      834,
-      835,
-      836
+      1638,
+      1639,
+      1640,
+      1641,
+      1642,
+      1643,
+      1644,
+      1645,
+      1646,
+      1647,
+      1648,
+      1649,
+      1650,
+      1651,
+      1652,
+      1653,
+      1654,
+      1655,
+      1656,
+      1657,
+      1658,
+      1659,
+      1660,
+      1661,
+      1662,
+      1663,
+      1664,
+      1665,
+      1666
     ]
   },
   "required_materials": [

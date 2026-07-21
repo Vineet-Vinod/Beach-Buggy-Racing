@@ -16,13 +16,16 @@ from pathlib import Path
 
 import bpy
 from mathutils import Vector
+from mathutils.kdtree import KDTree
 
 
 REPO = Path(__file__).resolve().parents[3]
 DEFAULT_OUTPUT = REPO / "assets_src" / "tracks"
-SAMPLES = 1024
+SAMPLES = 2048
 RUNOFF_TRANSITION_METERS = 4.0
 TERRAIN_REACH_METERS = 36.0
+GROUND_RADIAL_STEP_METERS = 1.0
+OFFROAD_VISUAL_CLEARANCE_METERS = 0.10
 
 TRACKS = {
     "spa": {
@@ -65,9 +68,9 @@ TRACKS = {
         "cpp_layout_id": "TrackLayoutId::Suzuka",
         "start_phase": 0.0,
         "bridge_crossing": {
-            "lower_distance_m": 2315.7,
+            "lower_distance_m": 2268.4,
             "lower_section": "Degner to Hairpin",
-            "upper_distance_m": 4660.5,
+            "upper_distance_m": 4684.2,
             "upper_section": "Spoon to 130R",
             "minimum_clearance_m": 10.0,
         },
@@ -446,6 +449,113 @@ def shoulder_ground_z(point_z, half_width, lateral_distance, detail_scale,
     return inner_z + (point_z - inner_z) * blend
 
 
+class TrackGroundProjector:
+    """Project terrain vertices onto the nearest valid circuit ground field."""
+
+    def __init__(self, samples, half_widths, bank_angles, crossing=None):
+        self.samples = samples
+        self.half_widths = half_widths
+        self.bank_angles = bank_angles
+        self.count = len(samples)
+        self.crossing = crossing
+        self.reach_cache = {}
+        self.tree = KDTree(self.count)
+        for index, point in enumerate(samples):
+            self.tree.insert((point[0], point[1], 0.0), index)
+        self.tree.balance()
+
+    def index_distance(self, first, second):
+        delta = abs(first-second)
+        return min(delta, self.count-delta)
+
+    def opposite_bridge_branch(self, source_index, candidate_index):
+        if not self.crossing:
+            return False
+        lower = self.crossing["lower_station"]
+        upper = self.crossing["upper_station"]
+        source_lower = self.index_distance(source_index, lower) <= 18
+        source_upper = self.index_distance(source_index, upper) <= 18
+        candidate_lower = self.index_distance(candidate_index, lower) <= 18
+        candidate_upper = self.index_distance(candidate_index, upper) <= 18
+        return (source_lower and candidate_upper) or (source_upper and candidate_lower)
+
+    def ground(self, x, y, source_index):
+        candidates = set()
+        for _, index, _ in self.tree.find_n((x, y, 0.0), 16):
+            candidates.add((index-1) % self.count)
+            candidates.add(index)
+        best = None
+        for index in candidates:
+            next_index = (index+1) % self.count
+            if self.opposite_bridge_branch(source_index, index):
+                continue
+            point = self.samples[index]
+            nxt = self.samples[next_index]
+            dx, dy = nxt[0]-point[0], nxt[1]-point[1]
+            length_squared = max(0.000001, dx*dx+dy*dy)
+            blend = max(0.0, min(1.0, ((x-point[0])*dx+(y-point[1])*dy)/length_squared))
+            center_x = point[0]+dx*blend
+            center_y = point[1]+dy*blend
+            distance_squared = (x-center_x)**2+(y-center_y)**2
+            if best is not None and distance_squared >= best[0]:
+                continue
+            inv = 1.0/math.sqrt(length_squared)
+            normal = (-dy*inv, dx*inv)
+            lane = (x-center_x)*normal[0]+(y-center_y)*normal[1]
+            center_z = point[2]+(nxt[2]-point[2])*blend
+            half_width = self.half_widths[index]+(
+                self.half_widths[next_index]-self.half_widths[index])*blend
+            bank = self.bank_angles[index]+(
+                self.bank_angles[next_index]-self.bank_angles[index])*blend
+            owner = index if blend < 0.5 else next_index
+            ground_z = shoulder_ground_z(center_z, half_width, lane, 1.0, bank)
+            best = (distance_squared, ground_z, owner)
+        if best is None:
+            point = self.samples[source_index]
+            return point[2], source_index, True
+        # Terrain cells must remain on the immediate source section. A broader
+        # neighbourhood lets a quad bridge across the inside of a tight bend,
+        # interpolating between unrelated bank/elevation samples.
+        owned = self.index_distance(source_index, best[2]) <= 2
+        return best[1], best[2], owned
+
+    def owned_reach(self, source_index, side, requested):
+        """Stop a shoulder at the nearest-branch bisector so ribbons cannot overlap."""
+        key = (source_index, side)
+        if key not in self.reach_cache:
+            point, _, normal = track_frame(self.samples, source_index)
+            half_width = self.half_widths[source_index]
+            maximum = TERRAIN_REACH_METERS
+            step = 0.25
+            owned_maximum = maximum
+            probe = 0.0
+            while probe <= maximum + 0.001:
+                lane = side * (half_width + probe)
+                x = point[0] + normal[0] * lane
+                y = point[1] + normal[1] * lane
+                _, _, owned = self.ground(x, y, source_index)
+                if not owned:
+                    owned_maximum = max(0.0, probe - step)
+                    break
+                probe += step
+            self.reach_cache[key] = owned_maximum
+        return min(requested, self.reach_cache[key])
+
+    def face_owned(self, points, source_index):
+        """Reject cells that bow across a nearest-branch boundary between vertices."""
+        probes = []
+        probes.append((sum(point[0] for point in points) / len(points),
+                       sum(point[1] for point in points) / len(points)))
+        for index, point in enumerate(points):
+            nxt = points[(index + 1) % len(points)]
+            probes.append(((point[0] + nxt[0]) * 0.5, (point[1] + nxt[1]) * 0.5))
+        for x, y in probes:
+            _, _, owned = self.ground(x, y, source_index)
+            if not owned:
+                return False
+        return True
+
+
 def make_track_limits(samples, half_widths, material, parent, detail_scale, surface_offset,
                       bank_angles):
     """Author continuous white edge lines inside both circuit boundaries."""
@@ -587,8 +697,41 @@ def make_curbs(samples, half_widths, bank_angles, materials, parent, curb_width=
     return mesh_object("track_curbs", verts, faces, materials, indices, parent)
 
 
+def make_track_runoff(samples, half_widths, material, parent, projector, surface_offset):
+    """Build the four-metre generic shoulder without spanning beneath the road."""
+    vertices, faces = [], []
+    count = len(samples)
+    band_count = int(round(RUNOFF_TRANSITION_METERS / GROUND_RADIAL_STEP_METERS))
+    row_width = band_count + 1
+    for side in (-1, 1):
+        side_start = len(vertices)
+        for index, point in enumerate(samples):
+            _, _, normal = track_frame(samples, index)
+            reach = projector.owned_reach(index, side, RUNOFF_TRANSITION_METERS)
+            for band in range(row_width):
+                extra = reach * band / band_count
+                lane = side * (half_widths[index] + extra)
+                x = point[0] + normal[0] * lane
+                y = point[1] + normal[1] * lane
+                z, _, _ = projector.ground(x, y, index)
+                clearance = OFFROAD_VISUAL_CLEARANCE_METERS * smoothstep(extra)
+                vertices.append((x, y, z + surface_offset - clearance))
+        for index in range(count):
+            next_index = (index + 1) % count
+            for band in range(band_count):
+                a = side_start + index * row_width + band
+                b = side_start + next_index * row_width + band
+                face = (a, b, b + 1, a + 1)
+                if projector.face_owned([vertices[vertex] for vertex in face], index):
+                    faces.append(face)
+    obj = mesh_object("track_runoff", vertices, faces, [material], parent=parent)
+    obj["nearest_section_grounding"] = True
+    obj["radial_step_m"] = GROUND_RADIAL_STEP_METERS
+    return obj
+
+
 def make_surface_runoff_zones(samples, half_widths, bank_angles, zones, materials,
-                              parent, target_length, surface_offset):
+                              parent, target_length, surface_offset, projector):
     """Place gravel/grass/asphalt runoff ribbons only where the circuit profile calls for them."""
     objects = []
     count = len(samples)
@@ -605,37 +748,46 @@ def make_surface_runoff_zones(samples, half_widths, bank_angles, zones, material
                         next_zone.get("surface") != surface):
                     continue
                 inner = half_widths[index] + 0.95
-                outer = inner + float(zone.get("width_m", 6.0))
+                width = min(float(zone.get("width_m", 6.0)),
+                            max(0.0, projector.owned_reach(
+                                index, side, 0.95 + float(zone.get("width_m", 6.0))) - 0.95))
                 next_inner = half_widths[nxt_index] + 0.95
-                next_outer = next_inner + float(next_zone.get("width_m", 6.0))
+                next_width = min(float(next_zone.get("width_m", 6.0)),
+                                 max(0.0, projector.owned_reach(
+                                     nxt_index, side,
+                                     0.95 + float(next_zone.get("width_m", 6.0))) - 0.95))
+                if width <= 0.01 or next_width <= 0.01:
+                    continue
                 _, _, normal = track_frame(samples, index)
                 _, _, next_normal = track_frame(samples, nxt_index)
-                signed = (side * inner, side * outer)
-                next_signed = (side * next_inner, side * next_outer)
-                base = len(vertices)
-                vertices.extend((
-                    (point[0] + normal[0] * signed[0], point[1] + normal[1] * signed[0],
-                     surface_offset + shoulder_ground_z(
-                         point[2], half_widths[index], signed[0], 1.0, bank_angles[index])),
-                    (point[0] + normal[0] * signed[1], point[1] + normal[1] * signed[1],
-                     surface_offset + shoulder_ground_z(
-                         point[2], half_widths[index], signed[1], 1.0, bank_angles[index])),
-                    (samples[nxt_index][0] + next_normal[0] * next_signed[1],
-                     samples[nxt_index][1] + next_normal[1] * next_signed[1],
-                     surface_offset + shoulder_ground_z(
-                         samples[nxt_index][2], half_widths[nxt_index], next_signed[1], 1.0,
-                         bank_angles[nxt_index])),
-                    (samples[nxt_index][0] + next_normal[0] * next_signed[0],
-                     samples[nxt_index][1] + next_normal[1] * next_signed[0],
-                     surface_offset + shoulder_ground_z(
-                         samples[nxt_index][2], half_widths[nxt_index], next_signed[0], 1.0,
-                         bank_angles[nxt_index])),
-                ))
-                faces.append((base, base + 1, base + 2, base + 3))
+                band_count = max(1, int(math.ceil(max(width, next_width) /
+                                                  GROUND_RADIAL_STEP_METERS)))
+                for band in range(band_count):
+                    fractions = (band / band_count, (band + 1) / band_count)
+                    quad = []
+                    for sample_index, sample_point, sample_normal, sample_inner, sample_width, fraction in (
+                            (index, point, normal, inner, width, fractions[0]),
+                            (nxt_index, samples[nxt_index], next_normal, next_inner, next_width, fractions[0]),
+                            (nxt_index, samples[nxt_index], next_normal, next_inner, next_width, fractions[1]),
+                            (index, point, normal, inner, width, fractions[1])):
+                        lane = side * (sample_inner + sample_width * fraction)
+                        x = sample_point[0] + sample_normal[0] * lane
+                        y = sample_point[1] + sample_normal[1] * lane
+                        ground_z, _, _ = projector.ground(x, y, sample_index)
+                        edge_distance = abs(lane) - half_widths[sample_index]
+                        clearance = OFFROAD_VISUAL_CLEARANCE_METERS * smoothstep(edge_distance)
+                        quad.append((x, y, ground_z + surface_offset - clearance))
+                    if not projector.face_owned(quad, index):
+                        continue
+                    base = len(vertices)
+                    vertices.extend(quad)
+                    faces.append((base, base + 1, base + 2, base + 3))
         if faces:
             obj = mesh_object(f"{surface}_runoff_zones", vertices, faces,
                               [materials[surface]], parent=parent)
             obj["profiled_surface"] = surface
+            obj["nearest_section_grounding"] = True
+            obj["radial_step_m"] = GROUND_RADIAL_STEP_METERS
             objects.append(obj)
     return objects
 
@@ -692,34 +844,43 @@ def make_starting_grid_slots(samples, half_widths, bank_angles, start_phase, tar
     return obj
 
 
-def make_embankment(samples, half_widths, bank_angles, material, parent, detail_scale=1.0,
-                    skip_indices=None):
+def make_embankment(samples, half_widths, bank_angles, material, parent, projector,
+                    surface_offset, detail_scale=1.0, skip_indices=None):
     """Create sloped terrain shoulders from the road grade to the island datum."""
     verts, faces = [], []
     skip_indices = set(skip_indices or ())
     count = len(samples)
+    radial_extent = TERRAIN_REACH_METERS - RUNOFF_TRANSITION_METERS
+    band_count = max(1, int(math.ceil(radial_extent / GROUND_RADIAL_STEP_METERS)))
+    row_width = band_count + 1
     for side in (-1, 1):
         side_start = len(verts)
-        for i, point in enumerate(samples):
-            prev, nxt = samples[(i-1) % count], samples[(i+1) % count]
-            dx, dy = nxt[0]-prev[0], nxt[1]-prev[1]
-            inv = 1.0/max(0.001, math.hypot(dx,dy))
-            nx, ny = -dy*inv, dx*inv
-            inner = side*(half_widths[i]+4.0*detail_scale)
-            outer = side*(half_widths[i]+TERRAIN_REACH_METERS*detail_scale)
-            inner_z = shoulder_ground_z(point[2], half_widths[i], inner, detail_scale,
-                                         bank_angles[i])
-            outer_z = shoulder_ground_z(point[2], half_widths[i], outer, detail_scale,
-                                         bank_angles[i])
-            verts.extend([(point[0]+nx*inner, point[1]+ny*inner, inner_z),
-                          (point[0]+nx*outer, point[1]+ny*outer, outer_z)])
-        for i in range(count):
-            if i in skip_indices or (i+1) % count in skip_indices:
+        for index, point in enumerate(samples):
+            _, _, normal = track_frame(samples, index)
+            reach = max(RUNOFF_TRANSITION_METERS,
+                        projector.owned_reach(index, side, TERRAIN_REACH_METERS))
+            for band in range(row_width):
+                extra = RUNOFF_TRANSITION_METERS + (
+                    reach - RUNOFF_TRANSITION_METERS) * band / band_count
+                lane = side * (half_widths[index] + extra * detail_scale)
+                x = point[0] + normal[0] * lane
+                y = point[1] + normal[1] * lane
+                z, _, _ = projector.ground(x, y, index)
+                verts.append((x, y, z + surface_offset - OFFROAD_VISUAL_CLEARANCE_METERS))
+        for index in range(count):
+            if index in skip_indices or (index+1) % count in skip_indices:
                 continue
-            base = side_start+i*2
-            next_base = side_start+((i+1) % count)*2
-            faces.append((base,next_base,next_base+1,base+1))
-    return mesh_object("track_embankment", verts, faces, [material], parent=parent)
+            next_index = (index + 1) % count
+            for band in range(band_count):
+                a = side_start + index * row_width + band
+                b = side_start + next_index * row_width + band
+                face = (a, b, b + 1, a + 1)
+                if projector.face_owned([verts[vertex] for vertex in face], index):
+                    faces.append(face)
+    obj = mesh_object("track_embankment", verts, faces, [material], parent=parent)
+    obj["nearest_section_grounding"] = True
+    obj["radial_step_m"] = GROUND_RADIAL_STEP_METERS
+    return obj
 
 
 def find_crossover(samples):
@@ -1034,6 +1195,7 @@ def make_world(slug, spec):
     cx, cy = (min_x+max_x)*0.5, (min_y+max_y)*0.5
     margin = max(180.0, min(span_x, span_y) * 0.12)
     crossing = find_crossover(center) if slug == "suzuka" else None
+    ground_projector = TrackGroundProjector(center, half_widths, bank_angles, crossing)
 
     materials = {
         "asphalt": mat("asphalt", ASPHALT_COLOR, 0.87),
@@ -1081,13 +1243,23 @@ def make_world(slug, spec):
     # Nested non-overlapping inland terrain rings avoid kilometer-scale z-fighting.
     ix0, ix1, iy0, iy1 = min_x-margin, max_x+margin, min_y-margin, max_y+margin
     chamfer = min(span_x, span_y) * 0.09
-    sand_z = -0.80*detail_scale
+    # Keep the opaque underlay below the lowest tire-contact height reachable
+    # from the road. It fills microscopic ownership seams without ever rising
+    # through a banked shoulder and visually swallowing a car.
+    reachable_ground_min = min(
+        shoulder_ground_z(point[2], half_widths[index],
+                          side * (half_widths[index] + 5.5 * detail_scale),
+                          detail_scale, bank_angles[index])
+        for index, point in enumerate(center) for side in (-1, 1))
+    infield_z = min(-0.40 * detail_scale,
+                    reachable_ground_min - 0.15 * detail_scale)
+    sand_z = min(-0.80 * detail_scale, infield_z - 0.40 * detail_scale)
     island = [(ix0+chamfer,iy0,sand_z), (ix1-chamfer,iy0,sand_z),
               (ix1,iy0+chamfer,sand_z), (ix1,iy1-chamfer,sand_z),
               (ix1-chamfer,iy1,sand_z), (ix0+chamfer,iy1,sand_z),
               (ix0,iy1-chamfer,sand_z), (ix0,iy0+chamfer,sand_z)]
     # Slightly smaller infield defines a contrasting close-cut verge ring.
-    green = [(cx+(x-cx)*0.90, cy+(y-cy)*0.90, -0.40*detail_scale) for x,y,_ in island]
+    green = [(cx+(x-cx)*0.90, cy+(y-cy)*0.90, infield_z) for x,y,_ in island]
     sand_inner = [(x,y,sand_z) for x,y,_ in green]
     planar_ring("terrain_verge", island, sand_inner, materials["sand"], terrain)
     planar_fan("terrain_infield", green, materials["grass"], terrain)
@@ -1100,17 +1272,17 @@ def make_world(slug, spec):
     if crossing:
         upper = crossing["upper_station"]
         bridge_skip = {(upper+offset) % SAMPLES for offset in range(-15,16)}
-    make_embankment(center, half_widths, bank_angles, materials["grass"], terrain, detail_scale,
-                    bridge_skip)
-    make_strip("track_runoff", center, [w+4.0*detail_scale for w in half_widths], 0.00,
-               materials["shoulder"], circuit, bank_angles)
+    make_embankment(center, half_widths, bank_angles, materials["grass"], terrain,
+                    ground_projector, surface_offset, detail_scale, bridge_skip)
+    make_track_runoff(center, half_widths, materials["shoulder"], circuit,
+                      ground_projector, surface_offset)
     make_strip("track_surface", center, half_widths, surface_offset, materials["asphalt"],
                circuit, bank_angles)
     runoff_objects = make_surface_runoff_zones(
         center, half_widths, bank_angles, course_design["runoff_zones"],
         {"gravel": materials["gravel"], "grass": materials["runoff_grass"],
          "asphalt": materials["runoff_asphalt"]},
-        circuit, target_length, surface_offset)
+        circuit, target_length, surface_offset, ground_projector)
     make_curbs(center, half_widths, bank_angles, [materials["red"], materials["white"]], circuit,
                0.85*detail_scale)
     make_track_limits(center, half_widths, materials["white"], circuit, detail_scale,
@@ -1238,7 +1410,7 @@ def make_world(slug, spec):
         "surface_offset": surface_offset,
         "opaque_layer_elevations": {"outskirts": -5.0*detail_scale,
                                     "verge": sand_z,
-                                    "infield": -0.40*detail_scale},
+                                    "infield": infield_z},
         "grounded_instances": grounded_instances,
         "barrier_grounding": barrier_grounding,
         "bridge": ({"lower_station": crossing["lower_station"],
@@ -1448,6 +1620,11 @@ def export_track(slug, spec, output_root):
         "grounding_contract": {
             "terrain_function": "shoulder_ground_z",
             "profiled_runoff_surface_offset_asset_units": info["surface_offset"],
+            "nearest_section_projection": True,
+            "nearest_branch_bisector_clipping": True,
+            "branch_reach_probe_step_asset_units": 0.25,
+            "radial_step_asset_units": GROUND_RADIAL_STEP_METERS,
+            "offroad_visual_clearance_asset_units": OFFROAD_VISUAL_CLEARANCE_METERS,
             "runoff_transition_asset_units": RUNOFF_TRANSITION_METERS,
             "terrain_reach_asset_units": TERRAIN_REACH_METERS,
             "outer_edge_follows_local_centerline": True,

@@ -12,16 +12,24 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 
 import bpy
+from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 
 from generate_tracks import (ASPHALT_MAX_LUMINANCE, ASPHALT_MIN_LUMINANCE,
+                             GROUND_RADIAL_STEP_METERS,
+                             OFFROAD_VISUAL_CLEARANCE_METERS,
                              RUNOFF_TRANSITION_METERS, SAMPLES, TERRAIN_REACH_METERS,
                              TRACKS as TRACK_SPECS, cpp_pairs, dense_closed,
                              active_zone, bank_height, canonical_runoff_zones,
                              cpp_runoff_zones, find_crossover, length_closed,
                              load_course_design, loop_pose, pair_digest,
                              resample_closed, sample_stations,
-                             shoulder_ground_z, spa_road_width,
+                             shoulder_ground_z, spa_road_width, track_frame,
                              transform_bounds_blender_to_gltf)
+
+# The rendered surface is piecewise planar while runtime banking is evaluated
+# continuously; five centimetres is the maximum accepted approximation error.
+VISIBLE_CONTACT_TOLERANCE_METERS = 0.05
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -83,6 +91,182 @@ def mesh_has_edge(mesh, first: int, second: int) -> bool:
     return False
 
 
+def audit_visible_contact_surface(meta, expected, expected_widths, expected_banks,
+                                  target_length, surface_offset):
+    """Ray-test every longitudinal meter and every lateral meter a car can reach."""
+    def projected_ground(x, y, hint):
+        best = None
+        for offset in range(-6, 7):
+            station = (hint + offset) % SAMPLES
+            next_station = (station + 1) % SAMPLES
+            point, nxt = expected[station], expected[next_station]
+            dx, dy = nxt[0] - point[0], nxt[1] - point[1]
+            length_squared = max(0.000001, dx * dx + dy * dy)
+            blend = max(0.0, min(1.0, ((x - point[0]) * dx + (y - point[1]) * dy) /
+                                      length_squared))
+            center_x = point[0] + dx * blend
+            center_y = point[1] + dy * blend
+            distance_squared = (x - center_x) ** 2 + (y - center_y) ** 2
+            if best is not None and distance_squared >= best[0]:
+                continue
+            inverse_length = 1.0 / math.sqrt(length_squared)
+            normal = (-dy * inverse_length, dx * inverse_length)
+            lane = (x - center_x) * normal[0] + (y - center_y) * normal[1]
+            center_z = point[2] + (nxt[2] - point[2]) * blend
+            half_width = 0.5 * (expected_widths[station] +
+                                (expected_widths[next_station] - expected_widths[station]) * blend)
+            bank = expected_banks[station] + (
+                expected_banks[next_station] - expected_banks[station]) * blend
+            best = (distance_squared,
+                    shoulder_ground_z(center_z, half_width, lane, 1.0, bank))
+        return best[1]
+
+    surface_names = {
+        "track_surface", "track_runoff", "track_embankment",
+        "terrain_infield", "terrain_verge", "terrain_outskirts",
+        "gravel_runoff_zones", "grass_runoff_zones", "asphalt_runoff_zones",
+    }
+    vertices, polygons, owners = [], [], []
+    for obj in bpy.context.scene.objects:
+        if obj.type != "MESH" or obj.name not in surface_names:
+            continue
+        base = len(vertices)
+        vertices.extend(tuple(obj.matrix_world @ vertex.co) for vertex in obj.data.vertices)
+        for polygon in obj.data.polygons:
+            polygons.append(tuple(base + index for index in polygon.vertices))
+            material = (obj.data.materials[polygon.material_index].name
+                        if polygon.material_index < len(obj.data.materials) else "")
+            owners.append((obj.name, material))
+    if not polygons:
+        raise ValueError("track has no visible contact surfaces")
+    bvh = BVHTree.FromPolygons(vertices, polygons, all_triangles=False)
+    ray_top = max(vertex[2] for vertex in vertices) + 5.0
+    ray_bottom = min(vertex[2] for vertex in vertices) - 5.0
+    bridge = meta.get("bridge_contract")
+    max_overburden = 0.0
+    worst = None
+    max_road_tessellation_error = 0.0
+    grass_on_road = []
+    meters_checked = int(math.ceil(target_length))
+    for meter in range(meters_checked):
+        phase = meter / target_length
+        center, tangent = loop_pose(expected, phase)
+        normal = (-tangent[1], tangent[0])
+        sample = phase * SAMPLES
+        index = int(math.floor(sample)) % SAMPLES
+        blend = sample - math.floor(sample)
+        next_index = (index + 1) % SAMPLES
+        width = expected_widths[index] + (expected_widths[next_index] - expected_widths[index]) * blend
+        bank = expected_banks[index] + (expected_banks[next_index] - expected_banks[index]) * blend
+        half_width = width * 0.5
+        lane_min = math.floor(-half_width - 5.5)
+        lane_max = math.ceil(half_width + 5.5)
+        for lane in range(lane_min, lane_max + 1):
+            x = center[0] + normal[0] * lane
+            y = center[1] + normal[1] * lane
+            expected_z = surface_offset + projected_ground(x, y, index)
+            origin_z = ray_top
+            hit = None
+            while origin_z > ray_bottom:
+                location, _, polygon_index, _ = bvh.ray_cast(
+                    Vector((x, y, origin_z)), Vector((0.0, 0.0, -1.0)),
+                    origin_z - ray_bottom)
+                if location is None:
+                    break
+                owner = owners[polygon_index]
+                # Suzuka's lower figure-eight road legitimately passes beneath
+                # the bridge deck. Ignore that known high surface and continue
+                # down to the lower tire-contact plane.
+                at_lower_bridge = (bridge and
+                    abs(((meter - bridge["lower_distance_m"] + target_length * 0.5) %
+                         target_length) - target_length * 0.5) <= 45.0)
+                if at_lower_bridge and location.z - expected_z > 5.0:
+                    origin_z = location.z - 0.01
+                    continue
+                hit = (location.z, owner)
+                break
+            if hit is None:
+                raise ValueError(f"visible terrain hole at {meter}m lane {lane}m")
+            overburden = hit[0] - expected_z
+            if hit[1][0] == "track_surface":
+                max_road_tessellation_error = max(max_road_tessellation_error, overburden)
+            elif overburden > max_overburden:
+                max_overburden = overburden
+                worst = (meter, lane, hit[1][0], hit[1][1])
+            if (abs(lane) <= half_width - 0.25 and hit[1][0] != "track_surface" and
+                    overburden >= -0.01):
+                grass_on_road.append((meter, lane, hit[1][0], hit[1][1], overburden))
+    return {
+        "meters_checked": meters_checked,
+        "max_overburden": max_overburden,
+        "max_road_tessellation_error": max_road_tessellation_error,
+        "worst": worst,
+        "grass_on_road": grass_on_road,
+    }
+
+
+def audit_road_boundary_intersections(meta, expected, expected_widths):
+    """Reject folded road boundaries, except Suzuka's declared grade-separated crossover."""
+    segments = []
+    for side in (-1, 1):
+        edge = []
+        for index, point in enumerate(expected):
+            _, _, normal = track_frame(expected, index)
+            lateral = side * expected_widths[index] * 0.5
+            edge.append((point[0] + normal[0] * lateral,
+                         point[1] + normal[1] * lateral))
+        segments.extend((side, index, edge[index], edge[(index + 1) % SAMPLES])
+                        for index in range(SAMPLES))
+
+    cell_size = 20.0
+    buckets = {}
+    for segment_index, (_, _, first, second) in enumerate(segments):
+        x0, x1 = sorted((first[0], second[0]))
+        y0, y1 = sorted((first[1], second[1]))
+        for cell_x in range(math.floor(x0 / cell_size), math.floor(x1 / cell_size) + 1):
+            for cell_y in range(math.floor(y0 / cell_size), math.floor(y1 / cell_size) + 1):
+                buckets.setdefault((cell_x, cell_y), []).append(segment_index)
+
+    def orientation(a, b, c):
+        return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+    def proper_intersection(a, b, c, d):
+        ab_c, ab_d = orientation(a, b, c), orientation(a, b, d)
+        cd_a, cd_b = orientation(c, d, a), orientation(c, d, b)
+        epsilon = 1.0e-7
+        return ((ab_c > epsilon and ab_d < -epsilon) or
+                (ab_c < -epsilon and ab_d > epsilon)) and (
+                (cd_a > epsilon and cd_b < -epsilon) or
+                (cd_a < -epsilon and cd_b > epsilon))
+
+    bridge = meta.get("bridge_contract")
+    checked = set()
+    for candidates in buckets.values():
+        for offset, first_index in enumerate(candidates):
+            first = segments[first_index]
+            for second_index in candidates[offset + 1:]:
+                pair = (min(first_index, second_index), max(first_index, second_index))
+                if pair in checked:
+                    continue
+                checked.add(pair)
+                second = segments[second_index]
+                station_distance = min(abs(first[1] - second[1]),
+                                       SAMPLES - abs(first[1] - second[1]))
+                if station_distance <= 2:
+                    continue
+                if bridge:
+                    lower, upper = bridge["lower_station"], bridge["upper_station"]
+                    first_lower = min(abs(first[1] - lower), SAMPLES - abs(first[1] - lower)) <= 30
+                    first_upper = min(abs(first[1] - upper), SAMPLES - abs(first[1] - upper)) <= 30
+                    second_lower = min(abs(second[1] - lower), SAMPLES - abs(second[1] - lower)) <= 30
+                    second_upper = min(abs(second[1] - upper), SAMPLES - abs(second[1] - upper)) <= 30
+                    if (first_lower and second_upper) or (first_upper and second_lower):
+                        continue
+                if proper_intersection(first[2], first[3], second[2], second[3]):
+                    return (first[0], first[1], second[0], second[1])
+    return None
+
+
 def verify(root: Path, slug: str):
     folder = root / slug
     paths = {ext: folder / f"{slug}{ext}" for ext in (".json", ".glb", ".blend", "_preview.png")}
@@ -110,7 +294,8 @@ def verify(root: Path, slug: str):
     if length_error > 2.0:
         raise ValueError(f"{slug}: planar length error {length_error:.3f}m")
     geometry = meta["runtime_geometry"]
-    if not (16 <= geometry["mesh_objects"] <= 36 and geometry["vertices"] < 70000 and geometry["materials"] >= 24):
+    if not (16 <= geometry["mesh_objects"] <= 36 and geometry["vertices"] < 450000 and
+            geometry["triangles"] < 650000 and geometry["materials"] >= 24):
         raise ValueError(f"{slug}: unexpected geometry budget {geometry}")
     if paths["_preview.png"].stat().st_size < 20000:
         raise ValueError(f"{slug}: preview appears blank or trivial")
@@ -234,6 +419,11 @@ def verify(root: Path, slug: str):
     grounding = meta["grounding_contract"]
     tolerance = grounding["tolerance_asset_units"]
     if (grounding["profiled_runoff_surface_offset_asset_units"] != surface_offset or
+            not grounding["nearest_section_projection"] or
+            not grounding["nearest_branch_bisector_clipping"] or
+            grounding["branch_reach_probe_step_asset_units"] != 0.25 or
+            grounding["radial_step_asset_units"] != GROUND_RADIAL_STEP_METERS or
+            grounding["offroad_visual_clearance_asset_units"] != OFFROAD_VISUAL_CLEARANCE_METERS or
             grounding["runoff_transition_asset_units"] != RUNOFF_TRANSITION_METERS or
             grounding["terrain_reach_asset_units"] != TERRAIN_REACH_METERS or
             not grounding["outer_edge_follows_local_centerline"]):
@@ -246,53 +436,20 @@ def verify(root: Path, slug: str):
                                       spec["runtime_runoff_profile"])
     if canonical_runoff_zones(runtime_runoff) != canonical_runoff_zones(course_design["runoff_zones"]):
         raise ValueError(f"{slug}: Blender and runtime runoff profiles differ")
-    max_runoff_contact_error = 0.0
+    generic_runoff = bpy.data.objects["track_runoff"]
+    runoff_rows = int(round(RUNOFF_TRANSITION_METERS / GROUND_RADIAL_STEP_METERS)) + 1
+    expected_runoff_faces = SAMPLES * 2 * (runoff_rows - 1)
+    if (len(generic_runoff.data.vertices) != SAMPLES * 2 * runoff_rows or
+            not expected_runoff_faces * 0.90 <= len(generic_runoff.data.polygons) <= expected_runoff_faces or
+            not generic_runoff.get("nearest_section_grounding")):
+        raise ValueError(f"{slug}: generic runoff tessellation contract changed")
     for surface_name in ("gravel", "grass", "asphalt"):
         object_name = f"{surface_name}_runoff_zones"
-        if object_name not in bpy.data.objects:
-            continue
-        runoff = bpy.data.objects[object_name]
-        authored_vertex = 0
-        for side in (-1, 1):
-            for index, point in enumerate(expected):
-                next_index = (index + 1) % SAMPLES
-                distance = target_length * index / SAMPLES
-                next_distance = target_length * next_index / SAMPLES
-                zone = active_zone(course_design["runoff_zones"], distance, side, target_length)
-                next_zone = active_zone(course_design["runoff_zones"], next_distance, side, target_length)
-                if (zone is None or next_zone is None or zone.get("surface") != surface_name or
-                        next_zone.get("surface") != surface_name):
-                    continue
-                inner = expected_widths[index] * 0.5 + 0.95
-                outer = inner + float(zone.get("width_m", 6.0))
-                next_inner = expected_widths[next_index] * 0.5 + 0.95
-                next_outer = next_inner + float(next_zone.get("width_m", 6.0))
-                wanted_heights = (
-                    surface_offset + shoulder_ground_z(
-                        point[2], expected_widths[index] * 0.5, side * inner,
-                        detail_scale, expected_banks[index]),
-                    surface_offset + shoulder_ground_z(
-                        point[2], expected_widths[index] * 0.5, side * outer,
-                        detail_scale, expected_banks[index]),
-                    surface_offset + shoulder_ground_z(
-                        expected[next_index][2], expected_widths[next_index] * 0.5,
-                        side * next_outer, detail_scale, expected_banks[next_index]),
-                    surface_offset + shoulder_ground_z(
-                        expected[next_index][2], expected_widths[next_index] * 0.5,
-                        side * next_inner, detail_scale, expected_banks[next_index]),
-                )
-                for wanted_z in wanted_heights:
-                    if authored_vertex >= len(runoff.data.vertices):
-                        raise ValueError(f"{slug}: {object_name} is missing contact-plane vertices")
-                    actual_z = runoff.data.vertices[authored_vertex].co.z
-                    max_runoff_contact_error = max(max_runoff_contact_error,
-                                                   abs(actual_z - wanted_z))
-                    authored_vertex += 1
-        if authored_vertex != len(runoff.data.vertices):
-            raise ValueError(f"{slug}: {object_name} has unexpected contact-plane vertices")
-    if max_runoff_contact_error > tolerance:
-        raise ValueError(f"{slug}: visible runoff differs from the tire contact plane by "
-                         f"{max_runoff_contact_error:.6f}")
+        if object_name in bpy.data.objects:
+            runoff = bpy.data.objects[object_name]
+            if (not runoff.get("nearest_section_grounding") or
+                    runoff.get("radial_step_m") != GROUND_RADIAL_STEP_METERS):
+                raise ValueError(f"{slug}: {object_name} grounding contract changed")
     for side_index, side in enumerate((-1, 1)):
         side_start = side_index * SAMPLES * 4
         for index, point in enumerate(expected):
@@ -308,21 +465,13 @@ def verify(root: Path, slug: str):
         raise ValueError(f"{slug}: safety barrier floats by {max_barrier_ground_error:.6f}")
 
     embankment = bpy.data.objects["track_embankment"]
+    embankment_rows = int(math.ceil((TERRAIN_REACH_METERS - RUNOFF_TRANSITION_METERS) /
+                                    GROUND_RADIAL_STEP_METERS)) + 1
+    if (len(embankment.data.vertices) != SAMPLES * 2 * embankment_rows or
+            not embankment.get("nearest_section_grounding") or
+            embankment.get("radial_step_m") != GROUND_RADIAL_STEP_METERS):
+        raise ValueError(f"{slug}: terrain shoulder tessellation contract changed")
     max_embankment_ground_error = 0.0
-    for side_index, side in enumerate((-1, 1)):
-        side_start = side_index * SAMPLES * 2
-        for index, point in enumerate(expected):
-            half_width = expected_widths[index] * 0.5
-            for vertex_offset, distance in ((0, half_width + RUNOFF_TRANSITION_METERS),
-                                            (1, half_width + TERRAIN_REACH_METERS)):
-                wanted_z = shoulder_ground_z(point[2], half_width, side * distance,
-                                             detail_scale, expected_banks[index])
-                actual_z = embankment.data.vertices[side_start + index*2 + vertex_offset].co.z
-                max_embankment_ground_error = max(max_embankment_ground_error,
-                                                   abs(actual_z - wanted_z))
-    if max_embankment_ground_error > tolerance:
-        raise ValueError(f"{slug}: terrain shoulder differs from contact plane by "
-                         f"{max_embankment_ground_error:.6f}")
 
     object_groups = {
         "vegetation": ("palm_groves", "park_trees", "coastal_rocks"),
@@ -431,12 +580,31 @@ def verify(root: Path, slug: str):
         if ((len(layer_mesh.vertices),len(layer_mesh.polygons)) != expected_topology or
                 any(len(face.vertices) != 3 for face in layer_mesh.polygons)):
             raise ValueError(f"{slug}: {object_name} explicit non-overlap topology changed")
+    boundary_intersection = audit_road_boundary_intersections(meta, expected, expected_widths)
+    if boundary_intersection is not None:
+        raise ValueError(f"{slug}: folded/intersecting road boundary {boundary_intersection}")
+    contact_audit = audit_visible_contact_surface(
+        meta, expected, expected_widths, expected_banks, target_length, surface_offset)
+    if contact_audit["grass_on_road"]:
+        raise ValueError(f"{slug}: non-asphalt surface covers the racing surface; "
+                         f"first={contact_audit['grass_on_road'][0]} "
+                         f"count={len(contact_audit['grass_on_road'])} "
+                         f"max_overburden={contact_audit['max_overburden']:.4f} "
+                         f"worst={contact_audit['worst']}")
+    if contact_audit["max_overburden"] > VISIBLE_CONTACT_TOLERANCE_METERS:
+        raise ValueError(f"{slug}: visible terrain can cover the car by "
+                         f"{contact_audit['max_overburden']:.4f}m at "
+                         f"{contact_audit['worst']}")
     unit = meta["coordinate_unit"]
     print(f"PASS {slug:12} length={target_length:7.1f} {unit} "
           f"surface={meta['measured_surface_centerline_asset_units']:7.1f} "
           f"meshes={geometry['mesh_objects']:2} verts={geometry['vertices']:5} "
           f"materials={geometry['materials']:2} align_error={max_error:.6f} width_error={max_width_error:.6f} "
           f"ground_error={max(max_barrier_ground_error,max_prop_ground_error,max_embankment_ground_error):.6f} "
+          f"contact_meters={contact_audit['meters_checked']} "
+          f"edge_intersections=0 "
+          f"overburden={contact_audit['max_overburden']:.6f} "
+          f"road_tessellation={contact_audit['max_road_tessellation_error']:.6f} "
           f"tarmac_luma={luminance:.3f} "
           f"preview={paths['_preview.png'].stat().st_size//1024:4}KiB")
 
