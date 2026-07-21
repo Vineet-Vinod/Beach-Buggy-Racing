@@ -1596,6 +1596,7 @@ struct Kart3D : ArcadeVehicleState {
     float aiIntentTimer = 0.0f;
     float aiDecisionCooldown = 0.0f;
     float aiRacecraftSide = 0.0f;
+    float aiRacecraftTargetLane = 0.0f;
     float aiLineBias = 0.0f;
     int aiRivalIndex = -1;
     AiRacecraftMode aiRacecraftMode = AiRacecraftMode::Racing;
@@ -1683,6 +1684,9 @@ struct RacecraftAuditResult3D {
     int sideBySideFrames = 0;
     int positionChanges = 0;
     int contactBeginnings = 0;
+    int unpairedCornerManeuverFrames = 0;
+    int cornerDecisionTransitions = 0;
+    int committedLaneRetargets = 0;
     float maxClosePackLaneSpreadMeters = 0.0f;
     float maxRoadViolationMeters = 0.0f;
 };
@@ -3198,9 +3202,22 @@ public:
         return ok;
     }
 
-    bool runRacecraftAudit() {
-        selectMapForCapture(2);
-        setupSectionTour(0.035f, 3);
+    bool runRacecraftAudit(int mapIndex = 2) {
+        selectMapForCapture(mapIndex);
+        float straightProgress = 0.0f;
+        float straightSeverity = std::numeric_limits<float>::max();
+        for (int sample = 0; sample < 256; ++sample) {
+            const float progress = track_.totalLength() * static_cast<float>(sample) / 256.0f;
+            const float severity = std::max({std::abs(smoothedSignedCurvature(progress)),
+                                             std::abs(smoothedSignedCurvature(progress + 45.0f)),
+                                             std::abs(smoothedSignedCurvature(progress + 95.0f)),
+                                             std::abs(smoothedSignedCurvature(progress + 175.0f))});
+            if (severity < straightSeverity) {
+                straightSeverity = severity;
+                straightProgress = progress;
+            }
+        }
+        setupSectionTour(straightProgress / track_.totalLength(), 3);
 
         // Put one opponent in the player's tow so the audit proves that the
         // same attack logic targets a human-driven car, not only other AI.
@@ -3224,10 +3241,15 @@ public:
 
         RacecraftAuditResult3D result;
         std::array<AiRacecraftMode, kKartCount> previousModes{};
+        std::array<int, kKartCount> previousRivals{};
+        std::array<float, kKartCount> previousRacecraftTargets{};
         std::array<float, kKartCount> previousContact{};
         std::array<std::array<float, kKartCount>, kKartCount> previousPairGaps{};
         for (int i = 0; i < kKartCount; ++i) {
             previousModes[static_cast<size_t>(i)] = karts_[static_cast<size_t>(i)].aiRacecraftMode;
+            previousRivals[static_cast<size_t>(i)] = karts_[static_cast<size_t>(i)].aiRivalIndex;
+            previousRacecraftTargets[static_cast<size_t>(i)] =
+                karts_[static_cast<size_t>(i)].aiRacecraftTargetLane;
             previousContact[static_cast<size_t>(i)] = karts_[static_cast<size_t>(i)].contactTimer;
             for (int j = i + 1; j < kKartCount; ++j) {
                 previousPairGaps[static_cast<size_t>(i)][static_cast<size_t>(j)] =
@@ -3237,7 +3259,7 @@ public:
             }
         }
 
-        constexpr int kAuditFrames = static_cast<int>(18.0f / kFixedDt);
+        constexpr int kAuditFrames = static_cast<int>(22.0f / kFixedDt);
         const float unitsPerMeter = auditUnitsPerMeter;
         for (int frame = 0; frame < kAuditFrames; ++frame) {
             updatePlayer(karts_[0], scriptedInput(), kFixedDt);
@@ -3252,6 +3274,24 @@ public:
             bool sideBySideThisFrame = false;
             for (int i = 1; i < activeKartCount(); ++i) {
                 const Kart3D& kart = karts_[static_cast<size_t>(i)];
+                const bool activeMove = kart.aiRacecraftMode == AiRacecraftMode::Attacking ||
+                                        kart.aiRacecraftMode == AiRacecraftMode::Defending;
+                const float cornerSeverity = std::max({std::abs(smoothedSignedCurvature(kart.progress)),
+                                                       std::abs(smoothedSignedCurvature(kart.progress + 45.0f)),
+                                                       std::abs(smoothedSignedCurvature(kart.progress + 95.0f)),
+                                                       std::abs(smoothedSignedCurvature(kart.progress + 155.0f))});
+                bool alongsideRival = false;
+                if (kart.aiRivalIndex >= 0 && kart.aiRivalIndex < activeKartCount()) {
+                    const Kart3D& rival = karts_[static_cast<size_t>(kart.aiRivalIndex)];
+                    const float rivalGap = std::abs(signedDistanceToLoop(kart.progress, rival.progress,
+                                                                         track_.totalLength()));
+                    const float lateralGap = std::abs(kart.lane - rival.lane);
+                    alongsideRival = rivalGap < 12.0f &&
+                                     lateralGap > (kart.spec.width + rival.spec.width) * 0.36f;
+                }
+                if (activeMove && cornerSeverity > 0.13f && !alongsideRival) {
+                    ++result.unpairedCornerManeuverFrames;
+                }
                 if (kart.aiRacecraftMode == AiRacecraftMode::Attacking) {
                     ++result.attackFrames;
                     result.playerEngagementFrames += kart.aiRivalIndex == 0 ? 1 : 0;
@@ -3259,11 +3299,19 @@ public:
                     ++result.defenseFrames;
                     result.playerEngagementFrames += kart.aiRivalIndex == 0 ? 1 : 0;
                 }
-                if (kart.aiRacecraftMode != previousModes[static_cast<size_t>(i)]) {
+                const bool modeChanged = kart.aiRacecraftMode != previousModes[static_cast<size_t>(i)];
+                if (modeChanged) {
                     result.attackTransitions += kart.aiRacecraftMode == AiRacecraftMode::Attacking ? 1 : 0;
                     result.defenseTransitions += kart.aiRacecraftMode == AiRacecraftMode::Defending ? 1 : 0;
-                    previousModes[static_cast<size_t>(i)] = kart.aiRacecraftMode;
+                    result.cornerDecisionTransitions += activeMove && cornerSeverity > 0.13f ? 1 : 0;
+                } else if (activeMove && kart.aiRivalIndex == previousRivals[static_cast<size_t>(i)] &&
+                           std::abs(kart.aiRacecraftTargetLane -
+                                    previousRacecraftTargets[static_cast<size_t>(i)]) > 0.05f * unitsPerMeter) {
+                    ++result.committedLaneRetargets;
                 }
+                previousModes[static_cast<size_t>(i)] = kart.aiRacecraftMode;
+                previousRivals[static_cast<size_t>(i)] = kart.aiRivalIndex;
+                previousRacecraftTargets[static_cast<size_t>(i)] = kart.aiRacecraftTargetLane;
                 if (previousContact[static_cast<size_t>(i)] <= 0.001f && kart.contactTimer > 0.05f) {
                     ++result.contactBeginnings;
                 }
@@ -3312,18 +3360,27 @@ public:
         const bool multipleLines = result.maxClosePackLaneSpreadMeters >= 4.0f &&
                                    result.sideBySideFrames >= 20;
         const bool dynamicOrder = result.positionChanges >= 1;
+        const bool stableCornerApproach = result.unpairedCornerManeuverFrames <= 2 &&
+                                          result.cornerDecisionTransitions == 0 &&
+                                          result.committedLaneRetargets == 0;
         const bool controlled = result.contactBeginnings <= 18 && result.maxRoadViolationMeters <= 2.6f;
-        const bool ok = deliberateMoves && racesEveryone && multipleLines && dynamicOrder && controlled;
-        std::cout << "racecraft-audit attacks=" << result.attackTransitions << "/" << result.attackFrames
+        const bool ok = deliberateMoves && racesEveryone && multipleLines && dynamicOrder &&
+                        stableCornerApproach && controlled;
+        std::cout << "racecraft-audit map=" << mapIndex
+                  << " attacks=" << result.attackTransitions << "/" << result.attackFrames
                   << " defenses=" << result.defenseTransitions << "/" << result.defenseFrames
                   << " player_engagement_frames=" << result.playerEngagementFrames
                   << " side_by_side_frames=" << result.sideBySideFrames
                   << " position_changes=" << result.positionChanges
                   << " lane_spread_m=" << result.maxClosePackLaneSpreadMeters
+                  << " unpaired_corner_frames=" << result.unpairedCornerManeuverFrames
+                  << " corner_decisions=" << result.cornerDecisionTransitions
+                  << " committed_retargets=" << result.committedLaneRetargets
                   << " contacts=" << result.contactBeginnings
                   << " road_violation_m=" << result.maxRoadViolationMeters
                   << " deliberate=" << deliberateMoves << " races_everyone=" << racesEveryone
                   << " multiple_lines=" << multipleLines << " dynamic_order=" << dynamicOrder
+                  << " stable_corner_approach=" << stableCornerApproach
                   << " controlled=" << controlled << " ok=" << ok << "\n";
         return ok;
     }
@@ -4874,6 +4931,12 @@ private:
         const float pathSpeed = distanceSpeed / kRacePaceScale;
         const float steeringCorner = std::max(std::abs(smoothedSignedCurvature(kart.progress + 80.0f)),
                                               std::abs(smoothedSignedCurvature(kart.progress + 175.0f)));
+        const float racecraftCorner = std::max({std::abs(smoothedSignedCurvature(kart.progress)),
+                                                std::abs(smoothedSignedCurvature(kart.progress + 45.0f)),
+                                                std::abs(smoothedSignedCurvature(kart.progress + 95.0f)),
+                                                std::abs(smoothedSignedCurvature(kart.progress + 155.0f))});
+        const bool approachingTurnIn = racecraftCorner > 0.09f;
+        const bool clearStraight = racecraftCorner < 0.075f && steeringCorner < 0.09f;
         const float cornerLookaheadScale = lerp(1.0f, 0.62f, std::clamp((steeringCorner - 0.08f) / 0.52f, 0.0f, 1.0f));
         const float lookahead = std::clamp((86.0f + pathSpeed * 0.50f) * cornerLookaheadScale, 78.0f, 230.0f);
         const TrackPoint3D future = track_.sample(kart.progress + lookahead);
@@ -4888,15 +4951,41 @@ private:
 
         kart.aiIntentTimer = std::max(0.0f, kart.aiIntentTimer - dt);
         kart.aiDecisionCooldown = std::max(0.0f, kart.aiDecisionCooldown - dt);
-        if (kart.aiIntentTimer <= 0.0f &&
+        bool committedAlongside = false;
+        if (raceTraffic && kart.aiRivalIndex >= 0 && kart.aiRivalIndex < activeKartCount()) {
+            const Kart3D& rival = karts_[static_cast<size_t>(kart.aiRivalIndex)];
+            const float rivalProgress = std::abs(signedDistanceToLoop(kart.progress, rival.progress,
+                                                                       track_.totalLength()));
+            const float lateralGap = std::abs(kart.lane - rival.lane);
+            committedAlongside = rivalProgress < 12.0f &&
+                                 lateralGap > (kart.spec.width + rival.spec.width) * 0.36f;
+        }
+        if (approachingTurnIn && !committedAlongside &&
             (kart.aiRacecraftMode == AiRacecraftMode::Attacking ||
              kart.aiRacecraftMode == AiRacecraftMode::Defending)) {
             kart.aiRacecraftMode = AiRacecraftMode::Yielding;
-            kart.aiIntentTimer = 0.72f;
-            kart.aiDecisionCooldown = 1.10f;
+            kart.aiIntentTimer = 0.85f;
+            kart.aiDecisionCooldown = 2.0f;
             kart.aiLaneIntent = 0.0f;
             kart.aiRivalIndex = -1;
             kart.aiRacecraftSide = 0.0f;
+            kart.aiRacecraftTargetLane = 0.0f;
+        } else if (kart.aiIntentTimer <= 0.0f && committedAlongside && approachingTurnIn &&
+                   (kart.aiRacecraftMode == AiRacecraftMode::Attacking ||
+                    kart.aiRacecraftMode == AiRacecraftMode::Defending)) {
+            // A car already alongside owns its lane through the corner. Delay
+            // any return to the racing line until both cars have cleared it.
+            kart.aiIntentTimer = 0.45f;
+        } else if (kart.aiIntentTimer <= 0.0f &&
+                   (kart.aiRacecraftMode == AiRacecraftMode::Attacking ||
+                    kart.aiRacecraftMode == AiRacecraftMode::Defending)) {
+            kart.aiRacecraftMode = AiRacecraftMode::Yielding;
+            kart.aiIntentTimer = 0.85f;
+            kart.aiDecisionCooldown = 2.0f;
+            kart.aiLaneIntent = 0.0f;
+            kart.aiRivalIndex = -1;
+            kart.aiRacecraftSide = 0.0f;
+            kart.aiRacecraftTargetLane = 0.0f;
         } else if (kart.aiIntentTimer <= 0.0f && kart.aiRacecraftMode == AiRacecraftMode::Yielding) {
             kart.aiRacecraftMode = AiRacecraftMode::Racing;
         }
@@ -4923,9 +5012,9 @@ private:
                 }
             }
 
-            const float racecraftLimit = std::max(0.0f, roadCenterLimit(kart, future) * 0.64f);
+            const float racecraftLimit = std::max(0.0f, roadCenterLimit(kart, future) * 0.56f);
             if (kart.aiRacecraftMode == AiRacecraftMode::Racing && kart.aiDecisionCooldown <= 0.0f &&
-                nearestAheadIndex >= 0 && nearestAhead < 105.0f && steeringCorner < 0.24f) {
+                nearestAheadIndex >= 0 && nearestAhead < 105.0f && clearStraight) {
                 const Kart3D& rival = karts_[static_cast<size_t>(nearestAheadIndex)];
                 const float closingSpeed = speed - length(rival.vel);
                 const bool canChallenge = closingSpeed > -1.5f * unitsPerMeter || nearestAhead < 42.0f;
@@ -4944,9 +5033,14 @@ private:
                     kart.aiRacecraftMode = AiRacecraftMode::Attacking;
                     kart.aiRivalIndex = nearestAheadIndex;
                     kart.aiIntentTimer = 2.15f + kart.aiRisk * 0.85f;
+                    const float passingClearance = (kart.spec.width + rival.spec.width) * 0.58f +
+                                                   0.55f * unitsPerMeter;
+                    kart.aiRacecraftTargetLane =
+                        std::clamp(rival.lane + kart.aiRacecraftSide * passingClearance,
+                                   -racecraftLimit, racecraftLimit);
                 }
             } else if (kart.aiRacecraftMode == AiRacecraftMode::Racing && kart.aiDecisionCooldown <= 0.0f &&
-                       nearestBehindIndex >= 0 && nearestBehind < 72.0f && steeringCorner < 0.28f) {
+                       nearestBehindIndex >= 0 && nearestBehind < 72.0f && clearStraight) {
                 const Kart3D& rival = karts_[static_cast<size_t>(nearestBehindIndex)];
                 const float pressure = length(rival.vel) - speed;
                 if (pressure > -0.8f * unitsPerMeter || nearestBehind < 32.0f) {
@@ -4960,6 +5054,9 @@ private:
                     kart.aiRacecraftMode = AiRacecraftMode::Defending;
                     kart.aiRivalIndex = nearestBehindIndex;
                     kart.aiIntentTimer = 1.65f + (72.0f - nearestBehind) * 0.012f;
+                    kart.aiRacecraftTargetLane =
+                        std::clamp(laneTarget + kart.aiRacecraftSide * racecraftLimit * 0.46f,
+                                   -racecraftLimit, racecraftLimit);
                 }
             }
 
@@ -4967,17 +5064,15 @@ private:
                 const Kart3D& rival = karts_[static_cast<size_t>(kart.aiRivalIndex)];
                 const float rivalProgress = signedDistanceToLoop(kart.progress, rival.progress,
                                                                   track_.totalLength());
-                const float passingClearance = (kart.spec.width + rival.spec.width) * 0.58f +
-                                               0.55f * unitsPerMeter;
                 if (kart.aiRacecraftMode == AiRacecraftMode::Attacking) {
-                    const float passLane = std::clamp(rival.lane + kart.aiRacecraftSide * passingClearance,
+                    const float passLane = std::clamp(kart.aiRacecraftTargetLane,
                                                       -racecraftLimit, racecraftLimit);
                     kart.aiLaneIntent = passLane - laneTarget;
                     if (rivalProgress < -11.0f || rivalProgress > 115.0f) {
                         kart.aiIntentTimer = 0.0f;
                     }
                 } else if (kart.aiRacecraftMode == AiRacecraftMode::Defending) {
-                    const float defenseLane = std::clamp(laneTarget + kart.aiRacecraftSide * racecraftLimit * 0.46f,
+                    const float defenseLane = std::clamp(kart.aiRacecraftTargetLane,
                                                          -racecraftLimit, racecraftLimit);
                     kart.aiLaneIntent = defenseLane - laneTarget;
                     if (rivalProgress > 10.0f || rivalProgress < -105.0f) {
@@ -5007,13 +5102,14 @@ private:
                 const float away = std::abs(kart.lane - other.lane) > 0.1f
                                        ? std::copysign(1.0f, kart.lane - other.lane)
                                        : (index < i ? -1.0f : 1.0f);
-                laneTarget += away * (passingClearance - lateralGap) * 0.72f;
+                const float separationResponse = approachingTurnIn ? 0.20f : 0.72f;
+                laneTarget += away * (passingClearance - lateralGap) * separationResponse;
             }
         }
         laneTarget += kart.aiLaneIntent;
         const float half = raceTraffic
                                ? std::min(hardBoundaryLaneLimit(kart, future) - 5.0f,
-                                          std::max(0.0f, roadCenterLimit(kart, future) * 0.80f))
+                                          std::max(0.0f, roadCenterLimit(kart, future) * 0.70f))
                                : hardBoundaryLaneLimit(kart, future) - 5.0f;
         laneTarget = std::clamp(laneTarget, -half, half);
         const float currentLineLimit = roadCenterLimit(kart, center) - 1.0f;
@@ -7158,9 +7254,29 @@ int runFormulaForge(int argc, char** argv) {
     } else if (aiPaceAuditInterlagos) {
         aiPaceAuditLayout = TrackLayoutId::Interlagos;
     }
+    const bool racecraftAuditSpa = hasArg(argc, argv, "--racecraft-audit-spa");
+    const bool racecraftAuditSuzuka = hasArg(argc, argv, "--racecraft-audit-suzuka");
+    const bool racecraftAuditSilverstone = hasArg(argc, argv, "--racecraft-audit-silverstone");
+    const bool racecraftAuditMonza = hasArg(argc, argv, "--racecraft-audit-monza");
+    const bool racecraftAuditInterlagos = hasArg(argc, argv, "--racecraft-audit-interlagos");
+    const bool racecraftAudit = hasArg(argc, argv, "--racecraft-audit") || racecraftAuditSpa ||
+                                racecraftAuditSuzuka || racecraftAuditSilverstone || racecraftAuditMonza ||
+                                racecraftAuditInterlagos;
+    int racecraftAuditMap = 2;
+    if (racecraftAuditSpa) {
+        racecraftAuditMap = 0;
+    } else if (racecraftAuditSuzuka) {
+        racecraftAuditMap = 1;
+    } else if (racecraftAuditSilverstone) {
+        racecraftAuditMap = 2;
+    } else if (racecraftAuditMonza) {
+        racecraftAuditMap = 3;
+    } else if (racecraftAuditInterlagos) {
+        racecraftAuditMap = 4;
+    }
     const bool windowed = agentPlay || hasArg(argc, argv, "--windowed") || hasArg(argc, argv, "--smoke-render") || assetAudit ||
                           hasArg(argc, argv, "--diagnose-controller") || hasArg(argc, argv, "--handling-audit") ||
-                          hasArg(argc, argv, "--race-audit") || hasArg(argc, argv, "--racecraft-audit") || aiPaceAudit ||
+                          hasArg(argc, argv, "--race-audit") || racecraftAudit || aiPaceAudit ||
                           hasArg(argc, argv, "--time-trial-audit") ||
                           hasArg(argc, argv, "--grid-audit") ||
                           hasArg(argc, argv, "--collision-audit") ||
@@ -7190,7 +7306,6 @@ int runFormulaForge(int argc, char** argv) {
     const bool diagnoseController = hasArg(argc, argv, "--diagnose-controller");
     const bool handlingAudit = hasArg(argc, argv, "--handling-audit");
     const bool raceAudit = hasArg(argc, argv, "--race-audit");
-    const bool racecraftAudit = hasArg(argc, argv, "--racecraft-audit");
     const bool timeTrialAudit = hasArg(argc, argv, "--time-trial-audit");
     const bool gridAudit = hasArg(argc, argv, "--grid-audit");
     const bool collisionAudit = hasArg(argc, argv, "--collision-audit");
@@ -7281,7 +7396,7 @@ int runFormulaForge(int argc, char** argv) {
         return ok ? 0 : 1;
     }
     if (racecraftAudit) {
-        const bool ok = game.runRacecraftAudit();
+        const bool ok = game.runRacecraftAudit(racecraftAuditMap);
         cleanupRuntime();
         return ok ? 0 : 1;
     }
