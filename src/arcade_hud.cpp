@@ -156,14 +156,14 @@ void drawBeachBackdrop(const Metrics& m, float time, bool subdued = false) {
     }
 }
 
-void drawFormulaBuggyLogo(const Metrics& m, float centerY, float scaleMultiplier = 1.0f) {
+void drawFormulaForgeLogo(const Metrics& m, float centerY, float scaleMultiplier = 1.0f) {
     const float titleSize = 68.0f * m.scale * scaleMultiplier;
     const float formulaSize = 22.0f * m.scale * scaleMultiplier;
     drawCenteredText("FORMULA", {m.width * 0.5f + 3.0f * m.scale, centerY - 36.0f * m.scale}, formulaSize,
                      Fade(kInk, 0.68f));
     drawCenteredText("FORMULA", {m.width * 0.5f, centerY - 39.0f * m.scale}, formulaSize, kPaper);
-    drawCenteredText("BUGGY", {m.width * 0.5f + 5.0f * m.scale, centerY + 9.0f * m.scale}, titleSize, Fade(kInk, 0.76f));
-    drawCenteredText("BUGGY", {m.width * 0.5f, centerY + 3.0f * m.scale}, titleSize, kSun);
+    drawCenteredText("FORGE", {m.width * 0.5f + 5.0f * m.scale, centerY + 9.0f * m.scale}, titleSize, Fade(kInk, 0.76f));
+    drawCenteredText("FORGE", {m.width * 0.5f, centerY + 3.0f * m.scale}, titleSize, kSun);
     DrawLineEx({m.width * 0.5f - 142.0f * m.scale * scaleMultiplier, centerY + 48.0f * m.scale * scaleMultiplier},
                {m.width * 0.5f + 142.0f * m.scale * scaleMultiplier, centerY + 48.0f * m.scale * scaleMultiplier},
                5.0f * m.scale, kCoral);
@@ -507,7 +507,7 @@ void DrawLoadingScreen(const LoadingScreenViewModel& viewModel) {
 
     const float logoY = viewModel.cinematicBackground ? m.height * 0.145f : m.height * 0.35f;
     const float logoScale = viewModel.cinematicBackground ? 0.88f : 1.18f;
-    drawFormulaBuggyLogo(m, logoY, logoScale);
+    drawFormulaForgeLogo(m, logoY, logoScale);
     const float railWidth = std::min(430.0f * m.scale, m.width - 2.0f * m.margin);
     const float railY = viewModel.cinematicBackground ? m.height * 0.885f : m.height * 0.73f;
     const Rectangle rail{(m.width - railWidth) * 0.5f, railY, railWidth, 8.0f * m.scale};
@@ -533,7 +533,7 @@ void DrawSelectionHud(const SelectionHudViewModel& viewModel) {
     }
     const float headerHeight = 98.0f * m.scale;
     DrawRectangleRec({0.0f, 0.0f, m.width, headerHeight}, Fade(kInk, 0.93f));
-    drawText("FORMULA BUGGY", {m.margin, 17.0f * m.scale}, 25.0f * m.scale, kSun);
+    drawText("FORMULA FORGE", {m.margin, 17.0f * m.scale}, 25.0f * m.scale, kSun);
     const char* setupTitle = stage == 0 ? "MAIN MENU" :
                              viewModel.selectedMode == GameModeOption::TimeTrial ? "TIME TRIAL SETUP" : "RACE SETUP";
     drawText(setupTitle, {m.margin, 52.0f * m.scale}, 15.0f * m.scale, kPaperMuted);

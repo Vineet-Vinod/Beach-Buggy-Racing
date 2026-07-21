@@ -1,6 +1,6 @@
-# Formula Buggy
+# Formula Forge
 
-Formula Buggy is an original Linux/C++ arcade formula racer that combines
+Formula Forge is an original Linux/C++ arcade formula racer that combines
 open-wheel cars and circuit driving with a bright tropical setting.
 
 The primary build is `harbor_karts_3d`: vendored SDL3 input plus vendored
@@ -76,7 +76,7 @@ them.
   Interlagos layouts with audited turn order,
   handedness, dimensions, and elevation
 - Staged driver, car, map, and 2/5/10/infinite-lap race selection
-- Formula Buggy startup screen, beach-themed selection flow, full race results, replay/home actions, and pause controls
+- Formula Forge startup screen, beach-themed selection flow, full race results, replay/home actions, and pause controls
 - 6-car racing pack with AI opponents
 - One original Blender-authored open-wheel Formula model with five selectable,
   logo-free liveries: Marc, Fiery, MacL, RB, and Dash. Every livery shares the
@@ -85,8 +85,8 @@ them.
 - One realistic-proportioned Blender-authored Standard Driver shared by every
   car, with fitted overalls, gauntlet gloves, driving boots, HANS-style collar,
   closed helmet, smoked visor, and the common animation rig
-- A Blender-rendered loading screen featuring all five cars in a red-lit
-  semicircle with the Standard Driver centered in the foreground
+- A Blender-rendered Formula Forge loading screen featuring all five cars in a
+  red-lit semicircle
 - No powerups and no character super powers
 - Blender-authored circuit worlds with medium-gray tarmac, continuous track
   limits, driveable curbs and runoff, collision-aligned safety walls, catch

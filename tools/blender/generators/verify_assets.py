@@ -183,10 +183,10 @@ def validate_asset(root: Path, kind: str, slug: str, spec: dict) -> str:
 
 
 def validate_loading_artwork(root: Path) -> str:
-    directory = root / "ui" / "loading_screen"
-    blend_path = directory / "loading_screen.blend"
-    png_path = directory / "loading_screen.png"
-    manifest_path = directory / "loading_screen.json"
+    directory = root / "ui" / "formula_forge_loading"
+    blend_path = directory / "formula_forge_loading.blend"
+    png_path = directory / "formula_forge_loading.png"
+    manifest_path = directory / "formula_forge_loading.json"
     for path in (blend_path, png_path, manifest_path):
         require(path.is_file() and path.stat().st_size > 0,
                 f"missing loading-screen asset: {path}")
@@ -201,9 +201,9 @@ def validate_loading_artwork(root: Path) -> str:
                      "formula_rb", "formula_dash"]
     require(manifest.get("type") == "ui_artwork"
             and manifest.get("vehicles") == expected_cars
-            and manifest.get("driver") == "standard_driver",
+            and "driver" not in manifest,
             f"loading-screen composition mismatch: {manifest_path}")
-    return "ui      loading_screen cars=5 driver=1 preview=1280x720"
+    return "ui      formula_forge_loading cars=5 driver=0 preview=1280x720"
 
 
 def main() -> int:

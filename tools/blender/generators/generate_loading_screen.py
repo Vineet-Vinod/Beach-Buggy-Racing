@@ -14,9 +14,9 @@ from mathutils import Vector
 
 CAR_LAYOUT = (
     ("formula_fiery", (-5.25, 4.10, 0.00), 18.0),
-    ("formula_marc", (-2.65, 2.40, 0.00), 9.0),
-    ("formula_macl", (0.00, 1.55, 0.00), 0.0),
-    ("formula_rb", (2.65, 2.40, 0.00), -9.0),
+    ("formula_marc", (-2.65, 2.25, 0.00), 9.0),
+    ("formula_macl", (0.00, 0.45, 0.00), 0.0),
+    ("formula_rb", (2.65, 2.25, 0.00), -9.0),
     ("formula_dash", (5.25, 4.10, 0.00), -18.0),
 )
 
@@ -83,13 +83,6 @@ def build_scene(project_root: Path, output_dir: Path) -> None:
         import_glb(project_root / "assets_src" / "vehicles" / slug / f"{slug}.glb",
                    f"LOADING_{slug}", location, yaw)
 
-    # The shared seated driver is enlarged into a foreground portrait. The
-    # bottom crop hides the pedal-box pose while retaining helmet, suit and
-    # gloved steering posture.
-    import_glb(project_root / "assets_src" / "drivers" / "standard_driver" /
-               "standard_driver.glb", "LOADING_standard_driver",
-               (0.0, -1.75, 1.02), 0.0, 2.35)
-
     # Cool front fill preserves every livery; saturated red rim lights deliver
     # the requested dark red-lit loading-screen mood.
     add_area_light("LOADING_key", (0.0, -7.0, 8.2), (0.0, 1.6, 0.65),
@@ -118,8 +111,8 @@ def build_scene(project_root: Path, output_dir: Path) -> None:
     background.inputs["Strength"].default_value = 0.055
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    png_path = output_dir / "loading_screen.png"
-    blend_path = output_dir / "loading_screen.blend"
+    png_path = output_dir / "formula_forge_loading.png"
+    blend_path = output_dir / "formula_forge_loading.blend"
     scene = bpy.context.scene
     scene.render.engine = "BLENDER_EEVEE"
     scene.render.resolution_x = 1280
@@ -139,17 +132,16 @@ def build_scene(project_root: Path, output_dir: Path) -> None:
 
     manifest = {
         "schema_version": 1,
-        "asset": "loading_screen",
+        "asset": "formula_forge_loading",
         "type": "ui_artwork",
         "resolution": [1280, 720],
-        "composition": "five Formula liveries in a semicircle with the Standard Driver centered in front",
+        "composition": "five Formula liveries in a red-lit semicircle",
         "lighting": "dark studio with red arena and rim lights",
         "vehicles": [slug for slug, _, _ in CAR_LAYOUT],
-        "driver": "standard_driver",
         "source": blend_path.name,
         "render": png_path.name,
     }
-    (output_dir / "loading_screen.json").write_text(
+    (output_dir / "formula_forge_loading.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
@@ -161,7 +153,7 @@ def main() -> None:
     args = parser.parse_args()
     project_root = args.project_root.resolve()
     output_dir = (args.output_dir.resolve() if args.output_dir else
-                  project_root / "assets_src" / "ui" / "loading_screen")
+                  project_root / "assets_src" / "ui" / "formula_forge_loading")
     build_scene(project_root, output_dir)
 
 

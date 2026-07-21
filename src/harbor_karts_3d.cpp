@@ -2172,8 +2172,12 @@ public:
             ClearBackground(Color{3, 3, 7, 255});
             const bool hasLoadingArtwork = IsTextureValid(loadingScreenTexture_);
             if (hasLoadingArtwork) {
-                const float screenWidth = static_cast<float>(std::max(1, GetScreenWidth()));
-                const float screenHeight = static_cast<float>(std::max(1, GetScreenHeight()));
+                // Match the artwork to the active render target. On high-DPI and
+                // offscreen capture backends the framebuffer can differ from the
+                // logical window size, which otherwise compresses the cars into
+                // only part of the loading screen.
+                const float screenWidth = static_cast<float>(std::max(1, GetRenderWidth()));
+                const float screenHeight = static_cast<float>(std::max(1, GetRenderHeight()));
                 const float screenAspect = screenWidth / screenHeight;
                 const float textureWidth = static_cast<float>(loadingScreenTexture_.width);
                 const float textureHeight = static_cast<float>(loadingScreenTexture_.height);
@@ -3867,7 +3871,7 @@ private:
 
     void loadGaragePreviewTextures() {
         loadingScreenTexture_ = LoadTexture(
-            "assets_src/ui/loading_screen/loading_screen.png");
+            "assets_src/ui/formula_forge_loading/formula_forge_loading.png");
         if (IsTextureValid(loadingScreenTexture_)) {
             SetTextureFilter(loadingScreenTexture_, TEXTURE_FILTER_BILINEAR);
         }
