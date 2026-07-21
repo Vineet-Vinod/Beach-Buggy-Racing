@@ -7,6 +7,7 @@ struct ArcadeAudioInput {
     float speedNormalized = 0.0f;
     float engineRpmNormalized = 0.333f;
     bool shiftActive = false;
+    bool shiftAlert = false;
     float throttle = 0.0f;
     float brake = 0.0f;
     float slip = 0.0f;
@@ -23,6 +24,7 @@ struct ArcadeAudioAuditResult {
     float fullSpeedRms = 0.0f;
     float scrubRmsIncrease = 0.0f;
     float landingPeak = 0.0f;
+    float shiftAlertRmsIncrease = 0.0f;
     float peakMagnitude = 0.0f;
     uint64_t deterministicHash = 0;
 };

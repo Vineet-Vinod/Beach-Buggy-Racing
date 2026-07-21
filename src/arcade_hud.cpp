@@ -172,7 +172,7 @@ std::string formatTime(float seconds) {
 std::string lapText(int currentLap, int totalLaps) {
     std::array<char, 32> buffer{};
     if (totalLaps <= 0) {
-        std::snprintf(buffer.data(), buffer.size(), "LAP %d / INF", std::max(1, currentLap));
+        std::snprintf(buffer.data(), buffer.size(), "LAP %d", std::max(1, currentLap));
     } else {
         std::snprintf(buffer.data(), buffer.size(), "LAP %d / %d", std::clamp(currentLap, 1, totalLaps), totalLaps);
     }
@@ -278,55 +278,57 @@ void drawCourseSchematic(const SelectionHudViewModel& viewModel, Rectangle bound
 }
 
 void drawRaceProgress(const RaceHudViewModel& viewModel, const Metrics& m) {
-    const float width = 440.0f * m.scale;
-    const Rectangle panel{(m.width - width) * 0.5f, m.margin, width, 52.0f * m.scale};
-    DrawRectangleRec(panel, Fade(kInk, 0.78f));
+    const float width = 650.0f * m.scale;
+    const float height = 82.0f * m.scale;
+    const Rectangle panel{(m.width - width) * 0.5f, m.margin, width, height};
+    DrawRectangleRec(panel, Fade(Color{4, 5, 8, 255}, 0.86f));
+    DrawRectangleRec({panel.x, panel.y, panel.width, 3.0f * m.scale}, kCoral);
+    DrawRectangleLinesEx(panel, 1.0f * m.scale, Fade(kPaper, 0.22f));
 
-    const std::string time = formatTime(viewModel.raceTimeSeconds);
-    drawCenteredText(time, {panel.x + panel.width * 0.5f, panel.y + 13.0f * m.scale}, 16.0f * m.scale, kPaper);
+    const float columnWidth = panel.width / 3.0f;
+    for (int column = 1; column < 3; ++column) {
+        const float x = panel.x + columnWidth * static_cast<float>(column);
+        DrawLineEx({x, panel.y + 12.0f * m.scale}, {x, panel.y + 61.0f * m.scale},
+                   1.0f * m.scale, Fade(kPaper, 0.20f));
+    }
 
-    const Rectangle rail{panel.x + 24.0f * m.scale, panel.y + 34.0f * m.scale, panel.width - 48.0f * m.scale, 6.0f * m.scale};
-    DrawRectangleRec(rail, Color{7, 18, 21, 240});
-    DrawRectangleRec({rail.x, rail.y, rail.width * clamp01(viewModel.raceProgress), rail.height}, kSun);
+    std::array<char, 24> lapValue{};
+    if (viewModel.totalLaps <= 0) {
+        std::snprintf(lapValue.data(), lapValue.size(), "%d", std::max(1, viewModel.currentLap));
+    } else {
+        std::snprintf(lapValue.data(), lapValue.size(), "%d / %d",
+                      std::clamp(viewModel.currentLap, 1, viewModel.totalLaps), viewModel.totalLaps);
+    }
+    const float timer = viewModel.isTimeTrial ? viewModel.currentLapTimeSeconds : viewModel.raceTimeSeconds;
+    const std::string best = viewModel.hasBestLap ? formatTime(viewModel.bestLapTimeSeconds) : "--:--.--";
+    const std::array<std::string, 3> labels = {
+        "LAP", viewModel.isTimeTrial ? "LAP TIME" : "RACE TIME", "BEST LAP"};
+    const std::array<std::string, 3> values = {lapValue.data(), formatTime(timer), best};
+    for (int column = 0; column < 3; ++column) {
+        const float centerX = panel.x + columnWidth * (static_cast<float>(column) + 0.5f);
+        drawCenteredText(labels[static_cast<size_t>(column)], {centerX, panel.y + 19.0f * m.scale},
+                         10.0f * m.scale, column == 2 && viewModel.hasBestLap ? kCoral : kPaperMuted);
+        drawCenteredText(values[static_cast<size_t>(column)], {centerX, panel.y + 45.0f * m.scale},
+                         column == 0 ? 24.0f * m.scale : 22.0f * m.scale,
+                         column == 2 && viewModel.hasBestLap ? kCoral : kPaper);
+    }
+
+    const Rectangle rail{panel.x + 18.0f * m.scale, panel.y + panel.height - 10.0f * m.scale,
+                         panel.width - 36.0f * m.scale, 4.0f * m.scale};
+    DrawRectangleRec(rail, Fade(BLACK, 0.82f));
+    const Color progressColor = viewModel.isTimeTrial ? kAqua : kCoral;
+    DrawRectangleRec({rail.x, rail.y, rail.width * clamp01(viewModel.raceProgress), rail.height}, progressColor);
 
     const int count = std::clamp(viewModel.racerProgressCount, 0, kMaxHudRacers);
     for (int index = 0; index < count; ++index) {
         const float progress = clamp01(viewModel.racerProgress[static_cast<size_t>(index)]);
         const Vector2 marker{rail.x + progress * rail.width, rail.y + rail.height * 0.5f};
         const bool player = index == viewModel.playerProgressIndex;
-        DrawCircleV(marker, (player ? 5.0f : 3.0f) * m.scale, player ? kSun : kPaperMuted);
+        DrawCircleV(marker, (player ? 4.5f : 2.5f) * m.scale, player ? kPaper : kPaperMuted);
         if (player) {
-            DrawCircleLines(static_cast<int>(marker.x), static_cast<int>(marker.y), 7.0f * m.scale, kPaper);
+            DrawCircleLines(static_cast<int>(marker.x), static_cast<int>(marker.y), 6.5f * m.scale, progressColor);
         }
     }
-}
-
-void drawTimeTrialProgress(const RaceHudViewModel& viewModel, const Metrics& m) {
-    const float width = 460.0f * m.scale;
-    const Rectangle panel{(m.width - width) * 0.5f, m.margin, width, 82.0f * m.scale};
-    DrawRectangleRec(panel, Fade(kInk, 0.84f));
-    DrawRectangleRec({panel.x, panel.y, 5.0f * m.scale, panel.height}, kAqua);
-
-    const float halfWidth = panel.width * 0.5f;
-    drawCenteredText("CURRENT LAP", {panel.x + halfWidth * 0.5f, panel.y + 14.0f * m.scale},
-                     12.0f * m.scale, kPaperMuted);
-    drawCenteredText(formatTime(viewModel.currentLapTimeSeconds),
-                     {panel.x + halfWidth * 0.5f, panel.y + 39.0f * m.scale}, 21.0f * m.scale, kPaper);
-
-    DrawLineEx({panel.x + halfWidth, panel.y + 10.0f * m.scale},
-               {panel.x + halfWidth, panel.y + 58.0f * m.scale}, 1.0f * m.scale, Fade(kOutline, 0.70f));
-    drawCenteredText("BEST", {panel.x + halfWidth * 1.5f, panel.y + 14.0f * m.scale},
-                     12.0f * m.scale, viewModel.hasBestLap ? kSun : kPaperMuted);
-    drawCenteredText(viewModel.hasBestLap ? formatTime(viewModel.bestLapTimeSeconds) : "--:--.--",
-                     {panel.x + halfWidth * 1.5f, panel.y + 39.0f * m.scale}, 21.0f * m.scale,
-                     viewModel.hasBestLap ? kSun : kPaperMuted);
-
-    const Rectangle rail{panel.x + 21.0f * m.scale, panel.y + 68.0f * m.scale,
-                         panel.width - 42.0f * m.scale, 5.0f * m.scale};
-    DrawRectangleRec(rail, Color{7, 18, 21, 240});
-    DrawRectangleRec({rail.x, rail.y, rail.width * clamp01(viewModel.raceProgress), rail.height}, kAqua);
-    DrawCircleV({rail.x + rail.width * clamp01(viewModel.raceProgress), rail.y + rail.height * 0.5f},
-                4.5f * m.scale, kPaper);
 }
 
 void drawPlacePanel(const RaceHudViewModel& viewModel, const Metrics& m) {
@@ -339,16 +341,6 @@ void drawPlacePanel(const RaceHudViewModel& viewModel, const Metrics& m) {
     drawText(place.data(), {panel.x + 69.0f * m.scale, panel.y + 24.0f * m.scale}, 38.0f * m.scale, kPaper);
 }
 
-void drawLapPanel(const RaceHudViewModel& viewModel, const Metrics& m) {
-    const float width = 184.0f * m.scale;
-    const Rectangle panel{m.width - m.margin - width, m.margin, width, 82.0f * m.scale};
-    DrawRectangleRec(panel, Fade(kInk, 0.76f));
-    drawText("LAP", {panel.x + 15.0f * m.scale, panel.y + 10.0f * m.scale}, 15.0f * m.scale, kPaper);
-    const std::string lap = lapText(viewModel.currentLap, viewModel.totalLaps);
-    drawFittedText(lap.substr(4), {panel.x + 55.0f * m.scale, panel.y + 24.0f * m.scale, panel.width - 66.0f * m.scale,
-                                  42.0f * m.scale},
-                   34.0f * m.scale, 18.0f * m.scale, kPaper);
-}
 
 void drawRaceAlert(const RaceHudViewModel& viewModel, const Metrics& m) {
     if (!viewModel.wrongWay && !viewModel.finished) {
@@ -367,21 +359,47 @@ void drawRaceAlert(const RaceHudViewModel& viewModel, const Metrics& m) {
 }
 
 void drawTelemetryPanel(const RaceHudViewModel& viewModel, const Metrics& m) {
-    const float width = 202.0f * m.scale;
-    const float height = 76.0f * m.scale;
-    const Rectangle panel{m.width - m.margin - width, m.height - m.margin - height, width, height};
-    DrawRectangleRec(panel, Fade(kInk, 0.86f));
-    DrawRectangleRec({panel.x, panel.y, 5.0f * m.scale, panel.height}, kSun);
+    const float radius = 105.0f * m.scale;
+    const Vector2 center{m.width - m.margin - radius, m.height - m.margin - radius};
+    DrawCircleV(center, radius, Fade(Color{4, 5, 8, 255}, 0.88f));
+    DrawCircleLines(static_cast<int>(center.x), static_cast<int>(center.y), radius, Fade(kPaper, 0.28f));
 
+    constexpr float startAngle = 135.0f;
+    constexpr float sweepAngle = 270.0f;
+    const float innerRadius = radius - 14.0f * m.scale;
+    const float outerRadius = radius - 6.0f * m.scale;
+    DrawRing(center, innerRadius, outerRadius, startAngle, startAngle + sweepAngle, 72, Fade(kPaperMuted, 0.20f));
+    DrawRing(center, innerRadius, outerRadius, startAngle + sweepAngle * 0.84f, startAngle + sweepAngle,
+             18, Fade(kCoral, 0.38f));
+    const float rpm = std::clamp(viewModel.engineRpmNormalized / 1.05f, 0.0f, 1.0f);
+    DrawRing(center, innerRadius, outerRadius, startAngle, startAngle + sweepAngle * rpm,
+             72, viewModel.shiftRecommended ? kCoral : kPaper);
+
+    for (int tick = 0; tick <= 10; ++tick) {
+        const float degrees = startAngle + sweepAngle * static_cast<float>(tick) / 10.0f;
+        const float radians = degrees * DEG2RAD;
+        const Vector2 direction{std::cos(radians), std::sin(radians)};
+        const float tickOuter = radius - 18.0f * m.scale;
+        const float tickInner = tickOuter - (tick % 2 == 0 ? 8.0f : 5.0f) * m.scale;
+        DrawLineEx({center.x + direction.x * tickInner, center.y + direction.y * tickInner},
+                   {center.x + direction.x * tickOuter, center.y + direction.y * tickOuter},
+                   (tick % 2 == 0 ? 2.0f : 1.0f) * m.scale,
+                   tick >= 9 ? kCoral : Fade(kPaper, 0.62f));
+    }
+
+    const bool pulse = std::fmod(std::max(0.0f, viewModel.presentationTimeSeconds), 0.28f) < 0.18f;
+    if (viewModel.shiftRecommended && pulse) {
+        drawCenteredText("SHIFT", {center.x, center.y - 62.0f * m.scale}, 13.0f * m.scale, kCoral);
+    }
     const std::string gear = viewModel.gear > 0 ? std::to_string(std::clamp(viewModel.gear, 1, 8)) : "N";
-    drawCenteredText(gear, {panel.x + 42.0f * m.scale, panel.y + panel.height * 0.52f}, 42.0f * m.scale, kSun);
-    DrawLineEx({panel.x + 78.0f * m.scale, panel.y + 12.0f * m.scale},
-               {panel.x + 78.0f * m.scale, panel.y + panel.height - 12.0f * m.scale},
-               1.0f * m.scale, Fade(kOutline, 0.80f));
-
+    drawCenteredText("GEAR", {center.x, center.y - 37.0f * m.scale}, 9.0f * m.scale, kPaperMuted);
+    drawCenteredText(gear, {center.x, center.y - 5.0f * m.scale}, 48.0f * m.scale,
+                     viewModel.shiftRecommended ? kCoral : kPaper);
     const std::string speed = std::to_string(std::max(0, viewModel.speedKph));
-    drawCenteredText(speed, {panel.x + 139.0f * m.scale, panel.y + 28.0f * m.scale}, 29.0f * m.scale, kPaper);
-    drawCenteredText("KM/H", {panel.x + 139.0f * m.scale, panel.y + 57.0f * m.scale}, 11.0f * m.scale, kPaperMuted);
+    drawCenteredText(speed, {center.x, center.y + 42.0f * m.scale}, 27.0f * m.scale, kPaper);
+    drawCenteredText("KM/H", {center.x, center.y + 66.0f * m.scale}, 9.0f * m.scale, kPaperMuted);
+    drawCenteredText("RPM", {center.x, center.y + 84.0f * m.scale}, 8.0f * m.scale,
+                     viewModel.shiftRecommended ? kCoral : Fade(kPaperMuted, 0.72f));
 }
 
 void drawRouteMap(const RaceHudViewModel& viewModel, const Metrics& m) {
@@ -390,12 +408,13 @@ void drawRouteMap(const RaceHudViewModel& viewModel, const Metrics& m) {
         return;
     }
 
-    const float width = 205.0f * m.scale;
-    const float height = 154.0f * m.scale;
+    const float width = 226.0f * m.scale;
+    const float height = 184.0f * m.scale;
     const Rectangle panel{m.margin, m.height - m.margin - height, width, height};
-    DrawRectangleRec(panel, Fade(kInk, 0.82f));
-    DrawRectangleRec({panel.x, panel.y, 5.0f * m.scale, panel.height}, kAqua);
-    drawText("ROUTE", {panel.x + 15.0f * m.scale, panel.y + 10.0f * m.scale}, 12.0f * m.scale, kPaperMuted);
+    DrawRectangleRec(panel, Fade(Color{4, 5, 8, 255}, 0.82f));
+    DrawRectangleRec({panel.x, panel.y, panel.width, 3.0f * m.scale}, kCoral);
+    DrawRectangleLinesEx(panel, 1.0f * m.scale, Fade(kPaper, 0.22f));
+    drawText("TRACK", {panel.x + 14.0f * m.scale, panel.y + 11.0f * m.scale}, 10.0f * m.scale, kPaperMuted);
 
     const Rectangle mapBounds{panel.x + 18.0f * m.scale, panel.y + 29.0f * m.scale,
                               panel.width - 34.0f * m.scale, panel.height - 42.0f * m.scale};
@@ -404,30 +423,41 @@ void drawRouteMap(const RaceHudViewModel& viewModel, const Metrics& m) {
         const float x = clamp01(viewModel.coursePolyline[static_cast<size_t>(index) * 2]);
         const float y = clamp01(viewModel.coursePolyline[static_cast<size_t>(index) * 2 + 1]);
         points[static_cast<size_t>(index)] = {mapBounds.x + x * mapBounds.width,
-                                              mapBounds.y + (1.0f - y) * mapBounds.height};
+                                              mapBounds.y + y * mapBounds.height};
     }
 
     for (int index = 0; index < count; ++index) {
         DrawLineEx(points[static_cast<size_t>(index)], points[static_cast<size_t>((index + 1) % count)],
-                   3.0f * m.scale, Fade(kPaperMuted, 0.58f));
+                   6.0f * m.scale, Fade(BLACK, 0.78f));
+        DrawLineEx(points[static_cast<size_t>(index)], points[static_cast<size_t>((index + 1) % count)],
+                   2.5f * m.scale, Fade(kPaper, 0.72f));
     }
 
     const float progress = clamp01(viewModel.courseProgress);
-    const int playerIndex = std::clamp(static_cast<int>(progress * static_cast<float>(count)), 0, count - 1);
-    const Vector2 player = points[static_cast<size_t>(playerIndex)];
+    const float scaledProgress = progress * static_cast<float>(count);
+    const int playerIndex = std::clamp(static_cast<int>(std::floor(scaledProgress)), 0, count - 1);
     const Vector2 next = points[static_cast<size_t>((playerIndex + 1) % count)];
-    const Vector2 delta{next.x - player.x, next.y - player.y};
+    const Vector2 current = points[static_cast<size_t>(playerIndex)];
+    const float fraction = scaledProgress - std::floor(scaledProgress);
+    const Vector2 player{current.x + (next.x - current.x) * fraction,
+                         current.y + (next.y - current.y) * fraction};
+    const Vector2 delta{next.x - current.x, next.y - current.y};
     const float magnitude = std::max(0.001f, std::sqrt(delta.x * delta.x + delta.y * delta.y));
     const Vector2 direction{delta.x / magnitude, delta.y / magnitude};
     const Vector2 side{-direction.y, direction.x};
-    const float markerSize = 8.0f * m.scale;
+    const float markerSize = 8.5f * m.scale;
+    DrawCircleV(player, 11.0f * m.scale, Fade(BLACK, 0.72f));
+    DrawLineEx(player, {player.x + direction.x * markerSize * 1.25f,
+                        player.y + direction.y * markerSize * 1.25f},
+               5.0f * m.scale, kCoral);
     DrawTriangle({player.x + direction.x * markerSize, player.y + direction.y * markerSize},
                  {player.x - direction.x * markerSize * 0.55f + side.x * markerSize * 0.62f,
                   player.y - direction.y * markerSize * 0.55f + side.y * markerSize * 0.62f},
                  {player.x - direction.x * markerSize * 0.55f - side.x * markerSize * 0.62f,
                   player.y - direction.y * markerSize * 0.55f - side.y * markerSize * 0.62f},
-                 kSun);
-    DrawCircleLines(static_cast<int>(player.x), static_cast<int>(player.y), 10.0f * m.scale, kPaper);
+                 kCoral);
+    DrawCircleV(player, 3.5f * m.scale, kPaper);
+    DrawCircleLines(static_cast<int>(player.x), static_cast<int>(player.y), 11.0f * m.scale, kPaper);
 }
 
 }  // namespace
@@ -480,14 +510,12 @@ bool IsUiFontLoaded() {
 }
 
 void DrawRaceHud(const RaceHudViewModel& viewModel) {
+    SelectionFontScope formulaFont;
     const Metrics m = metrics();
-    if (viewModel.isTimeTrial) {
-        drawTimeTrialProgress(viewModel, m);
-    } else {
+    if (!viewModel.isTimeTrial) {
         drawPlacePanel(viewModel, m);
-        drawRaceProgress(viewModel, m);
     }
-    drawLapPanel(viewModel, m);
+    drawRaceProgress(viewModel, m);
     drawRouteMap(viewModel, m);
     drawTelemetryPanel(viewModel, m);
     drawRaceAlert(viewModel, m);

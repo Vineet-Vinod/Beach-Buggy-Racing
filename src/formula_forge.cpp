@@ -2135,14 +2135,12 @@ public:
             const auto raceInputs = currentRaceInputs();
             raceFlow_->update(dt, raceInputs);
             raceTime_ = static_cast<float>(raceFlow_->raceTimeSeconds());
-            if (isTimeTrial()) {
-                for (const ArcadeRaceEvent& event : raceFlow_->events()) {
-                    if (event.racerIndex == 0 && event.type == ArcadeRaceEventType::LapCompleted) {
-                        lastLapTime_ = std::max(0.0f, static_cast<float>(event.raceTimeSeconds) - lapStartTime_);
-                        bestLapTime_ = hasBestLap_ ? std::min(bestLapTime_, lastLapTime_) : lastLapTime_;
-                        hasBestLap_ = true;
-                        lapStartTime_ = static_cast<float>(event.raceTimeSeconds);
-                    }
+            for (const ArcadeRaceEvent& event : raceFlow_->events()) {
+                if (event.racerIndex == 0 && event.type == ArcadeRaceEventType::LapCompleted) {
+                    lastLapTime_ = std::max(0.0f, static_cast<float>(event.raceTimeSeconds) - lapStartTime_);
+                    bestLapTime_ = hasBestLap_ ? std::min(bestLapTime_, lastLapTime_) : lastLapTime_;
+                    hasBestLap_ = true;
+                    lapStartTime_ = static_cast<float>(event.raceTimeSeconds);
                 }
             }
             for (int i = 0; i < activeKartCount(); ++i) {
@@ -3860,6 +3858,9 @@ private:
             audioInput.speedNormalized = std::clamp(player.telemetry.normalizedSpeed, 0.0f, 1.0f);
             audioInput.engineRpmNormalized = player.engineRpmNormalized;
             audioInput.shiftActive = player.shiftTimer > 0.0f;
+            audioInput.shiftAlert = player.shiftTimer <= 0.0f &&
+                                    player.gear < static_cast<int>(player.tuning.gearRedlineSpeedRatios.size()) &&
+                                    player.engineRpmNormalized >= player.tuning.automaticUpshiftRpm;
             audioInput.throttle = input.throttle;
             audioInput.brake = std::max(input.brake, player.brakeLoad);
             audioInput.slip = std::clamp(std::abs(player.slipAngle) / 0.70f, 0.0f, 1.0f);
@@ -6103,6 +6104,7 @@ private:
             const float speedKphScale = speedKphPerSimulationUnit(track_.layout());
             view.speedKph = static_cast<int>(std::max(0.0f, player.telemetry.forwardSpeed) * speedKphScale + 0.5f);
             view.gear = player.gear;
+            view.engineRpmNormalized = player.engineRpmNormalized;
             view.currentLap = laps == kInfiniteLaps ? std::max(1, player.lap + 1) : std::clamp(player.lap + 1, 1, laps);
             view.totalLaps = laps;
             view.position = playerPosition_;
@@ -6138,17 +6140,25 @@ private:
             }
             const Vec2 hudMapSpan{std::max(1.0f, hudMapMax.x - hudMapMin.x),
                                   std::max(1.0f, hudMapMax.y - hudMapMin.y)};
+            const float hudMapScale = std::max(hudMapSpan.x, hudMapSpan.y);
+            const Vec2 hudMapInset{(1.0f - hudMapSpan.x / hudMapScale) * 0.5f,
+                                   (1.0f - hudMapSpan.y / hudMapScale) * 0.5f};
             view.coursePolylinePointCount = kHudMapPoints;
             view.courseProgress = raceLapProgress(player) / track_.totalLength();
             for (int i = 0; i < kHudMapPoints; ++i) {
                 const Vec2 point = hudMapPoints[static_cast<size_t>(i)];
-                view.coursePolyline[static_cast<size_t>(i * 2)] = (point.x - hudMapMin.x) / hudMapSpan.x;
-                view.coursePolyline[static_cast<size_t>(i * 2 + 1)] = (point.y - hudMapMin.y) / hudMapSpan.y;
+                view.coursePolyline[static_cast<size_t>(i * 2)] =
+                    hudMapInset.x + (point.x - hudMapMin.x) / hudMapScale;
+                view.coursePolyline[static_cast<size_t>(i * 2 + 1)] =
+                    hudMapInset.y + (point.y - hudMapMin.y) / hudMapScale;
             }
             view.driftCharge = std::clamp(player.driftCharge / player.tuning.tierThreeCharge, 0.0f, 1.0f);
             view.boostCharge = std::clamp(player.boostTimer / player.tuning.tierThreeBoostDuration, 0.0f, 1.0f);
             view.presentationTimeSeconds = raceTime_;
             view.boostActive = player.boostTimer > 0.0f;
+            view.shiftRecommended = player.shiftTimer <= 0.0f &&
+                                    player.gear < static_cast<int>(player.tuning.gearRedlineSpeedRatios.size()) &&
+                                    player.engineRpmNormalized >= player.tuning.automaticUpshiftRpm;
             view.wrongWay = raceFlow_ && raceFlow_->racer(0).wrongWay;
             view.finished = raceFinished_;
             view.controllerConnected = hasController;
@@ -6377,7 +6387,8 @@ int runFormulaForge(int argc, char** argv) {
         const ArcadeAudioAuditResult result = runArcadeAudioUnitAudit();
         std::cout << "audio-audit checks=" << result.checks << " failures=" << result.failures << " idle_rms=" << result.idleRms
                   << " full_rms=" << result.fullSpeedRms << " scrub_delta=" << result.scrubRmsIncrease
-                  << " landing_peak=" << result.landingPeak << " peak=" << result.peakMagnitude
+                  << " landing_peak=" << result.landingPeak << " shift_alert_delta=" << result.shiftAlertRmsIncrease
+                  << " peak=" << result.peakMagnitude
                   << " deterministic_hash=" << result.deterministicHash << " ok=" << result.ok << "\n";
         return result.ok ? 0 : 1;
     }

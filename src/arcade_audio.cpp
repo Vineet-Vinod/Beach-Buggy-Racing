@@ -48,6 +48,12 @@ class ArcadeSynth {
         target_.slip = clamp01(std::abs(input.slip));
         target_.grounded = input.grounded ? 1.0f : 0.0f;
 
+        if (input.shiftAlert && !wasShiftAlert_) {
+            shiftAlertEnvelope_ = 1.0f;
+            shiftAlertPhase_ = 0.0f;
+        }
+        wasShiftAlert_ = input.shiftAlert;
+
         const float impulse = std::max(0.0f, std::isfinite(input.landingImpulse) ? input.landingImpulse : 0.0f);
         const bool landed = input.grounded && !wasGrounded_;
         if ((landed || impulse > previousLandingImpulse_ + 2.0f) && impulse > 4.0f) {
@@ -102,8 +108,15 @@ class ArcadeSynth {
             landingEnvelope_ *= 0.99908f;
             if (landingEnvelope_ < 0.00001f) landingEnvelope_ = 0.0f;
 
+            shiftAlertPhase_ = wrapPhase(shiftAlertPhase_ + 980.0f * dt);
+            const float shiftBeep = (std::sin(2.0f * kPi * shiftAlertPhase_) +
+                                     std::sin(4.0f * kPi * shiftAlertPhase_) * 0.22f) *
+                                    shiftAlertEnvelope_ * 0.19f;
+            shiftAlertEnvelope_ *= 0.99982f;
+            if (shiftAlertEnvelope_ < 0.00001f) shiftAlertEnvelope_ = 0.0f;
+
             const float airMute = 0.72f + controls_.grounded * 0.28f;
-            const float center = engine * airMute + road + wind + scrub + thump;
+            const float center = engine * airMute + road + wind + scrub + thump + shiftBeep;
             const float stereoMotion = (noise - roadNoise_) * (0.008f + controls_.speed * 0.014f);
             stereo[frame * 2] = softLimit(center + stereoMotion);
             stereo[frame * 2 + 1] = softLimit(center - stereoMotion);
@@ -132,11 +145,14 @@ class ArcadeSynth {
     float modulationPhase_ = 0.0f;
     float landingPhase_ = 0.0f;
     float landingEnvelope_ = 0.0f;
+    float shiftAlertPhase_ = 0.0f;
+    float shiftAlertEnvelope_ = 0.0f;
     float previousLandingImpulse_ = 0.0f;
     float roadNoise_ = 0.0f;
     float windNoise_ = 0.0f;
     float scrubNoise_ = 0.0f;
     bool wasGrounded_ = true;
+    bool wasShiftAlert_ = false;
 };
 
 struct SignalMetrics {
@@ -329,6 +345,14 @@ ArcadeAudioAuditResult runArcadeAudioUnitAudit() {
     result.landingPeak = measure(landingSignal).peak;
     check(result.landingPeak > 0.30f);
     check(result.landingPeak < 0.90f);
+
+    ArcadeAudioInput nearRedline = fast;
+    nearRedline.engineRpmNormalized = 0.98f;
+    const SignalMetrics nearRedlineMetrics = measure(renderScenario(nearRedline, 4));
+    nearRedline.shiftAlert = true;
+    const SignalMetrics shiftAlertMetrics = measure(renderScenario(nearRedline, 4));
+    result.shiftAlertRmsIncrease = shiftAlertMetrics.rms - nearRedlineMetrics.rms;
+    check(result.shiftAlertRmsIncrease > 0.015f);
 
     const std::vector<float> repeat = renderScenario(fast, 18);
     result.deterministicHash = hashSamples(fastSignal);

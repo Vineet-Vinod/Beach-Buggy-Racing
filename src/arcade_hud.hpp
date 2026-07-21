@@ -21,6 +21,7 @@ struct RaceHudViewModel {
     std::string driverName;
     int speedKph = 0;
     int gear = 0;
+    float engineRpmNormalized = 0.0f;
     int currentLap = 1;
     int totalLaps = 2;
     int position = 1;
@@ -39,6 +40,7 @@ struct RaceHudViewModel {
     float boostCharge = 0.0f;
     float presentationTimeSeconds = 0.0f;
     bool boostActive = false;
+    bool shiftRecommended = false;
     bool wrongWay = false;
     bool finished = false;
     bool isTimeTrial = false;
