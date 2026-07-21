@@ -7,6 +7,7 @@ import math
 from pathlib import Path
 
 import bpy
+import bmesh
 
 from asset_helpers import (ASSET_PROP, add_wheel, asset_objects, bar,
                            build_rigid_rig, create_rig_action, cube, cylinder,
@@ -105,6 +106,27 @@ VEHICLES = {
 REQUIRED = ["car_root", "body", "wheel_FL", "wheel_FR", "wheel_RL",
             "wheel_RR", "steering", "brake_lights", "driver_mount",
             "vehicle_rig", "seat_anchor"]
+
+
+def ensure_outward_normals() -> None:
+    """Make every closed runtime mesh opaque under back-face culling."""
+    invalid = []
+    for obj in asset_objects():
+        if obj.type != "MESH":
+            continue
+        mesh = obj.data
+        editable = bmesh.new()
+        editable.from_mesh(mesh)
+        bmesh.ops.recalc_face_normals(editable, faces=editable.faces)
+        if any(not edge.is_manifold for edge in editable.edges):
+            invalid.append(f"{obj.name}: non-manifold")
+        elif editable.calc_volume(signed=True) <= 0.0:
+            invalid.append(f"{obj.name}: inward normals")
+        editable.to_mesh(mesh)
+        mesh.update()
+        editable.free()
+    if invalid:
+        raise RuntimeError("Vehicle mesh orientation failed: " + ", ".join(invalid))
 
 
 def common_materials(spec):
@@ -769,6 +791,11 @@ def build_vehicle(slug: str):
          mats["detail"], steering, 0.018)
     cube("rear_rain_light", (0, 2.225, 0.42), (0.16, 0.045, 0.09),
          mats["brake"], brakes, 0.012)
+
+    # Blender's preview displays both face directions, while the runtime
+    # intentionally culls back-faces. Normalize every generated shell before
+    # skinning/export so opposite-side suspension cannot show through bodywork.
+    ensure_outward_normals()
 
     bone_specs = {
         "rig_root": {"head": (0, 0, 0), "tail": (0, 0, 0.25)},
