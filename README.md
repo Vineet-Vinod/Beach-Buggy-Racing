@@ -27,7 +27,7 @@ repository root so it can find `assets/`. The game starts fullscreen; use the
 following command for a windowed session:
 
 ```sh
-./build/game/formula_forge --windowed
+make run ARGS="--windowed"
 ```
 
 Python 3.11, [`uv`](https://docs.astral.sh/uv/), and the pinned `bpy` package
@@ -98,9 +98,14 @@ circuit. The Monza AI audit is calibrated around a 75-second player lap.
 make test
 ```
 
-Useful focused checks include `make asset-audit`, `make race-audit`,
-`make handling-audit`, `make track-catalog-audit`, and the five
-`ai-pace-audit` targets in the [Makefile](Makefile).
+For a focused diagnostic, pass the executable's options through `make run`:
+
+```sh
+make run ARGS="--race-audit"
+make run ARGS="--handling-audit"
+make run ARGS="--track-catalog-audit"
+make run ARGS="--ai-pace-audit-spa"
+```
 
 ### Blender asset pipeline
 
