@@ -55,7 +55,7 @@ constexpr float kContactVerticalWindow = 7.0f;
 constexpr float kStandardGravityMetersPerSecondSquared = 9.80665f;
 constexpr int kInfiniteLaps = 0;
 constexpr std::array<int, 4> kLapOptions = {2, 5, 10, kInfiniteLaps};
-constexpr int kRaceLapOptionCount = 3;
+constexpr int kLapOptionCount = static_cast<int>(kLapOptions.size());
 constexpr float kLoadingScreenSeconds = 2.35f;
 constexpr float kMenuSteerThreshold = 0.20f;
 constexpr float kTcamBackMeters = 0.68f;
@@ -98,17 +98,6 @@ float authoredRoadSurfaceLift(TrackLayoutId layout) {
                ? kMetricRoadSurfaceOffsetMeters * kSpaSimulationUnitsPerMeter * kRenderScale
                : kTrackSurfaceLift;
 }
-
-constexpr const char* kStandardDriverBackstory =
-    "One neutral, fully equipped racing driver shared by every Formula car.";
-
-constexpr std::array<const char*, 5> kCarBackstories = {
-    "Marc uses a graphite, silver and aqua treatment on the shared Formula chassis.",
-    "Fiery pairs deep red bodywork with cream and warm gold details.",
-    "MacL combines papaya orange, black bodywork and electric blue accents.",
-    "RB layers red and yellow speed lines over a dark navy base.",
-    "Dash uses a clean white and cobalt field edged with restrained red details.",
-};
 
 struct MapSpec3D {
     TrackLayoutId layout;
@@ -1141,6 +1130,8 @@ struct Input3D {
     bool down = false;
     bool pageLeft = false;
     bool pageRight = false;
+    bool triggerLeft = false;
+    bool triggerRight = false;
     bool shiftDown = false;
     bool shiftUp = false;
     bool automaticShift = false;
@@ -1320,6 +1311,10 @@ public:
         } else if (IsGamepadAvailable(0)) {
             input = readRaylib();
         }
+        // Preserve physical trigger presses as menu edges before keyboard W/S
+        // is folded into throttle/brake for driving.
+        input.triggerLeft = input.brake > 0.55f;
+        input.triggerRight = input.throttle > 0.55f;
         applyKeyboardFallback(input, devKeyboard);
         input.brake = canonicalBrake(input.brake, input.bHeld);
         input.automaticShift = false;
@@ -1403,6 +1398,8 @@ private:
         out.down = pressed(current.down, previousDigital_.down);
         out.pageLeft = pressed(current.pageLeft, previousDigital_.pageLeft);
         out.pageRight = pressed(current.pageRight, previousDigital_.pageRight);
+        out.triggerLeft = pressed(current.triggerLeft, previousDigital_.triggerLeft);
+        out.triggerRight = pressed(current.triggerRight, previousDigital_.triggerRight);
         out.shiftDown = pressed(current.shiftDown, previousDigital_.shiftDown);
         out.shiftUp = pressed(current.shiftUp, previousDigital_.shiftUp);
         out.quit = current.quit || (current.start && current.back);
@@ -2041,7 +2038,7 @@ public:
             audio_.initialize();
         }
         buildParticleTexture();
-        loadGaragePreviewTextures();
+        loadMenuTextures();
         buildTrackRenderer();
         resetRace();
     }
@@ -2062,17 +2059,9 @@ public:
                 UnloadTexture(loadingScreenTexture_);
                 loadingScreenTexture_ = {};
             }
-            for (Texture2D& texture : carPreviewTextures_) {
-                if (IsTextureValid(texture)) {
-                    UnloadTexture(texture);
-                    texture = {};
-                }
-            }
-            for (Texture2D& texture : driverPreviewTextures_) {
-                if (IsTextureValid(texture)) {
-                    UnloadTexture(texture);
-                    texture = {};
-                }
+            if (IsTextureValid(garageBackgroundTexture_)) {
+                UnloadTexture(garageBackgroundTexture_);
+                garageBackgroundTexture_ = {};
             }
             renderer_.shutdown();
         }
@@ -2212,13 +2201,41 @@ public:
         if (mode_ == Mode::Race || mode_ == Mode::Pause || mode_ == Mode::Results) {
             camera_ = raceTcam(renderAlpha_);
         }
-        ClearBackground(Color{91, 196, 232, 255});
-        drawSkyGradient();
+        const bool garageBackdrop = mode_ == Mode::Garage && IsTextureValid(garageBackgroundTexture_);
+        ClearBackground(garageBackdrop ? Color{3, 3, 6, 255} : Color{91, 196, 232, 255});
+        if (garageBackdrop) {
+            const float width = static_cast<float>(std::max(1, GetRenderWidth()));
+            const float height = static_cast<float>(std::max(1, GetRenderHeight()));
+            const float textureWidth = static_cast<float>(garageBackgroundTexture_.width);
+            const float textureHeight = static_cast<float>(garageBackgroundTexture_.height);
+            const float screenAspect = width / height;
+            const float textureAspect = textureWidth / textureHeight;
+            Rectangle source{0.0f, 0.0f, textureWidth, textureHeight};
+            if (screenAspect > textureAspect) {
+                source.height = textureWidth / screenAspect;
+                source.y = (textureHeight - source.height) * 0.5f;
+            } else {
+                source.width = textureHeight * screenAspect;
+                source.x = (textureWidth - source.width) * 0.5f;
+            }
+            DrawTexturePro(garageBackgroundTexture_, source, {0.0f, 0.0f, width, height},
+                           {0.0f, 0.0f}, 0.0f, WHITE);
+        } else {
+            drawSkyGradient();
+        }
         arcade_render::DirectionalLightFog lighting;
         lighting.cameraPosition = camera_.position;
         lighting.fogStart = isMetricCircuit(track_.layout()) ? 10000.0f : 74.0f;
         lighting.fogEnd = isMetricCircuit(track_.layout()) ? 12000.0f : 235.0f;
         lighting.exposure = 1.0f;
+        if (mode_ == Mode::Garage) {
+            lighting.sunDirection = {-0.30f, 0.72f, -0.62f};
+            lighting.sunColor = {255, 176, 165, 255};
+            lighting.skyAmbient = {132, 139, 157, 255};
+            lighting.groundAmbient = {104, 35, 38, 255};
+            lighting.fogColor = {8, 4, 7, 255};
+            lighting.exposure = 1.22f;
+        }
         renderer_.setLighting(lighting);
         BeginMode3D(camera_);
         rlDisableBackfaceCulling();
@@ -2236,7 +2253,6 @@ public:
         drawParticles();
         drawKarts();
         EndMode3D();
-        drawGaragePreviewArtwork();
         // Keep the dense world pass from sharing a near-capacity rlgl batch
         // with the menu/HUD primitives that must remain complete and crisp.
         rlDrawRenderBatchActive();
@@ -2275,15 +2291,14 @@ public:
         Input3D next;
         next.right = true;
         press(next);     // Race -> Time Trial.
-        press(confirm);  // Driver.
+        press(confirm);  // Car.
         Input3D back;
         back.back = true;
         press(back);
         const bool backReturnedHome = selectionStage_ == harbor::ui::SelectionStage::Mode && mode_ == Mode::Garage;
-        press(confirm);  // Driver again.
-        press(confirm);  // Car.
-        press(confirm);  // Map.
-        press(confirm);  // Start directly; Time Trial has no lap selection.
+        press(confirm);  // Car again.
+        press(confirm);  // Map and laps.
+        press(confirm);  // Start.
 
         const bool selectionFlow = selectedSession_ == harbor::ui::GameModeOption::TimeTrial &&
                                    selectedMap_ == 0 && selectionStage_ == harbor::ui::SelectionStage::Map &&
@@ -2399,8 +2414,8 @@ public:
     std::string agentStateJson(std::uint64_t frame) const {
         static constexpr std::array<std::string_view, 5> kModeNames = {
             "loading", "garage", "race", "pause", "results"};
-        static constexpr std::array<std::string_view, 5> kStageNames = {
-            "mode", "driver", "car", "map", "laps"};
+        static constexpr std::array<std::string_view, 3> kStageNames = {
+            "mode", "car", "map"};
         static constexpr std::array<std::string_view, 4> kPhaseNames = {
             "grid", "countdown", "racing", "finished"};
         const Kart3D& player = karts_[0];
@@ -3869,33 +3884,16 @@ private:
         SetTextureFilter(particleTexture_, TEXTURE_FILTER_BILINEAR);
     }
 
-    void loadGaragePreviewTextures() {
+    void loadMenuTextures() {
         loadingScreenTexture_ = LoadTexture(
             "assets_src/ui/formula_forge_loading/formula_forge_loading.png");
         if (IsTextureValid(loadingScreenTexture_)) {
             SetTextureFilter(loadingScreenTexture_, TEXTURE_FILTER_BILINEAR);
         }
-        static constexpr std::array<const char*, 5> kCarPreviewPaths = {
-            "assets_src/vehicles/formula_marc/formula_marc_preview.png",
-            "assets_src/vehicles/formula_fiery/formula_fiery_preview.png",
-            "assets_src/vehicles/formula_macl/formula_macl_preview.png",
-            "assets_src/vehicles/formula_rb/formula_rb_preview.png",
-            "assets_src/vehicles/formula_dash/formula_dash_preview.png",
-        };
-        static constexpr std::array<const char*, 1> kDriverPreviewPaths = {
-            "assets_src/drivers/standard_driver/standard_driver_preview.png",
-        };
-        for (size_t i = 0; i < kCarPreviewPaths.size(); ++i) {
-            carPreviewTextures_[i] = LoadTexture(kCarPreviewPaths[i]);
-            if (IsTextureValid(carPreviewTextures_[i])) {
-                SetTextureFilter(carPreviewTextures_[i], TEXTURE_FILTER_BILINEAR);
-            }
-        }
-        for (size_t i = 0; i < kDriverPreviewPaths.size(); ++i) {
-            driverPreviewTextures_[i] = LoadTexture(kDriverPreviewPaths[i]);
-            if (IsTextureValid(driverPreviewTextures_[i])) {
-                SetTextureFilter(driverPreviewTextures_[i], TEXTURE_FILTER_BILINEAR);
-            }
+        garageBackgroundTexture_ = LoadTexture(
+            "assets_src/ui/formula_garage/formula_garage_background.png");
+        if (IsTextureValid(garageBackgroundTexture_)) {
+            SetTextureFilter(garageBackgroundTexture_, TEXTURE_FILTER_BILINEAR);
         }
     }
 
@@ -4013,32 +4011,33 @@ private:
     void updateGarage(const Input3D& input, bool hasController) {
         garageSpin_ += kFixedDt;
         const int previousMap = selectedMap_;
-        const int direction = (input.right || input.down || input.pageRight ? 1 : 0) -
-                              (input.left || input.up || input.pageLeft ? 1 : 0);
-        auto wrapChoice = [direction](int& value, int count) {
+        const int horizontal = (input.right || input.pageRight || input.triggerRight ? 1 : 0) -
+                               (input.left || input.pageLeft || input.triggerLeft ? 1 : 0);
+        const int vertical = (input.down ? 1 : 0) - (input.up ? 1 : 0);
+        const auto wrapChoice = [](int& value, int count, int direction) {
             if (direction != 0 && count > 0) {
                 value = (value + direction + count) % count;
             }
         };
         switch (selectionStage_) {
             case harbor::ui::SelectionStage::Mode:
-                if (direction != 0) {
+                if (horizontal != 0 || vertical != 0) {
                     selectedSession_ = selectedSession_ == harbor::ui::GameModeOption::Race
                                            ? harbor::ui::GameModeOption::TimeTrial
                                            : harbor::ui::GameModeOption::Race;
+                    selectedLapOption_ = isTimeTrial() ? kLapOptionCount - 1 : 0;
                 }
                 break;
-            case harbor::ui::SelectionStage::Driver:
-                selectedRacer_ = 0;
-                break;
             case harbor::ui::SelectionStage::Car:
-                wrapChoice(selectedCar_, static_cast<int>(specs_.size()));
+                wrapChoice(selectedCar_, static_cast<int>(specs_.size()), horizontal);
                 break;
             case harbor::ui::SelectionStage::Map:
-                wrapChoice(selectedMap_, static_cast<int>(kMaps.size()));
-                break;
-            case harbor::ui::SelectionStage::Laps:
-                wrapChoice(selectedLapOption_, kRaceLapOptionCount);
+                wrapChoice(selectedMap_, static_cast<int>(kMaps.size()), horizontal);
+                if (isTimeTrial()) {
+                    selectedLapOption_ = kLapOptionCount - 1;
+                } else {
+                    wrapChoice(selectedLapOption_, kLapOptionCount, vertical);
+                }
                 break;
         }
         if (selectedMap_ != previousMap) {
@@ -4048,19 +4047,20 @@ private:
         syncGaragePreview();
 
         if (input.b || input.back) {
-            const int stage = static_cast<int>(selectionStage_);
-            if (stage > static_cast<int>(harbor::ui::SelectionStage::Mode)) {
-                selectionStage_ = static_cast<harbor::ui::SelectionStage>(stage - 1);
+            if (selectionStage_ == harbor::ui::SelectionStage::Map) {
+                selectionStage_ = harbor::ui::SelectionStage::Car;
+            } else if (selectionStage_ == harbor::ui::SelectionStage::Car) {
+                selectionStage_ = harbor::ui::SelectionStage::Mode;
             }
             return;
         }
         if ((input.a || input.start) && hasController) {
-            const int stage = static_cast<int>(selectionStage_);
-            if (selectionStage_ == harbor::ui::SelectionStage::Laps ||
-                (selectionStage_ == harbor::ui::SelectionStage::Map && isTimeTrial())) {
+            if (selectionStage_ == harbor::ui::SelectionStage::Map) {
                 startRace();
+            } else if (selectionStage_ == harbor::ui::SelectionStage::Mode) {
+                selectionStage_ = harbor::ui::SelectionStage::Car;
             } else {
-                selectionStage_ = static_cast<harbor::ui::SelectionStage>(stage + 1);
+                selectionStage_ = harbor::ui::SelectionStage::Map;
             }
         }
     }
@@ -4139,8 +4139,8 @@ private:
         (void)dt;
         const TrackPoint3D start = track_.sample(track_.startProgress() + 52.0f);
         const KartSpec3D& previewSpec = specs_[static_cast<size_t>(selectedCar_)];
-        const float orbit = std::sin(garageSpin_ * 0.32f) * 8.0f;
-        const float cameraDistance = std::max(120.0f, previewSpec.length * 1.90f);
+        const float orbit = std::sin(garageSpin_ * 0.32f) * 3.0f;
+        const float cameraDistance = std::max(105.0f, previewSpec.length * 1.55f);
         const float cameraSide = std::max(18.0f, previewSpec.width * 0.55f);
         const float cameraHeight = std::max(30.0f, previewSpec.height * 1.70f);
         const float targetHeight = std::max(10.0f, previewSpec.height * 0.90f);
@@ -5908,20 +5908,13 @@ private:
 
     void drawKarts() {
         if (mode_ == Mode::Garage) {
-            const bool hasDriverArtwork = selectionStage_ == harbor::ui::SelectionStage::Driver &&
-                                          IsTextureValid(driverPreviewTextures_[static_cast<size_t>(selectedRacer_)]);
-            const bool hasCarArtwork = selectionStage_ == harbor::ui::SelectionStage::Car &&
-                                       IsTextureValid(carPreviewTextures_[static_cast<size_t>(selectedCar_)]);
-            if (hasDriverArtwork || hasCarArtwork) {
-                return;
-            }
             const TrackPoint3D start = track_.sample(track_.startProgress() + 52.0f);
             Kart3D preview = karts_[0];
             preview.spec = specs_[static_cast<size_t>(selectedCar_)];
             preview.racer = racers_[static_cast<size_t>(selectedRacer_)];
             preview.pos = start.pos;
-            preview.heading = angleOf(start.tangent) + std::sin(garageSpin_ * 0.58f) * 0.10f;
-            preview.vel = start.tangent * 38.0f;
+            preview.heading = angleOf(start.tangent) + garageSpin_ * 0.52f;
+            preview.vel = {};
             preview.progress = start.progress;
             preview.elevation = bankedElevation(start, 0.0f);
             preview.nearest = track_.nearestIndex(preview.pos);
@@ -5968,36 +5961,6 @@ private:
                 DrawSphere(toWorld(p.pos, p.elevation), size * 0.5f, c);
             }
         }
-    }
-
-    void drawGaragePreviewArtwork() {
-        if (mode_ != Mode::Garage) {
-            return;
-        }
-        const Texture2D* preview = nullptr;
-        if (selectionStage_ == harbor::ui::SelectionStage::Driver) {
-            preview = &driverPreviewTextures_[static_cast<size_t>(selectedRacer_)];
-        } else if (selectionStage_ == harbor::ui::SelectionStage::Car) {
-            preview = &carPreviewTextures_[static_cast<size_t>(selectedCar_)];
-        }
-        if (preview == nullptr || !IsTextureValid(*preview)) {
-            return;
-        }
-
-        const float width = static_cast<float>(std::max(1, GetScreenWidth()));
-        const float height = static_cast<float>(std::max(1, GetScreenHeight()));
-        const float scale = std::clamp(height / 720.0f, 0.75f, 1.75f);
-        const float margin = 24.0f * scale;
-        const float headerHeight = 98.0f * scale;
-        const float footerHeight = 62.0f * scale;
-        const float contentTop = headerHeight + 22.0f * scale;
-        const float contentBottom = height - footerHeight - 18.0f * scale;
-        const float contentHeight = std::max(260.0f * scale, contentBottom - contentTop);
-        const float contentWidth = width - margin * 2.0f;
-        const Rectangle showcase{margin, contentTop, contentWidth * 0.58f, contentHeight};
-        const Rectangle source{0.0f, 0.0f, static_cast<float>(preview->width),
-                               static_cast<float>(preview->height)};
-        DrawTexturePro(*preview, source, showcase, {0.0f, 0.0f}, 0.0f, WHITE);
     }
 
     void drawSpeedFx() {
@@ -6080,17 +6043,9 @@ private:
                     view.itemIndex = isTimeTrial() ? 1 : 0;
                     view.itemCount = 2;
                     break;
-                case harbor::ui::SelectionStage::Driver:
-                    view.itemName = "STANDARD DRIVER";
-                    view.itemSubtitle = "RACE SUIT / GLOVES / BOOTS / HELMET";
-                    view.backstory = kStandardDriverBackstory;
-                    view.itemIndex = 0;
-                    view.itemCount = 1;
-                    break;
                 case harbor::ui::SelectionStage::Car:
                     view.itemName = spec.name;
                     view.itemSubtitle = "SPEC LIVERY";
-                    view.backstory = kCarBackstories[static_cast<size_t>(selectedCar_)];
                     view.itemIndex = selectedCar_;
                     view.itemCount = static_cast<int>(specs_.size());
                     break;
@@ -6101,26 +6056,26 @@ private:
                     view.itemIndex = selectedMap_;
                     view.itemCount = static_cast<int>(kMaps.size());
                     break;
-                case harbor::ui::SelectionStage::Laps:
-                    view.itemName = "RACE DISTANCE";
-                    view.itemSubtitle = selectedMap().eventName;
-                    view.backstory = targetLaps() == kInfiniteLaps
-                                         ? "Endless mode keeps the race running until you decide the session is over."
-                                         : "Every racer must complete the selected distance. The first across the line wins.";
-                    view.itemIndex = selectedLapOption_;
-                    view.itemCount = kRaceLapOptionCount;
-                    break;
             }
             view.lapOptions = kLapOptions;
-            view.lapOptionCount = kRaceLapOptionCount;
+            view.lapOptionCount = kLapOptionCount;
             view.selectedLapOption = selectedLapOption_;
+            view.lapsAdjustable = !isTimeTrial();
             view.presentationTimeSeconds = presentationTime_;
             view.canContinue = true;
             view.controllerConnected = hasController;
-            view.navigationHint = "D-PAD / WASD / ARROWS  CHOOSE";
-            view.confirmHint = selectionStage_ == harbor::ui::SelectionStage::Map && isTimeTrial()
-                                   ? "A / ENTER  START TIME TRIAL"
-                                   : "A / ENTER  CONTINUE";
+            if (selectionStage_ == harbor::ui::SelectionStage::Mode) {
+                view.navigationHint = "LEFT / RIGHT   SESSION";
+                view.confirmHint = "A / ENTER   SELECT";
+            } else if (selectionStage_ == harbor::ui::SelectionStage::Car) {
+                view.navigationHint = "LEFT / RIGHT   CAR";
+                view.confirmHint = "A / ENTER   CONTINUE";
+            } else {
+                view.navigationHint = isTimeTrial()
+                                          ? "LT / RT OR LEFT / RIGHT   TRACK"
+                                          : "LT / RT OR LEFT / RIGHT   TRACK     UP / DOWN   LAPS";
+                view.confirmHint = isTimeTrial() ? "A / ENTER   START TIME TRIAL" : "A / ENTER   START RACE";
+            }
             view.backHint = "B / BACKSPACE  BACK";
             harbor::ui::DrawSelectionHud(view);
         } else if (mode_ == Mode::Results) {
@@ -6236,8 +6191,7 @@ private:
     harbor::TrackRenderer trackRenderer_;
     Texture2D particleTexture_{};
     Texture2D loadingScreenTexture_{};
-    std::array<Texture2D, 5> carPreviewTextures_{};
-    std::array<Texture2D, 1> driverPreviewTextures_{};
+    Texture2D garageBackgroundTexture_{};
     Camera camera_{};
     Camera previousCamera_{};
     Mode mode_ = Mode::Loading;
@@ -6509,6 +6463,7 @@ int runFormulaForge(int argc, char** argv) {
     SetExitKey(KEY_NULL);
     ChangeDirectory(launchDir.string().c_str());
     harbor::ui::InitializeUiFont("assets/fonts/NotoSansDisplay-Bold.ttf", 72);
+    harbor::ui::InitializeSelectionFont("assets/fonts/Lato-HeavyItalic.ttf", 72);
     SetTargetFPS(120);
     if (!windowed) {
         const int monitor = GetCurrentMonitor();
@@ -6719,6 +6674,8 @@ int runFormulaForge(int argc, char** argv) {
         pendingEdges.down = pendingEdges.down || sampledInput.down;
         pendingEdges.pageLeft = pendingEdges.pageLeft || sampledInput.pageLeft;
         pendingEdges.pageRight = pendingEdges.pageRight || sampledInput.pageRight;
+        pendingEdges.triggerLeft = pendingEdges.triggerLeft || sampledInput.triggerLeft;
+        pendingEdges.triggerRight = pendingEdges.triggerRight || sampledInput.triggerRight;
         pendingEdges.shiftDown = pendingEdges.shiftDown || sampledInput.shiftDown;
         pendingEdges.shiftUp = pendingEdges.shiftUp || sampledInput.shiftUp;
         Input3D input = sampledInput;
@@ -6732,6 +6689,8 @@ int runFormulaForge(int argc, char** argv) {
         input.down = pendingEdges.down;
         input.pageLeft = pendingEdges.pageLeft;
         input.pageRight = pendingEdges.pageRight;
+        input.triggerLeft = pendingEdges.triggerLeft;
+        input.triggerRight = pendingEdges.triggerRight;
         input.shiftDown = pendingEdges.shiftDown;
         input.shiftUp = pendingEdges.shiftUp;
         const bool hasController = true;
@@ -6748,6 +6707,8 @@ int runFormulaForge(int argc, char** argv) {
             input.down = false;
             input.pageLeft = false;
             input.pageRight = false;
+            input.triggerLeft = false;
+            input.triggerRight = false;
             input.shiftDown = false;
             input.shiftUp = false;
             accumulator -= kFixedDt;
@@ -6756,10 +6717,8 @@ int runFormulaForge(int argc, char** argv) {
         if (capturePlaytest) {
             const char* captureName = frames == 20  ? "formula_forge_loading.png"
                                       : frames == 65  ? "formula_forge_mode.png"
-                                      : frames == 110 ? "formula_forge_driver.png"
-                                      : frames == 155 ? "formula_forge_car.png"
+                                      : frames == 110 ? "formula_forge_car.png"
                                       : frames == 200 ? "formula_forge_map.png"
-                                      : frames == 245 ? "formula_forge_laps.png"
                                       : frames == 335 ? "formula_forge_race.png"
                                       : frames == 380 ? "formula_forge_pause.png"
                                       : frames == 425 ? "formula_forge_results.png"
@@ -6785,18 +6744,14 @@ int runFormulaForge(int argc, char** argv) {
                 confirm.a = true;
                 game.update(kFixedDt, confirm, true);
             } else if (frames == 155) {
-                Input3D confirm;
-                confirm.a = true;
-                game.update(kFixedDt, confirm, true);
-            } else if (frames == 175) {
                 Input3D nextMap;
                 nextMap.right = true;
                 game.update(kFixedDt, nextMap, true);
+            } else if (frames == 175) {
+                Input3D moreLaps;
+                moreLaps.down = true;
+                game.update(kFixedDt, moreLaps, true);
             } else if (frames == 200) {
-                Input3D confirm;
-                confirm.a = true;
-                game.update(kFixedDt, confirm, true);
-            } else if (frames == 245) {
                 Input3D confirm;
                 confirm.a = true;
                 game.update(kFixedDt, confirm, true);

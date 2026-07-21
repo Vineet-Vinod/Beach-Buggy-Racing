@@ -19,6 +19,8 @@ assets:
 	uv run --no-sync python tools/build_assets.py build all
 	uv run --no-sync python tools/blender/generators/generate_vehicles.py --asset all
 	uv run --no-sync python tools/blender/generators/generate_drivers.py --asset all
+	uv run --no-sync python tools/blender/generators/generate_loading_screen.py
+	uv run --no-sync python tools/blender/generators/generate_formula_garage.py
 	uv run --no-sync python tools/blender/tracks/generate_tracks.py --track all
 
 assets-validate:

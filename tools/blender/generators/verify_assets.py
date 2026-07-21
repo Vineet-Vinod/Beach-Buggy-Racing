@@ -206,6 +206,27 @@ def validate_loading_artwork(root: Path) -> str:
     return "ui      formula_forge_loading cars=5 driver=0 preview=1280x720"
 
 
+def validate_garage_artwork(root: Path) -> str:
+    directory = root / "ui" / "formula_garage"
+    blend_path = directory / "formula_garage.blend"
+    png_path = directory / "formula_garage_background.png"
+    manifest_path = directory / "formula_garage.json"
+    for path in (blend_path, png_path, manifest_path):
+        require(path.is_file() and path.stat().st_size > 0,
+                f"missing Formula garage asset: {path}")
+    with blend_path.open("rb") as stream:
+        magic = stream.read(7)
+        require(magic == b"BLENDER" or magic[:4] == b"\x28\xb5\x2f\xfd",
+                f"invalid Formula garage Blender source: {blend_path}")
+    require(read_png_dimensions(png_path) == (1280, 720),
+            f"Formula garage must be 1280x720: {png_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    require(manifest.get("asset") == "formula_garage"
+            and manifest.get("type") == "ui_background",
+            f"Formula garage manifest mismatch: {manifest_path}")
+    return "ui      formula_garage background=1280x720 live_car_overlay=1"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--asset-root", type=Path,
@@ -233,11 +254,16 @@ def main() -> int:
     except (OSError, ValueError, VerificationError, json.JSONDecodeError) as error:
         failures.append(str(error))
 
+    try:
+        print(validate_garage_artwork(args.asset_root))
+    except (OSError, ValueError, VerificationError, json.JSONDecodeError) as error:
+        failures.append(str(error))
+
     if failures:
         for failure in failures:
             print(f"ERROR: {failure}", file=sys.stderr)
         return 1
-    print(f"PASS: {checked} assets, {checked} skins, {checked * 5} exact gameplay clips, 1 UI artwork")
+    print(f"PASS: {checked} assets, {checked} skins, {checked * 5} exact gameplay clips, 2 UI artworks")
     return 0
 
 

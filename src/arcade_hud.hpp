@@ -12,6 +12,7 @@ inline constexpr int kMaxCoursePolylinePoints = 192;
 // Call after InitWindow and before the first frame. The default raylib font is
 // retained as a fallback when the bundled face cannot be loaded.
 bool InitializeUiFont(const char* fontPath, int baseSize = 64);
+bool InitializeSelectionFont(const char* fontPath, int baseSize = 64);
 void ShutdownUiFont();
 bool IsUiFontLoaded();
 
@@ -59,10 +60,8 @@ struct LoadingScreenViewModel {
 
 enum class SelectionStage {
     Mode,
-    Driver,
     Car,
     Map,
-    Laps,
 };
 
 enum class GameModeOption {
@@ -87,6 +86,7 @@ struct SelectionHudViewModel {
     std::array<int, 4> lapOptions = {2, 5, 10, 0};
     int lapOptionCount = 4;
     int selectedLapOption = 0;
+    bool lapsAdjustable = true;
     float presentationTimeSeconds = 0.0f;
     bool canContinue = true;
     bool controllerConnected = true;

@@ -56,8 +56,9 @@ low-deadzone steering profile and analog accelerator/brake pedals.
 - LT or B / Circle: brake for corner entry; hold at low speed to reverse
 - RB / E: shift up; LB / Q: shift down
 - W / up and S / down: keyboard accelerate and brake
-- D-pad or arrows/WASD: navigate driver, car, map, lap, pause, and results screens
-- LB/RB or Q/E: previous/next choice on selection screens
+- Left/right or A/D: choose the session and car; cycle tracks on the map screen
+- LT/RT, LB/RB, or Q/E: previous/next track on the combined map/laps screen
+- Up/down or W/S: choose 2, 5, 10, or infinite laps for a race
 - A / Cross or Enter: confirm, select, or start
 - B / Circle or Backspace: return to the previous selection stage
 - Start or Escape: pause the race
@@ -75,8 +76,9 @@ them.
 - Five selectable meter-scaled circuits: Spa, Suzuka, Silverstone, Monza, and
   Interlagos layouts with audited turn order,
   handedness, dimensions, and elevation
-- Staged driver, car, map, and 2/5/10/infinite-lap race selection
-- Formula Forge startup screen, beach-themed selection flow, full race results, replay/home actions, and pause controls
+- Streamlined session, car, and combined map/laps selection with 2/5/10/infinite race distances
+- Formula Forge startup screen, Blender-authored dark garage with red lighting,
+  live rotating car previews, full race results, replay/home actions, and pause controls
 - 6-car racing pack with AI opponents
 - One original Blender-authored open-wheel Formula model with five selectable,
   logo-free liveries: Marc, Fiery, MacL, RB, and Dash. Every livery shares the
@@ -87,6 +89,8 @@ them.
   closed helmet, smoked visor, and the common animation rig
 - A Blender-rendered Formula Forge loading screen featuring all five cars in a
   red-lit semicircle
+- A Blender-rendered graphite Formula garage used behind the pre-race flow,
+  with a menu-only Lato Heavy Italic face; race HUD styling remains unchanged
 - No powerups and no character super powers
 - Blender-authored circuit worlds with medium-gray tarmac, continuous track
   limits, driveable curbs and runoff, collision-aligned safety walls, catch
@@ -269,7 +273,7 @@ which helps with USB receivers that expose a partial or unusual mapping.
 - `src/track_layout.hpp`: Spa Coast centerline/elevation data
 - `src/track_catalog.*`: Suzuka, Silverstone, Monza, and Interlagos geometry contracts
 - `tools/build_assets.py`: manifest-driven Blender source/export/validation CLI
-- `tools/blender/generators/`: production vehicle and driver generators and verifier
+- `tools/blender/generators/`: production vehicle, driver, UI-garage generators and verifier
 - `tools/blender/tracks/`: production circuit-world generator and verifier
 
 ## Third-Party Code

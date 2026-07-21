@@ -23,6 +23,23 @@ repository.
 
 The vendored TTF is the unmodified package file.
 
+## Lato Heavy Italic
+
+- Asset: `assets/fonts/Lato-HeavyItalic.ttf`
+- Upstream: <http://www.latofonts.com>
+- Local provenance: copied without modification from
+  `/usr/share/fonts/truetype/lato/Lato-HeavyItalic.ttf`, installed by the
+  Debian `fonts-lato` package.
+- Copyright: 2010-2011, Łukasz Dziedzic.
+- License: SIL Open Font License, Version 1.1.
+- SHA-256:
+  `4c9af8df580f1b7a2e3336d69b225a38364a636dc014d8fd9c2b72adea68dd2d`
+- Complete package copyright and OFL 1.1 text:
+  `third_party/licenses/fonts-lato-copyright.txt`
+
+The vendored TTF is the unmodified package file and is used only by the
+pre-race Formula Forge menus; the race HUD retains its existing face.
+
 ## SDL 3.4.10
 
 - Source: <https://github.com/libsdl-org/SDL/releases/download/release-3.4.10/SDL3-3.4.10.tar.gz>
