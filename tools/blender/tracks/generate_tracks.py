@@ -714,7 +714,7 @@ def make_track_runoff(samples, half_widths, material, parent, projector, surface
                 x = point[0] + normal[0] * lane
                 y = point[1] + normal[1] * lane
                 z, _, _ = projector.ground(x, y, index)
-                clearance = OFFROAD_VISUAL_CLEARANCE_METERS * smoothstep(extra)
+                clearance = OFFROAD_VISUAL_CLEARANCE_METERS * smoothstep(extra / 0.5)
                 vertices.append((x, y, z + surface_offset - clearance))
         for index in range(count):
             next_index = (index + 1) % count
@@ -775,7 +775,7 @@ def make_surface_runoff_zones(samples, half_widths, bank_angles, zones, material
                         y = sample_point[1] + sample_normal[1] * lane
                         ground_z, _, _ = projector.ground(x, y, sample_index)
                         edge_distance = abs(lane) - half_widths[sample_index]
-                        clearance = OFFROAD_VISUAL_CLEARANCE_METERS * smoothstep(edge_distance)
+                        clearance = OFFROAD_VISUAL_CLEARANCE_METERS * smoothstep(edge_distance / 0.5)
                         quad.append((x, y, ground_z + surface_offset - clearance))
                     if not projector.face_owned(quad, index):
                         continue
