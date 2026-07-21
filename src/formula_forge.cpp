@@ -222,6 +222,38 @@ std::span<const FormulaCornerTarget> formulaCornerTargets(TrackLayoutId layout) 
     return {};
 }
 
+struct AiCircuitProfile {
+    const char* name;
+    float curvatureReference;
+    float straightSpeedScale;
+    float minimumCornerSpeedScale;
+    float cornerCommitment;
+    float lineGuidanceScale;
+    float baselineLapSeconds;
+    float minimumAuditLapSeconds;
+    float maximumAuditLapSeconds;
+    int maximumBrakeDriftFrames;
+};
+
+// Each circuit gets its own curvature response and measured flying-lap
+// baseline. The baseline drives player adaptation; the final three values keep
+// deterministic audits tolerant of each circuit's distinct braking rhythm.
+constexpr AiCircuitProfile aiCircuitProfile(TrackLayoutId layout) {
+    switch (layout) {
+        case TrackLayoutId::SpaCoast:
+            return {"spa", 1.25f, 0.985f, 0.55f, 1.05f, 6.0f, 105.0f, 97.0f, 113.0f, 150};
+        case TrackLayoutId::Suzuka:
+            return {"suzuka", 1.35f, 0.985f, 0.55f, 1.05f, 6.0f, 91.5f, 84.0f, 99.0f, 500};
+        case TrackLayoutId::Silverstone:
+            return {"silverstone", 1.30f, 0.990f, 0.56f, 1.06f, 6.0f, 85.5f, 78.0f, 93.0f, 320};
+        case TrackLayoutId::Monza:
+            return {"monza", 0.92f, 0.995f, 0.58f, 1.06f, 2.5f, 78.0f, 70.0f, 80.0f, 60};
+        case TrackLayoutId::Interlagos:
+            return {"interlagos", 1.25f, 0.980f, 0.54f, 1.05f, 3.0f, 68.5f, 62.0f, 76.0f, 100};
+    }
+    return {"unknown", 0.72f, 0.94f, 0.43f, 1.00f, 2.5f, 90.0f, 60.0f, 120.0f, 500};
+}
+
 Color mix(Color a, Color b, float t) {
     t = std::clamp(t, 0.0f, 1.0f);
     const auto channel = [t](unsigned char av, unsigned char bv) {
@@ -3347,9 +3379,10 @@ public:
         return ok;
     }
 
-    bool runAiPaceAudit() {
+    bool runAiPaceAudit(TrackLayoutId layout = TrackLayoutId::Monza) {
         particles_.clear();
-        track_.rebuild(TrackLayoutId::Monza);
+        track_.rebuild(layout);
+        const AiCircuitProfile profile = aiCircuitProfile(layout);
         const float startProgress = track_.startProgress();
         const TrackPoint3D start = track_.sample(startProgress);
         Kart3D kart;
@@ -3475,15 +3508,17 @@ public:
         const float p90TrackCurvature = trackCurvatures[trackCurvatures.size() * 9 / 10];
         const float maxTrackCurvature = trackCurvatures.back();
 
-        const bool targetPace = result.lapSeconds >= 70.0f && result.lapSeconds <= 80.0f;
+        const bool targetPace = result.lapSeconds >= profile.minimumAuditLapSeconds &&
+                                result.lapSeconds <= profile.maximumAuditLapSeconds;
         const bool physicalPath = result.progressJumps == 0 && result.maxProgressStep <= 2.0f &&
                                   result.maxRoadViolation <= 6.0f * kSpaSimulationUnitsPerMeter &&
                                   result.roadViolationFrames < 2300 && result.contacts <= 1;
         const bool formulaRacecraft = result.averageSpeed > 600.0f && result.brakeFrames > 200 &&
                                       result.poweredExitFrames > 1000 && result.driftFrames == 0 &&
-                                      result.brakeDriftFrames < 60;
+                                      result.brakeDriftFrames < profile.maximumBrakeDriftFrames;
         const bool ok = targetPace && physicalPath && formulaRacecraft;
-        std::cout << "ai-pace-audit launch_lap_s=" << result.launchLapSeconds
+        std::cout << "ai-pace-audit track=" << profile.name
+                  << " launch_lap_s=" << result.launchLapSeconds
                   << " flying_lap_s=" << result.lapSeconds << " distance=" << result.distance
                   << " final_phase=" << result.finalPhase << " avg_speed=" << result.averageSpeed
                   << " max_speed=" << result.maxSpeed << " max_road_violation=" << result.maxRoadViolation
@@ -4672,11 +4707,11 @@ private:
         if (isMetricCircuit(track_.layout())) {
             const float nearCorner = std::max(track_.sample(progress).curvature,
                                               track_.sample(progress + 48.0f).curvature);
-            const bool monza = track_.layout() == TrackLayoutId::Monza;
-            const float cornerLoad = std::clamp(nearCorner / (monza ? 0.92f : 0.72f), 0.0f, 1.0f);
-            const float pace = monza
-                                   ? lerp(0.995f, 0.58f, smoothstep(cornerLoad))
-                                   : lerp(0.94f, 0.43f, smoothstep(cornerLoad));
+            const AiCircuitProfile profile = aiCircuitProfile(track_.layout());
+            const float cornerLoad = std::clamp(nearCorner / profile.curvatureReference, 0.0f, 1.0f);
+            const float pace = lerp(profile.straightSpeedScale,
+                                    profile.minimumCornerSpeedScale,
+                                    smoothstep(cornerLoad));
             return kart.tuning.maxForwardSpeed * pace * (kart.aiTempo / 1.075f);
         }
         const float phase = progressAhead(track_.startProgress(), progress, track_.totalLength()) / track_.totalLength();
@@ -4688,8 +4723,7 @@ private:
         const float brakingAcceleration = kart.tuning.brakeDeceleration * 0.94f;
         if (isMetricCircuit(track_.layout())) {
             const float tempoScale = std::clamp(kart.aiTempo / 1.075f, 0.96f, 1.04f);
-            const float circuitCommitment = track_.layout() == TrackLayoutId::Monza ? 1.06f : 1.0f;
-            const float cornerCommitment = circuitCommitment +
+            const float cornerCommitment = aiCircuitProfile(track_.layout()).cornerCommitment +
                                            std::clamp(kart.aiRisk - 0.72f, 0.0f, 0.24f) * 0.16f;
             float targetSpeed = kart.tuning.maxForwardSpeed * 0.985f * tempoScale;
             for (const FormulaCornerTarget& corner : formulaCornerTargets(track_.layout())) {
@@ -4731,9 +4765,9 @@ private:
         // A completed player lap teaches the field the player's sustainable
         // pace. Gap correction is deliberately smaller and keeps the pack in
         // contention without handing an opponent an obvious speed boost.
-        constexpr float kBaselineMonzaLapSeconds = 78.0f;
-        const float learnedPace = hasBestLap_ && track_.layout() == TrackLayoutId::Monza
-                                      ? std::clamp(kBaselineMonzaLapSeconds / std::max(1.0f, bestLapTime_),
+        const float learnedPace = hasBestLap_
+                                      ? std::clamp(aiCircuitProfile(track_.layout()).baselineLapSeconds /
+                                                       std::max(1.0f, bestLapTime_),
                                                    0.965f, 1.045f)
                                       : 1.0f;
         const float gapMeters = raceScore(kart) - raceScore(karts_[0]);
@@ -4822,9 +4856,10 @@ private:
         const float desiredLateralSpeed = std::clamp((kart.aiLineTarget + kart.aiLaneIntent - kart.lane) * 1.80f,
                                                      -18.0f * guidanceUnits, 18.0f * guidanceUnits);
         const float currentLateralSpeed = dot(kart.vel, center.normal);
+        const float lineGuidanceScale = aiCircuitProfile(track_.layout()).lineGuidanceScale;
         const float guidanceAcceleration = std::clamp((desiredLateralSpeed - currentLateralSpeed) * 4.0f,
-                                                      -kart.tuning.lateralGripAcceleration * 2.50f,
-                                                      kart.tuning.lateralGripAcceleration * 2.50f);
+                                                      -kart.tuning.lateralGripAcceleration * lineGuidanceScale,
+                                                      kart.tuning.lateralGripAcceleration * lineGuidanceScale);
         kart.vel += center.normal * (guidanceAcceleration * dt);
         if (laneExcess > 1.0f) {
             laneTarget = 0.0f;
@@ -6912,9 +6947,25 @@ int runFormulaForge(int argc, char** argv) {
     }
     const bool assetAudit = hasArg(argc, argv, "--asset-audit");
     const bool agentPlay = hasArg(argc, argv, "--agent-play");
+    const bool aiPaceAuditSpa = hasArg(argc, argv, "--ai-pace-audit-spa");
+    const bool aiPaceAuditSuzuka = hasArg(argc, argv, "--ai-pace-audit-suzuka");
+    const bool aiPaceAuditSilverstone = hasArg(argc, argv, "--ai-pace-audit-silverstone");
+    const bool aiPaceAuditInterlagos = hasArg(argc, argv, "--ai-pace-audit-interlagos");
+    const bool aiPaceAudit = hasArg(argc, argv, "--ai-pace-audit") || aiPaceAuditSpa || aiPaceAuditSuzuka ||
+                             aiPaceAuditSilverstone || aiPaceAuditInterlagos;
+    TrackLayoutId aiPaceAuditLayout = TrackLayoutId::Monza;
+    if (aiPaceAuditSpa) {
+        aiPaceAuditLayout = TrackLayoutId::SpaCoast;
+    } else if (aiPaceAuditSuzuka) {
+        aiPaceAuditLayout = TrackLayoutId::Suzuka;
+    } else if (aiPaceAuditSilverstone) {
+        aiPaceAuditLayout = TrackLayoutId::Silverstone;
+    } else if (aiPaceAuditInterlagos) {
+        aiPaceAuditLayout = TrackLayoutId::Interlagos;
+    }
     const bool windowed = agentPlay || hasArg(argc, argv, "--windowed") || hasArg(argc, argv, "--smoke-render") || assetAudit ||
                           hasArg(argc, argv, "--diagnose-controller") || hasArg(argc, argv, "--handling-audit") ||
-                          hasArg(argc, argv, "--race-audit") || hasArg(argc, argv, "--ai-pace-audit") ||
+                          hasArg(argc, argv, "--race-audit") || aiPaceAudit ||
                           hasArg(argc, argv, "--time-trial-audit") ||
                           hasArg(argc, argv, "--grid-audit") ||
                           hasArg(argc, argv, "--collision-audit") ||
@@ -6939,7 +6990,6 @@ int runFormulaForge(int argc, char** argv) {
     const bool diagnoseController = hasArg(argc, argv, "--diagnose-controller");
     const bool handlingAudit = hasArg(argc, argv, "--handling-audit");
     const bool raceAudit = hasArg(argc, argv, "--race-audit");
-    const bool aiPaceAudit = hasArg(argc, argv, "--ai-pace-audit");
     const bool timeTrialAudit = hasArg(argc, argv, "--time-trial-audit");
     const bool gridAudit = hasArg(argc, argv, "--grid-audit");
     const bool collisionAudit = hasArg(argc, argv, "--collision-audit");
@@ -7030,7 +7080,7 @@ int runFormulaForge(int argc, char** argv) {
         return ok ? 0 : 1;
     }
     if (aiPaceAudit) {
-        const bool ok = game.runAiPaceAudit();
+        const bool ok = game.runAiPaceAudit(aiPaceAuditLayout);
         cleanupRuntime();
         return ok ? 0 : 1;
     }
