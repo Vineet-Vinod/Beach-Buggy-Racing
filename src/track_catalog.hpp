@@ -4,18 +4,11 @@
 #include <span>
 #include <string_view>
 
-#include "track_layout.hpp"
+#include "track_types.hpp"
 
 // Immutable, renderer-independent source data for the real-world-inspired
 // circuits. Centerlines are hand-authored plan-view controls and are normalized
 // to targetLengthMeters by Track3D; elevation and width stations are in meters.
-enum class CatalogCircuitId {
-    Suzuka,
-    Silverstone,
-    Monza,
-    Interlagos,
-};
-
 struct TrackWidthPoint {
     float distanceMeters = 0.0f;
     float roadWidthMeters = 12.0f;
@@ -28,7 +21,7 @@ struct TrackGradeSeparation {
 };
 
 struct TrackCatalogEntry {
-    CatalogCircuitId id{};
+    TrackLayoutId id{};
     std::string_view displayName;
     std::string_view venueName;
     std::string_view country;
@@ -39,6 +32,8 @@ struct TrackCatalogEntry {
     float startPhase = 0.0f;
     float nominalElevationReliefMeters = 0.0f;
     bool clockwise = true;
+    float centerlineScale = 1.0f;
+    bool mirrorCenterlineY = true;
     std::span<const TrackControlPoint> centerline;
     std::span<const TrackElevationPoint> elevationProfile;
     std::span<const TrackWidthPoint> widthProfile;
@@ -48,7 +43,7 @@ struct TrackCatalogEntry {
 };
 
 std::span<const TrackCatalogEntry> trackCatalog() noexcept;
-const TrackCatalogEntry* findTrackCatalogEntry(CatalogCircuitId id) noexcept;
+const TrackCatalogEntry* findTrackCatalogEntry(TrackLayoutId id) noexcept;
 
 float sampleTrackElevationMeters(const TrackCatalogEntry& track, float distanceMeters) noexcept;
 float sampleTrackWidthMeters(const TrackCatalogEntry& track, float distanceMeters) noexcept;
@@ -80,5 +75,5 @@ struct TrackShapeAuditResult {
     }
 };
 
-std::span<const TrackTurnExpectation> trackTurnExpectations(CatalogCircuitId id) noexcept;
+std::span<const TrackTurnExpectation> trackTurnExpectations(TrackLayoutId id) noexcept;
 TrackShapeAuditResult auditTrackCatalogShape(const TrackCatalogEntry& track) noexcept;

@@ -26,14 +26,14 @@
     "max": 16.0,
     "unit": "meter",
     "profile": null,
-    "formula": "spaRoadWidthMetersForPhase"
+    "formula": "sampleTrackWidthMeters"
   },
   "road_width_cpp_world_units": {
     "min": 20.23,
     "max": 23.12
   },
   "source_centerline": {
-    "file": "src/track_layout.hpp",
+    "file": "src/track_catalog.cpp",
     "symbol": "kSpaControlPoints",
     "control_points": 121,
     "normalization_scale": 2.03090011,
@@ -251,7 +251,7 @@
     ]
   },
   "runtime_alignment": {
-    "cpp_layout_id": "TrackLayoutId::SpaCoast",
+    "cpp_layout_id": "TrackLayoutId::Spa",
     "asset_origin": "C++ catalog plan origin and zero-elevation datum; not the start line",
     "blender_to_gltf_matrix_row_major": [
       [

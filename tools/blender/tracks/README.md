@@ -1,9 +1,8 @@
 # Track asset authoring
 
-The generator reads the authoritative centerline/elevation/width arrays from
-`src/track_layout.hpp` and `src/track_catalog.cpp`, then authors a Blender world
-in meters for each playable layout. Generated artifacts live under
-`assets/tracks/<slug>/`.
+The generator reads every authoritative centerline, elevation, and width
+contract from `src/track_catalog.cpp`, then authors a Blender world in meters
+for each playable layout. Generated artifacts live under `assets/tracks/<slug>/`.
 
 ```sh
 uv sync

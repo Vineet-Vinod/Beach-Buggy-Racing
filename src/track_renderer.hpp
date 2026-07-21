@@ -6,7 +6,7 @@
 
 #include <raylib.h>
 
-namespace harbor {
+namespace formula_forge {
 
 struct TrackRenderSample {
     Vector3 center{};
@@ -73,4 +73,4 @@ private:
     bool ready_ = false;
 };
 
-}  // namespace harbor
+}  // namespace formula_forge

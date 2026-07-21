@@ -6,7 +6,7 @@
 #include <limits>
 #include <span>
 
-namespace harbor {
+namespace formula_forge {
 
 // Inputs stay independent of the runtime track type so generated, rendered,
 // and collision widths can be checked against the same centerline.
@@ -263,4 +263,4 @@ inline TrackClearanceAuditResult AuditTrackClearance(std::span<const TrackCleara
     return result;
 }
 
-}  // namespace harbor
+}  // namespace formula_forge

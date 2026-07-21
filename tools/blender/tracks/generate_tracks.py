@@ -33,7 +33,7 @@ TRACKS = {
         "display_name": "Spa-Francorchamps",
         "venue": "Circuit de Spa-Francorchamps inspired Ardennes circuit",
         "country": "Belgium",
-        "source_file": "src/track_layout.hpp",
+        "source_file": "src/track_catalog.cpp",
         "centerline": "kSpaControlPoints",
         "source_scale": 1.0,
         "target_length": 7004.0,
@@ -41,12 +41,12 @@ TRACKS = {
         "bank_profile": "kSpaBankProfile",
         "runtime_runoff_profile": "kSpaRunoffProfile",
         "width": 13.0,
-        "width_formula": "spaRoadWidthMetersForPhase",
+        "width_formula": "sampleTrackWidthMeters",
         "turns": 19,
         "clockwise": True,
         "palette": "highland",
         "runtime_mirror_y": False,
-        "cpp_layout_id": "TrackLayoutId::SpaCoast",
+        "cpp_layout_id": "TrackLayoutId::Spa",
         "start_phase": 0.0,
         "cpp_simulation_units_per_asset_unit": 17.0,
         "coordinate_unit": "meter",
@@ -383,7 +383,7 @@ def runtime_track_width(phase):
 
 
 def spa_road_width(phase):
-    """Port spaRoadWidthMetersForPhase from game.cpp."""
+    """Port Spa's sampleTrackWidthMeters branch from track_catalog.cpp."""
     normalized = max(0.0,min(1.0,(runtime_track_width(phase)-190.0)/26.0))
     return 14.0+2.0*normalized
 

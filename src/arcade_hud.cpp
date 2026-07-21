@@ -10,7 +10,7 @@
 #include <string_view>
 #include <utility>
 
-namespace harbor::ui {
+namespace formula_forge::ui {
 namespace {
 
 constexpr Color kInk = {15, 30, 34, 242};
@@ -924,4 +924,4 @@ void DrawResultsHud(const ResultsHudViewModel& viewModel) {
     }
 }
 
-}  // namespace harbor::ui
+}  // namespace formula_forge::ui

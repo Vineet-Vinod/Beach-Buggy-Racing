@@ -3,7 +3,7 @@
 #include <array>
 #include <string>
 
-namespace harbor::ui {
+namespace formula_forge::ui {
 
 inline constexpr int kMaxHudRacers = 8;
 inline constexpr int kMaxResultRacers = 10;
@@ -150,4 +150,4 @@ void DrawSelectionHud(const SelectionHudViewModel& viewModel);
 void DrawPauseHud(const PauseHudViewModel& viewModel);
 void DrawResultsHud(const ResultsHudViewModel& viewModel);
 
-}  // namespace harbor::ui
+}  // namespace formula_forge::ui

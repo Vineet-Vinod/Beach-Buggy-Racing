@@ -27,7 +27,7 @@
 #include "arcade_vehicle.hpp"
 #include "core_math.hpp"
 #include "track_renderer.hpp"
-#include "track_layout.hpp"
+#include "track_types.hpp"
 #include "track_catalog.hpp"
 #include "track_clearance_audit.hpp"
 
@@ -81,32 +81,20 @@ bool isMetricCircuit(TrackLayoutId layout) {
 }
 
 float speedKphPerSimulationUnit(TrackLayoutId layout) {
-    return isMetricCircuit(layout) ? 3.6f / kSpaSimulationUnitsPerMeter : 1.22f;
+    return isMetricCircuit(layout) ? 3.6f / kTrackSimulationUnitsPerMeter : 1.22f;
 }
 
 const TrackCatalogEntry* catalogEntryForLayout(TrackLayoutId layout) {
-    switch (layout) {
-        case TrackLayoutId::Suzuka:
-            return findTrackCatalogEntry(CatalogCircuitId::Suzuka);
-        case TrackLayoutId::Silverstone:
-            return findTrackCatalogEntry(CatalogCircuitId::Silverstone);
-        case TrackLayoutId::Monza:
-            return findTrackCatalogEntry(CatalogCircuitId::Monza);
-        case TrackLayoutId::Interlagos:
-            return findTrackCatalogEntry(CatalogCircuitId::Interlagos);
-        case TrackLayoutId::SpaCoast:
-            return nullptr;
-    }
-    return nullptr;
+    return findTrackCatalogEntry(layout);
 }
 
 float trackProgressRenderScale(TrackLayoutId layout) {
-    return isMetricCircuit(layout) ? kSpaSimulationUnitsPerMeter * kRenderScale : kRenderScale;
+    return isMetricCircuit(layout) ? kTrackSimulationUnitsPerMeter * kRenderScale : kRenderScale;
 }
 
 float authoredRoadSurfaceLift(TrackLayoutId layout) {
     return isMetricCircuit(layout)
-               ? kMetricRoadSurfaceOffsetMeters * kSpaSimulationUnitsPerMeter * kRenderScale
+               ? kMetricRoadSurfaceOffsetMeters * kTrackSimulationUnitsPerMeter * kRenderScale
                : kTrackSurfaceLift;
 }
 
@@ -119,7 +107,7 @@ struct MapSpec3D {
 };
 
 constexpr std::array<MapSpec3D, 5> kMaps = {{
-    {TrackLayoutId::SpaCoast, "SPA-FRANCORCHAMPS", "BELGIAN GRAND PRIX", "7.004 KM / 19 TURNS / 102.2 M RELIEF",
+    {TrackLayoutId::Spa, "SPA-FRANCORCHAMPS", "BELGIAN GRAND PRIX", "7.004 KM / 19 TURNS / 102.2 M RELIEF",
      "An Ardennes classic that climbs steeply from Eau Rouge to Raidillon and the Kemmel Straight before descending home."},
     {TrackLayoutId::Suzuka, "SUZUKA", "SUZUKA GRAND PRIX", "5.807 KM / 18 TURNS / FIGURE EIGHT",
      "A flowing figure-eight with rhythmic esses, a climbing crossover and a committed final sector."},
@@ -213,7 +201,7 @@ constexpr std::array<FormulaCornerTarget, 9> kInterlagosFormulaTargets = {{
 
 std::span<const FormulaCornerTarget> formulaCornerTargets(TrackLayoutId layout) {
     switch (layout) {
-        case TrackLayoutId::SpaCoast: return kSpaFormulaTargets;
+        case TrackLayoutId::Spa: return kSpaFormulaTargets;
         case TrackLayoutId::Suzuka: return kSuzukaFormulaTargets;
         case TrackLayoutId::Silverstone: return kSilverstoneFormulaTargets;
         case TrackLayoutId::Monza: return kMonzaFormulaTargets;
@@ -240,7 +228,7 @@ struct AiCircuitProfile {
 // deterministic audits tolerant of each circuit's distinct braking rhythm.
 constexpr AiCircuitProfile aiCircuitProfile(TrackLayoutId layout) {
     switch (layout) {
-        case TrackLayoutId::SpaCoast:
+        case TrackLayoutId::Spa:
             return {"spa", 1.25f, 0.985f, 0.55f, 1.05f, 6.0f, 105.0f, 97.0f, 113.0f, 150};
         case TrackLayoutId::Suzuka:
             return {"suzuka", 1.35f, 0.985f, 0.55f, 1.05f, 6.0f, 91.5f, 84.0f, 99.0f, 500};
@@ -322,8 +310,8 @@ float metricGroundElevation(const TrackPoint3D& point, float lane) {
     const float half = std::max(1.0f, point.width * 0.5f);
     const float crossfall = point.bank / half;
     const float roadHalf = point.width * kRoadSurfaceRatio;
-    const float transition = roadHalf + kMetricRunoffWidthMeters * kSpaSimulationUnitsPerMeter;
-    const float outer = roadHalf + kMetricTerrainReachMeters * kSpaSimulationUnitsPerMeter;
+    const float transition = roadHalf + kMetricRunoffWidthMeters * kTrackSimulationUnitsPerMeter;
+    const float outer = roadHalf + kMetricTerrainReachMeters * kTrackSimulationUnitsPerMeter;
     const float laneMagnitude = std::abs(lane);
     if (laneMagnitude <= transition) {
         return point.elevation + crossfall * lane;
@@ -429,11 +417,6 @@ float trackWidthForPhase(float phase) {
     return width;
 }
 
-float spaRoadWidthMetersForPhase(float phase) {
-    const float normalized = std::clamp((trackWidthForPhase(phase) - 190.0f) / 26.0f, 0.0f, 1.0f);
-    return lerp(14.0f, 16.0f, normalized);
-}
-
 ZoneMaterial3D materialForPhase(float phase) {
     ZoneMaterial3D material = baseZoneMaterial(zoneForPhase(phase));
     static constexpr float kBlend = 0.034f;
@@ -449,62 +432,23 @@ ZoneMaterial3D materialForPhase(float phase) {
     return material;
 }
 
-float spaElevationForDistance(float distanceMeters) {
-    distanceMeters = wrapDistance(distanceMeters, kSpaTargetLength);
-    for (size_t i = 0; i + 1 < kSpaElevationProfile.size(); ++i) {
-        const TrackElevationPoint& a = kSpaElevationProfile[i];
-        const TrackElevationPoint& b = kSpaElevationProfile[i + 1];
-        if (distanceMeters >= a.distanceMeters && distanceMeters <= b.distanceMeters) {
-            const float t = (distanceMeters - a.distanceMeters) /
-                            std::max(0.001f, b.distanceMeters - a.distanceMeters);
-            return lerp(a.elevationMeters, b.elevationMeters, t);
-        }
-    }
-    return kSpaElevationProfile.back().elevationMeters;
-}
-
-float spaBankDegreesForDistance(float distanceMeters) {
-    distanceMeters = wrapDistance(distanceMeters, kSpaTargetLength);
-    for (size_t i = 0; i + 1 < kSpaBankProfile.size(); ++i) {
-        const TrackBankPoint& a = kSpaBankProfile[i];
-        const TrackBankPoint& b = kSpaBankProfile[i + 1];
-        if (distanceMeters >= a.distanceMeters && distanceMeters <= b.distanceMeters) {
-            const float t = (distanceMeters - a.distanceMeters) /
-                            std::max(0.001f, b.distanceMeters - a.distanceMeters);
-            return lerp(a.angleDegrees, b.angleDegrees, t);
-        }
-    }
-    return kSpaBankProfile.back().angleDegrees;
-}
-
 float metricTrackElevationMeters(TrackLayoutId layout, float distanceMeters) {
-    if (layout == TrackLayoutId::SpaCoast) {
-        return spaElevationForDistance(distanceMeters);
-    }
     const TrackCatalogEntry* entry = catalogEntryForLayout(layout);
     return entry != nullptr ? sampleTrackElevationMeters(*entry, distanceMeters) : 0.0f;
 }
 
 float metricTrackWidthMeters(TrackLayoutId layout, float distanceMeters, float phase) {
-    if (layout == TrackLayoutId::SpaCoast) {
-        return spaRoadWidthMetersForPhase(phase);
-    }
+    (void)phase;
     const TrackCatalogEntry* entry = catalogEntryForLayout(layout);
     return entry != nullptr ? sampleTrackWidthMeters(*entry, distanceMeters) : 14.0f;
 }
 
 float metricTrackBankDegrees(TrackLayoutId layout, float distanceMeters) {
-    if (layout == TrackLayoutId::SpaCoast) {
-        return spaBankDegreesForDistance(distanceMeters);
-    }
     const TrackCatalogEntry* entry = catalogEntryForLayout(layout);
     return entry != nullptr ? sampleTrackBankDegrees(*entry, distanceMeters) : 0.0f;
 }
 
 std::span<const TrackRunoffZone> metricTrackRunoffProfile(TrackLayoutId layout) {
-    if (layout == TrackLayoutId::SpaCoast) {
-        return kSpaRunoffProfile;
-    }
     const TrackCatalogEntry* entry = catalogEntryForLayout(layout);
     return entry != nullptr ? entry->runoffProfile : std::span<const TrackRunoffZone>{};
 }
@@ -534,15 +478,12 @@ struct TrackProjection3D {
 
 class Track3D {
 public:
-    explicit Track3D(TrackLayoutId layout = TrackLayoutId::SpaCoast) : layout_(layout) { build(); }
+    explicit Track3D(TrackLayoutId layout = TrackLayoutId::Spa) : layout_(layout) { build(); }
 
     float totalLength() const { return totalLength_; }
     float startProgress() const {
-        if (layout_ == TrackLayoutId::SpaCoast) {
-            return totalLength_ * kSpaStartPhase;
-        }
         const TrackCatalogEntry* entry = catalogEntryForLayout(layout_);
-        return totalLength_ * (entry != nullptr ? entry->startPhase : kSpaStartPhase);
+        return totalLength_ * (entry != nullptr ? entry->startPhase : 0.0f);
     }
     TrackLayoutId layout() const { return layout_; }
     int sampleCount() const { return static_cast<int>(samples_.size()); }
@@ -565,7 +506,7 @@ public:
         out.progress = progress;
         out.width = lerp(a.width, b.width, t);
         out.elevation = isMetricCircuit(layout_)
-                            ? metricTrackElevationMeters(layout_, progress) * kSpaSimulationUnitsPerMeter
+                            ? metricTrackElevationMeters(layout_, progress) * kTrackSimulationUnitsPerMeter
                             : lerp(a.elevation, b.elevation, t);
         out.bank = lerp(a.bank, b.bank, t);
         out.curvature = lerp(a.curvature, b.curvature, t);
@@ -671,7 +612,7 @@ private:
         point.zone = zoneForPhase(phase);
         point.metricCircuit = isMetricCircuit(layout_);
         point.width = isMetricCircuit(layout_)
-                          ? metricTrackWidthMeters(layout_, progress, phase) * kSpaSimulationUnitsPerMeter /
+                          ? metricTrackWidthMeters(layout_, progress, phase) * kTrackSimulationUnitsPerMeter /
                                 (kRoadSurfaceRatio * 2.0f)
                           : trackWidthForPhase(phase);
         if (isMetricCircuit(layout_)) {
@@ -682,7 +623,7 @@ private:
         point.shoulder = material.shoulder;
         point.natural = material.natural;
 
-        point.elevation = metricTrackElevationMeters(layout_, progress) * kSpaSimulationUnitsPerMeter;
+        point.elevation = metricTrackElevationMeters(layout_, progress) * kTrackSimulationUnitsPerMeter;
         point.launchVelocity = 0.0f;
         return point;
     }
@@ -791,14 +732,12 @@ private:
     }
 
     void build() {
-        if (layout_ == TrackLayoutId::SpaCoast) {
-            buildFromControl(kSpaControlPoints, kSpaCourseScale, kSpaTargetLength, kSpaSimulationUnitsPerMeter);
-        } else if (const TrackCatalogEntry* entry = catalogEntryForLayout(layout_)) {
+        if (const TrackCatalogEntry* entry = catalogEntryForLayout(layout_)) {
             // TrackControlPoint uses Cartesian XY, while raylib drives on its
             // Y-up XZ plane. Reflecting plan Y here preserves real-world turn
             // handedness after that orientation-reversing basis conversion.
-            buildFromControl(entry->centerline, 1.0f, entry->targetLengthMeters,
-                             kSpaSimulationUnitsPerMeter, true);
+            buildFromControl(entry->centerline, entry->centerlineScale, entry->targetLengthMeters,
+                             kTrackSimulationUnitsPerMeter, entry->mirrorCenterlineY);
         }
     }
 
@@ -901,31 +840,14 @@ private:
     std::vector<TrackPoint3D> samples_;
     std::vector<Prop3D> props_;
     float totalLength_ = 1.0f;
-    TrackLayoutId layout_ = TrackLayoutId::SpaCoast;
+    TrackLayoutId layout_ = TrackLayoutId::Spa;
 };
 
 bool runTrackCatalogAudit() {
-    struct LayoutEntry {
-        TrackLayoutId layout;
-        CatalogCircuitId catalog;
-    };
-    constexpr std::array<LayoutEntry, 4> kLayouts = {{
-        {TrackLayoutId::Suzuka, CatalogCircuitId::Suzuka},
-        {TrackLayoutId::Silverstone, CatalogCircuitId::Silverstone},
-        {TrackLayoutId::Monza, CatalogCircuitId::Monza},
-        {TrackLayoutId::Interlagos, CatalogCircuitId::Interlagos},
-    }};
-
     bool allOk = true;
-    for (const LayoutEntry& item : kLayouts) {
-        const TrackCatalogEntry* catalog = findTrackCatalogEntry(item.catalog);
-        if (catalog == nullptr) {
-            std::cout << "track-catalog-audit missing_catalog=1 ok=0\n";
-            allOk = false;
-            continue;
-        }
-
-        Track3D track(item.layout);
+    for (const TrackCatalogEntry& catalogEntry : trackCatalog()) {
+        const TrackCatalogEntry* catalog = &catalogEntry;
+        Track3D track(catalog->id);
         float planarMeters = 0.0f;
         float minElevation = std::numeric_limits<float>::max();
         float maxElevation = std::numeric_limits<float>::lowest();
@@ -935,9 +857,9 @@ bool runTrackCatalogAudit() {
         for (int i = 0; i < track.sampleCount(); ++i) {
             const TrackPoint3D& a = track.pointAtIndex(i);
             const TrackPoint3D& b = track.pointAtIndex(i + 1);
-            planarMeters += length(b.pos - a.pos) / kSpaSimulationUnitsPerMeter;
-            const float elevation = a.elevation / kSpaSimulationUnitsPerMeter;
-            const float width = a.width * kRoadSurfaceRatio * 2.0f / kSpaSimulationUnitsPerMeter;
+            planarMeters += length(b.pos - a.pos) / kTrackSimulationUnitsPerMeter;
+            const float elevation = a.elevation / kTrackSimulationUnitsPerMeter;
+            const float width = a.width * kRoadSurfaceRatio * 2.0f / kTrackSimulationUnitsPerMeter;
             minElevation = std::min(minElevation, elevation);
             maxElevation = std::max(maxElevation, elevation);
             minWidth = std::min(minWidth, width);
@@ -950,7 +872,7 @@ bool runTrackCatalogAudit() {
         const TrackShapeAuditResult shape = auditTrackCatalogShape(*catalog);
         std::size_t runtimeLandmarkFailures = 0;
         constexpr float kTurnWindow = 0.018f;
-        for (const TrackTurnExpectation& expected : trackTurnExpectations(item.catalog)) {
+        for (const TrackTurnExpectation& expected : trackTurnExpectations(catalog->id)) {
             const TrackPoint3D before = track.sample(
                 (expected.lapFraction - kTurnWindow) * track.totalLength());
             const TrackPoint3D center = track.sample(expected.lapFraction * track.totalLength());
@@ -990,7 +912,12 @@ bool runTrackCatalogAudit() {
 }
 
 bool runSpaGeometryAudit() {
-    Track3D track(TrackLayoutId::SpaCoast);
+    const TrackCatalogEntry* spaCatalog = findTrackCatalogEntry(TrackLayoutId::Spa);
+    if (spaCatalog == nullptr) {
+        std::cout << "spa-audit missing_catalog=1 ok=0\n";
+        return false;
+    }
+    Track3D track(TrackLayoutId::Spa);
     float planarLength = 0.0f;
     float surfaceLength = 0.0f;
     float maxGrade = 0.0f;
@@ -1007,35 +934,35 @@ bool runSpaGeometryAudit() {
     float stationError = 0.0f;
     float minElevation = std::numeric_limits<float>::max();
     float maxElevation = std::numeric_limits<float>::lowest();
-    for (const TrackElevationPoint& station : kSpaElevationProfile) {
-        const float sampled = track.sample(station.distanceMeters).elevation / kSpaSimulationUnitsPerMeter;
+    for (const TrackElevationPoint& station : spaCatalog->elevationProfile) {
+        const float sampled = track.sample(station.distanceMeters).elevation / kTrackSimulationUnitsPerMeter;
         stationError = std::max(stationError, std::abs(sampled - station.elevationMeters));
         minElevation = std::min(minElevation, sampled);
         maxElevation = std::max(maxElevation, sampled);
     }
-    std::vector<harbor::TrackClearanceSample> clearanceSamples;
+    std::vector<formula_forge::TrackClearanceSample> clearanceSamples;
     clearanceSamples.reserve(track.samples().size());
     for (const TrackPoint3D& point : track.samples()) {
         const float physicalRoadHalfWidth = point.width * kRoadSurfaceRatio;
         clearanceSamples.push_back({point.pos.x, point.pos.y, point.elevation, point.progress,
                                     physicalRoadHalfWidth, physicalRoadHalfWidth});
     }
-    harbor::TrackClearanceAuditSettings clearanceSettings;
+    formula_forge::TrackClearanceAuditSettings clearanceSettings;
     clearanceSettings.totalLength = track.totalLength();
     clearanceSettings.widestKartWidth = 41.0f;
     clearanceSettings.roadLaneInset = kRoadLaneInset;
-    clearanceSettings.twoKartPassingMargin = 0.5f * kSpaSimulationUnitsPerMeter;
+    clearanceSettings.twoKartPassingMargin = 0.5f * kTrackSimulationUnitsPerMeter;
     clearanceSettings.localArcExclusion = 600.0f;
-    clearanceSettings.verticalOverlapTolerance = 7.0f * kSpaSimulationUnitsPerMeter;
+    clearanceSettings.verticalOverlapTolerance = 7.0f * kTrackSimulationUnitsPerMeter;
     clearanceSettings.minimumSegmentLength = 0.1f;
-    clearanceSettings.overlapTolerance = 0.05f * kSpaSimulationUnitsPerMeter;
+    clearanceSettings.overlapTolerance = 0.05f * kTrackSimulationUnitsPerMeter;
     clearanceSettings.widthParityTolerance = 0.01f;
-    const harbor::TrackClearanceAuditResult clearance =
-        harbor::AuditTrackClearance(clearanceSamples, clearanceSettings);
+    const formula_forge::TrackClearanceAuditResult clearance =
+        formula_forge::AuditTrackClearance(clearanceSamples, clearanceSettings);
 
-    planarLength /= kSpaSimulationUnitsPerMeter;
-    surfaceLength /= kSpaSimulationUnitsPerMeter;
-    const float lengthError = std::abs(track.totalLength() - kSpaTargetLength);
+    planarLength /= kTrackSimulationUnitsPerMeter;
+    surfaceLength /= kTrackSimulationUnitsPerMeter;
+    const float lengthError = std::abs(track.totalLength() - spaCatalog->targetLengthMeters);
     const float relief = maxElevation - minElevation;
     const auto signedTurn = [&](float start, float end) {
         float total = 0.0f;
@@ -1051,20 +978,22 @@ bool runSpaGeometryAudit() {
     for (float progress = 900.0f; progress <= 1650.0f; progress += 5.0f) {
         maxEauRougeCurvature = std::max(maxEauRougeCurvature, track.sample(progress).curvature);
     }
-    const bool ok = lengthError <= 0.01f && std::abs(relief - kSpaElevationRelief) <= 0.03f &&
-                    stationError <= 0.03f && std::abs(planarLength - kSpaTargetLength) <= 1.5f &&
+    const bool ok = lengthError <= 0.01f &&
+                    std::abs(relief - spaCatalog->nominalElevationReliefMeters) <= 0.03f &&
+                    stationError <= 0.03f &&
+                    std::abs(planarLength - spaCatalog->targetLengthMeters) <= 1.5f &&
                     std::isfinite(surfaceLength) && maxGrade <= 0.25f && clearance.ok() && laSourceTurn > 0.5f &&
                     eauRougeTurns[0] < -0.25f && eauRougeTurns[1] > 0.5f && eauRougeTurns[2] < -0.25f &&
                     maxEauRougeCurvature < 0.65f;
     std::cout << "spa-audit length_m=" << track.totalLength() << " planar_mesh_m=" << planarLength
               << " surface_mesh_m=" << surfaceLength << " relief_m=" << relief
               << " station_error_m=" << stationError << " max_grade=" << maxGrade
-              << " road_width_m=" << clearance.minPhysicalRoadWidth / kSpaSimulationUnitsPerMeter << ".."
-              << clearance.maxPhysicalRoadWidth / kSpaSimulationUnitsPerMeter
-              << " passing_clearance_m=" << clearance.minTwoKartPassingClearance / kSpaSimulationUnitsPerMeter
-              << " branch_clearance_m=" << clearance.minPhysicalNonLocalClearance / kSpaSimulationUnitsPerMeter
+              << " road_width_m=" << clearance.minPhysicalRoadWidth / kTrackSimulationUnitsPerMeter << ".."
+              << clearance.maxPhysicalRoadWidth / kTrackSimulationUnitsPerMeter
+              << " passing_clearance_m=" << clearance.minTwoKartPassingClearance / kTrackSimulationUnitsPerMeter
+              << " branch_clearance_m=" << clearance.minPhysicalNonLocalClearance / kTrackSimulationUnitsPerMeter
               << " overlap_pairs=" << clearance.physicalOverlapPairs
-              << " rendered_width_margin_m=" << clearance.minRenderedPhysicalMargin / kSpaSimulationUnitsPerMeter
+              << " rendered_width_margin_m=" << clearance.minRenderedPhysicalMargin / kTrackSimulationUnitsPerMeter
               << " la_source_turn=" << laSourceTurn
               << " eau_rouge_turns=" << eauRougeTurns[0] << "," << eauRougeTurns[1] << "," << eauRougeTurns[2]
               << " eau_max_curvature=" << maxEauRougeCurvature
@@ -1827,7 +1756,7 @@ struct DrivingSurfaceResponse3D {
 };
 
 MetricCircuitEnvelope3D metricCircuitEnvelope(const TrackPoint3D& point) {
-    const float units = kSpaSimulationUnitsPerMeter;
+    const float units = kTrackSimulationUnitsPerMeter;
     const float asphalt = roadSurfaceHalfWidth(point);
     const float barrierCenter = asphalt + kMetricBarrierOffsetMeters * units;
     return {asphalt,
@@ -2072,7 +2001,7 @@ float hardBoundaryLaneLimit(const Kart3D& kart, const TrackPoint3D& point) {
         return std::max(0.0f, envelope.barrierInnerFace - projectedKartExtent(kart, point.normal));
     }
     const bool metricSpaWidth = point.width > 260.0f;
-    const float shoulder = metricSpaWidth ? 0.75f * kSpaSimulationUnitsPerMeter
+    const float shoulder = metricSpaWidth ? 0.75f * kTrackSimulationUnitsPerMeter
                                           : std::min(42.0f, offroadReachForZone(point.zone) * 0.22f);
     return roadCenterLimit(kart, point) + shoulder - kHardBoundaryInset * 0.20f;
 }
@@ -2185,7 +2114,7 @@ public:
             updateAudio(dt, input, false);
             if (loadingTime_ >= kLoadingScreenSeconds || input.a || input.start) {
                 mode_ = Mode::Garage;
-                selectionStage_ = harbor::ui::SelectionStage::Mode;
+                selectionStage_ = formula_forge::ui::SelectionStage::Mode;
             }
             return;
         }
@@ -2209,7 +2138,7 @@ public:
         }
         if (input.start) {
             mode_ = Mode::Pause;
-            pauseAction_ = harbor::ui::PauseAction::Resume;
+            pauseAction_ = formula_forge::ui::PauseAction::Resume;
             return;
         }
 
@@ -2288,12 +2217,12 @@ public:
                                {0.0f, 0.0f, screenWidth, screenHeight},
                                {0.0f, 0.0f}, 0.0f, WHITE);
             }
-            harbor::ui::LoadingScreenViewModel loading;
+            formula_forge::ui::LoadingScreenViewModel loading;
             loading.progress = std::clamp(loadingTime_ / kLoadingScreenSeconds, 0.0f, 1.0f);
             loading.presentationTimeSeconds = presentationTime_;
             loading.statusText = loading.progress < 0.72f ? "BUILDING THE STARTING GRID" : "READY TO RACE";
             loading.cinematicBackground = hasLoadingArtwork;
-            harbor::ui::DrawLoadingScreen(loading);
+            formula_forge::ui::DrawLoadingScreen(loading);
             if (capturePath) {
                 rlDrawRenderBatchActive();
                 TakeScreenshot(capturePath);
@@ -2377,12 +2306,12 @@ public:
         activateSelectedMap();
         resetRace();
         mode_ = Mode::Race;
-        pauseAction_ = harbor::ui::PauseAction::Resume;
-        resultsAction_ = harbor::ui::ResultsAction::Replay;
+        pauseAction_ = formula_forge::ui::PauseAction::Resume;
+        resultsAction_ = formula_forge::ui::ResultsAction::Replay;
     }
 
     void selectTimeTrialForCapture() {
-        selectedSession_ = harbor::ui::GameModeOption::TimeTrial;
+        selectedSession_ = formula_forge::ui::GameModeOption::TimeTrial;
         resetRace();
         syncGaragePreview();
     }
@@ -2402,13 +2331,13 @@ public:
         Input3D back;
         back.back = true;
         press(back);
-        const bool backReturnedHome = selectionStage_ == harbor::ui::SelectionStage::Mode && mode_ == Mode::Garage;
+        const bool backReturnedHome = selectionStage_ == formula_forge::ui::SelectionStage::Mode && mode_ == Mode::Garage;
         press(confirm);  // Car again.
         press(confirm);  // Map and laps.
         press(confirm);  // Start.
 
-        const bool selectionFlow = selectedSession_ == harbor::ui::GameModeOption::TimeTrial &&
-                                   selectedMap_ == 0 && selectionStage_ == harbor::ui::SelectionStage::Map &&
+        const bool selectionFlow = selectedSession_ == formula_forge::ui::GameModeOption::TimeTrial &&
+                                   selectedMap_ == 0 && selectionStage_ == formula_forge::ui::SelectionStage::Map &&
                                    mode_ == Mode::Race && backReturnedHome;
 
         std::array<Vec2, kKartCount - 1> parkedOpponents{};
@@ -2462,7 +2391,7 @@ public:
         const bool timingValid = hasBestLap_ && bestLapTime_ > 20.0f && lastLapTime_ > 20.0f &&
                                  bestLapTime_ <= lastLapTime_ + 0.001f;
         const float offroadRatio = static_cast<float>(offroadFrames) / std::max(1, frames);
-        const float averageSpeedKph = speedSum / std::max(1, frames) / kSpaSimulationUnitsPerMeter * 3.6f;
+        const float averageSpeedKph = speedSum / std::max(1, frames) / kTrackSimulationUnitsPerMeter * 3.6f;
         const bool staysActive = mode_ == Mode::Race && !raceFinished_ && resultCount_ == 0;
         const bool ok = selectionFlow && frames < maxFrames && distance >= targetDistance && soloFlow && infinite && timingValid &&
                         staysActive && opponentsParked && playerPosition_ == 1 && offroadRatio < 0.08f && barrierImpacts <= 12;
@@ -2474,7 +2403,7 @@ public:
                   << " steer_usage=" << steerUsageSum / std::max(1, frames)
                   << " steer_saturation=" << static_cast<float>(saturatedSteerFrames) / std::max(1, frames)
                   << " barrier_impacts=" << barrierImpacts
-                  << " max_road_violation_m=" << maxRoadViolation / kSpaSimulationUnitsPerMeter
+                  << " max_road_violation_m=" << maxRoadViolation / kTrackSimulationUnitsPerMeter
                   << " max_violation_phase=" << maxRoadViolationProgress / track_.totalLength()
                   << " selected=" << selectionFlow << " solo=" << soloFlow << " infinite=" << infinite << " parked=" << opponentsParked
                   << " active=" << staysActive << " sectors=";
@@ -2487,7 +2416,7 @@ public:
     }
 
     bool runGridAlignmentAudit() {
-        selectedSession_ = harbor::ui::GameModeOption::Race;
+        selectedSession_ = formula_forge::ui::GameModeOption::Race;
         float maxSlotPositionErrorMeters = 0.0f;
         float maxHeadingErrorDegrees = 0.0f;
         float maxPlayerStartDistanceMeters = 0.0f;
@@ -2504,7 +2433,7 @@ public:
                 longestCar = std::max(longestCar, spec.length);
                 widestCar = std::max(widestCar, spec.width);
             }
-            const float unitsPerMeter = isMetricCircuit(track_.layout()) ? kSpaSimulationUnitsPerMeter : 1.0f;
+            const float unitsPerMeter = isMetricCircuit(track_.layout()) ? kTrackSimulationUnitsPerMeter : 1.0f;
             const float firstRowInsetMeters = longestCar / unitsPerMeter * 0.5f + kGridFirstRowClearanceMeters;
             const float slotSpacingMeters = longestCar / unitsPerMeter + kGridSlotGapMeters;
             const float columnOffset = std::max(widestCar * 0.95f, 2.0f * unitsPerMeter);
@@ -2569,19 +2498,19 @@ public:
     void showMapSelectionForCapture(int index) {
         selectMapForCapture(index);
         mode_ = Mode::Garage;
-        selectionStage_ = harbor::ui::SelectionStage::Map;
+        selectionStage_ = formula_forge::ui::SelectionStage::Map;
         updateGarageCamera(1.0f);
     }
 
     void resetAgentSession() {
-        selectedSession_ = harbor::ui::GameModeOption::Race;
+        selectedSession_ = formula_forge::ui::GameModeOption::Race;
         selectedCar_ = 0;
         selectedRacer_ = 0;
         selectedMap_ = 0;
         selectedLapOption_ = 0;
-        selectionStage_ = harbor::ui::SelectionStage::Mode;
-        pauseAction_ = harbor::ui::PauseAction::Resume;
-        resultsAction_ = harbor::ui::ResultsAction::Replay;
+        selectionStage_ = formula_forge::ui::SelectionStage::Mode;
+        pauseAction_ = formula_forge::ui::PauseAction::Resume;
+        resultsAction_ = formula_forge::ui::ResultsAction::Replay;
         loadingTime_ = 0.0f;
         presentationTime_ = 0.0f;
         garageSpin_ = 0.0f;
@@ -2600,7 +2529,7 @@ public:
             "grid", "countdown", "racing", "finished"};
         const Kart3D& player = karts_[0];
         const TrackPoint3D point = track_.sample(player.progress);
-        const float unitsPerMeter = isMetricCircuit(track_.layout()) ? kSpaSimulationUnitsPerMeter : 1.0f;
+        const float unitsPerMeter = isMetricCircuit(track_.layout()) ? kTrackSimulationUnitsPerMeter : 1.0f;
         const float speedKphScale = speedKphPerSimulationUnit(track_.layout());
         const float speedKph = std::max(0.0f, player.telemetry.forwardSpeed) * speedKphScale;
         const float roadClearance = (roadCenterLimit(player, point) - std::abs(player.lane)) / unitsPerMeter;
@@ -2616,7 +2545,7 @@ public:
             << ",\"screen\":" << agent_play::jsonString(kModeNames[static_cast<size_t>(mode_)])
             << ",\"selection_stage\":" << agent_play::jsonString(kStageNames[static_cast<size_t>(selectionStage_)])
             << ",\"selected\":{\"session\":"
-            << agent_play::jsonString(selectedSession_ == harbor::ui::GameModeOption::Race ? "race" : "time_trial")
+            << agent_play::jsonString(selectedSession_ == formula_forge::ui::GameModeOption::Race ? "race" : "time_trial")
             << ",\"driver\":" << agent_play::jsonString(racers_[static_cast<size_t>(selectedRacer_)])
             << ",\"car\":" << agent_play::jsonString(specs_[static_cast<size_t>(selectedCar_)].name)
             << ",\"map\":" << agent_play::jsonString(selectedMap().name)
@@ -2673,7 +2602,7 @@ public:
     }
 
     void showResultsCapture() {
-        selectedSession_ = harbor::ui::GameModeOption::Race;
+        selectedSession_ = formula_forge::ui::GameModeOption::Race;
         static constexpr std::array<int, kKartCount> kCaptureOrder = {1, 0, 4, 2, 5, 3};
         static constexpr std::array<float, kKartCount> kCaptureTimes = {101.42f, 103.87f, 106.15f, 108.74f, 111.26f, 115.90f};
         resultCount_ = kKartCount;
@@ -2682,7 +2611,7 @@ public:
                                                 kCaptureTimes[static_cast<size_t>(i)], std::max(1, targetLaps())};
         }
         mode_ = Mode::Results;
-        resultsAction_ = harbor::ui::ResultsAction::Replay;
+        resultsAction_ = formula_forge::ui::ResultsAction::Replay;
     }
 
     void setupSectionTour(float phase, int variant) {
@@ -2797,7 +2726,7 @@ public:
         const auto brakingDistance = [&](float startKph, float targetKph) {
             ArcadeVehicleState state;
             state.grounded = true;
-            state.vel = {startKph / 3.6f * kSpaSimulationUnitsPerMeter, 0.0f};
+            state.vel = {startKph / 3.6f * kTrackSimulationUnitsPerMeter, 0.0f};
             state.forwardSpeed = length(state.vel);
             syncArcadeTransmissionToSpeed(state, formulaTuning);
             ArcadeVehicleControl control;
@@ -2805,13 +2734,13 @@ public:
             const Vec2 start = state.pos;
             int frames = 0;
             constexpr int kMaxBrakingFrames = static_cast<int>(12.0f / kFixedDt);
-            const float targetSpeed = targetKph / 3.6f * kSpaSimulationUnitsPerMeter;
+            const float targetSpeed = targetKph / 3.6f * kTrackSimulationUnitsPerMeter;
             while (frames < kMaxBrakingFrames && state.forwardSpeed > std::max(2.0f, targetSpeed)) {
                 stepArcadeVehicle(state, formulaTuning, control, road, kFixedDt);
                 ++frames;
             }
             return BrakingDistanceResult{startKph, targetKph,
-                                         length(state.pos - start) / kSpaSimulationUnitsPerMeter,
+                                         length(state.pos - start) / kTrackSimulationUnitsPerMeter,
                                          static_cast<float>(frames) * kFixedDt};
         };
         const std::array<BrakingDistanceResult, 3> brakingDistances = {
@@ -2827,7 +2756,7 @@ public:
             }
             ArcadeVehicleState state;
             state.grounded = true;
-            state.vel = {startKph / 3.6f * kSpaSimulationUnitsPerMeter, 0.0f};
+            state.vel = {startKph / 3.6f * kTrackSimulationUnitsPerMeter, 0.0f};
             state.forwardSpeed = length(state.vel);
             syncArcadeTransmissionToSpeed(state, coastTuning);
             ArcadeVehicleControl coastControl;
@@ -2835,7 +2764,7 @@ public:
             for (int frame = 0; frame < static_cast<int>(seconds / kFixedDt); ++frame) {
                 stepArcadeVehicle(state, coastTuning, coastControl, road, kFixedDt);
             }
-            return state.forwardSpeed / kSpaSimulationUnitsPerMeter * 3.6f;
+            return state.forwardSpeed / kTrackSimulationUnitsPerMeter * 3.6f;
         };
         constexpr std::array<float, 3> kCoastStartKph = {300.0f, 200.0f, 100.0f};
         std::array<float, 3> coastEndKph{};
@@ -2854,7 +2783,7 @@ public:
         for (int frame = 0; frame < kStraightLineFrames; ++frame) {
             stepArcadeVehicle(straightLine, formulaTuning, fullThrottle, road, kFixedDt);
             const float elapsed = static_cast<float>(frame + 1) * kFixedDt;
-            const float speedKph = straightLine.forwardSpeed / kSpaSimulationUnitsPerMeter * 3.6f;
+            const float speedKph = straightLine.forwardSpeed / kTrackSimulationUnitsPerMeter * 3.6f;
             if (zeroToOneHundredSeconds <= 0.0f && speedKph >= 100.0f) {
                 zeroToOneHundredSeconds = elapsed;
             }
@@ -2862,15 +2791,15 @@ public:
                 zeroToTwoHundredSeconds = elapsed;
             }
         }
-        const float terminalSpeedKph = straightLine.forwardSpeed / kSpaSimulationUnitsPerMeter * 3.6f;
+        const float terminalSpeedKph = straightLine.forwardSpeed / kTrackSimulationUnitsPerMeter * 3.6f;
         track_.rebuild(TrackLayoutId::Monza);
         const float mechanicalGripG = formulaTuning.lateralGripAcceleration /
-                                      (kSpaSimulationUnitsPerMeter * kStandardGravityMetersPerSecondSquared);
+                                      (kTrackSimulationUnitsPerMeter * kStandardGravityMetersPerSecondSquared);
         const float highSpeedGripG = mechanicalGripG * (1.0f + formulaTuning.downforceGripGain);
 
         int namedBrakingCorners = 0;
         float lowestNamedCornerSpeedKph = terminalSpeedKph;
-        const auto monzaTurns = trackTurnExpectations(CatalogCircuitId::Monza);
+        const auto monzaTurns = trackTurnExpectations(TrackLayoutId::Monza);
         for (const TrackTurnExpectation& turn : monzaTurns) {
             float peakCurvaturePerMeter = 0.0f;
             const float centerProgress = turn.lapFraction * track_.totalLength();
@@ -2881,8 +2810,8 @@ public:
                 peakCurvaturePerMeter = std::max(peakCurvaturePerMeter,
                                                  std::abs(wrapAngle(angleOf(after) - angleOf(before))) / 16.0f);
             }
-            const float baseAcceleration = formulaTuning.lateralGripAcceleration / kSpaSimulationUnitsPerMeter;
-            const float maxSpeedMetersPerSecond = formulaTuning.maxForwardSpeed / kSpaSimulationUnitsPerMeter;
+            const float baseAcceleration = formulaTuning.lateralGripAcceleration / kTrackSimulationUnitsPerMeter;
+            const float maxSpeedMetersPerSecond = formulaTuning.maxForwardSpeed / kTrackSimulationUnitsPerMeter;
             const float downforceTerm = baseAcceleration * formulaTuning.downforceGripGain /
                                         (maxSpeedMetersPerSecond * maxSpeedMetersPerSecond);
             const float speedSquaredDenominator = peakCurvaturePerMeter - downforceTerm;
@@ -2918,7 +2847,7 @@ public:
         };
         const auto cornerBenchmark = [&](const CornerBenchmarkSpec& spec, bool useBrakes) {
             track_.rebuild(spec.layout);
-            const float unitsPerMeter = kSpaSimulationUnitsPerMeter;
+            const float unitsPerMeter = kTrackSimulationUnitsPerMeter;
             const float cornerProgress = spec.lapFraction * track_.totalLength();
             const float startProgress = cornerProgress - spec.approachMeters;
             const TrackPoint3D start = track_.sample(startProgress);
@@ -3006,7 +2935,7 @@ public:
         }
         track_.rebuild(TrackLayoutId::Monza);
         const bool controlledRoad = attack.offroadFrames < 280 &&
-                                    attack.maxOffroad <= 2.1f * kSpaSimulationUnitsPerMeter;
+                                    attack.maxOffroad <= 2.1f * kTrackSimulationUnitsPerMeter;
         const bool noBrakeConsequences = noBrake.offroadFrames > 30 || noBrake.maxOffroad > 5.0f;
         const bool groundClear = std::abs(noBrake.minGroundClearance) <= 0.03f && std::abs(brake.minGroundClearance) <= 0.03f &&
                                  std::abs(attack.minGroundClearance) <= 0.03f;
@@ -3071,7 +3000,7 @@ public:
         int formulaDynamicsChecks = 0;
         float maximumCornerGripScale = 1.0f;
         float minimumYawRateMargin = std::numeric_limits<float>::max();
-        for (TrackLayoutId layout : {TrackLayoutId::SpaCoast, TrackLayoutId::Suzuka, TrackLayoutId::Silverstone,
+        for (TrackLayoutId layout : {TrackLayoutId::Spa, TrackLayoutId::Suzuka, TrackLayoutId::Silverstone,
                                      TrackLayoutId::Monza, TrackLayoutId::Interlagos}) {
             track_.rebuild(layout);
             const ArcadeVehicleConfig layoutTuning = selectedTrackTuning(specs_[0]);
@@ -3145,7 +3074,7 @@ public:
                     calibrationKart.progress = wrapDistance((target.lapFraction + phaseOffset) * track_.totalLength(),
                                                             track_.totalLength());
                     const TrackPoint3D point = track_.sample(calibrationKart.progress);
-                    calibrationKart.vel = point.tangent * (target.speedKph / 3.6f * kSpaSimulationUnitsPerMeter);
+                    calibrationKart.vel = point.tangent * (target.speedKph / 3.6f * kTrackSimulationUnitsPerMeter);
                     const float scale = formulaCornerGripScale(calibrationKart, point);
                     maximumCornerGripScale = std::max(maximumCornerGripScale, scale);
                     const float curvatureSpanMeters = 16.0f * track_.totalLength() /
@@ -3153,9 +3082,9 @@ public:
                     const float curvaturePerMeter = point.curvature / curvatureSpanMeters;
                     const float speedMetersPerSecond = target.speedKph / 3.6f;
                     const float normalizedSpeed = speedMetersPerSecond /
-                                                  (layoutTuning.maxForwardSpeed / kSpaSimulationUnitsPerMeter);
+                                                  (layoutTuning.maxForwardSpeed / kTrackSimulationUnitsPerMeter);
                     const float availableAcceleration = layoutTuning.lateralGripAcceleration /
-                                                            kSpaSimulationUnitsPerMeter *
+                                                            kTrackSimulationUnitsPerMeter *
                                                         layoutTuning.tireLimitedYawScale *
                                                         (1.0f + layoutTuning.downforceGripGain * normalizedSpeed * normalizedSpeed) *
                                                         scale;
@@ -3173,12 +3102,12 @@ public:
                                       tcam.position.z - cameraKartPosition.z};
         const Vec2 cameraViewPlanar{tcam.target.x - tcam.position.x,
                                     tcam.target.z - tcam.position.z};
-        const float speedVibrationTolerance = 0.012f * kSpaSimulationUnitsPerMeter * kRenderScale;
+        const float speedVibrationTolerance = 0.012f * kTrackSimulationUnitsPerMeter * kRenderScale;
         const bool fixedTcam = std::abs(length(cameraPlanarOffset) -
-                                        kTcamBackMeters * kSpaSimulationUnitsPerMeter * kRenderScale) <
+                                        kTcamBackMeters * kTrackSimulationUnitsPerMeter * kRenderScale) <
                                     speedVibrationTolerance &&
                                 std::abs((tcam.position.y - cameraKartPosition.y) -
-                                         kTcamHeightMeters * kSpaSimulationUnitsPerMeter * kRenderScale) <
+                                         kTcamHeightMeters * kTrackSimulationUnitsPerMeter * kRenderScale) <
                                     speedVibrationTolerance &&
                                 dot(normalize(cameraViewPlanar), fromAngle(cameraKart.heading)) > 0.999f &&
                                 std::abs(tcam.fovy - kTcamFovDegrees) < 0.001f;
@@ -3511,7 +3440,7 @@ public:
         const bool targetPace = result.lapSeconds >= profile.minimumAuditLapSeconds &&
                                 result.lapSeconds <= profile.maximumAuditLapSeconds;
         const bool physicalPath = result.progressJumps == 0 && result.maxProgressStep <= 2.0f &&
-                                  result.maxRoadViolation <= 6.0f * kSpaSimulationUnitsPerMeter &&
+                                  result.maxRoadViolation <= 6.0f * kTrackSimulationUnitsPerMeter &&
                                   result.roadViolationFrames < 2300 && result.contacts <= 1;
         const bool formulaRacecraft = result.averageSpeed > 600.0f && result.brakeFrames > 200 &&
                                       result.poweredExitFrames > 1000 && result.driftFrames == 0 &&
@@ -3594,7 +3523,7 @@ public:
         float maxBoundaryContractError = 0.0f;
         bool envelopeOrdered = true;
         constexpr std::array<TrackLayoutId, 5> kMetricLayouts = {
-            TrackLayoutId::SpaCoast, TrackLayoutId::Suzuka, TrackLayoutId::Silverstone,
+            TrackLayoutId::Spa, TrackLayoutId::Suzuka, TrackLayoutId::Silverstone,
             TrackLayoutId::Monza, TrackLayoutId::Interlagos};
         for (TrackLayoutId layout : kMetricLayouts) {
             track_.rebuild(layout);
@@ -3611,16 +3540,16 @@ public:
                                                     std::abs(hardBoundaryLaneLimit(contractKart, point) - expectedBoundary));
                 maxBarrierWidthStepMeters = std::max(maxBarrierWidthStepMeters,
                                                      std::abs(nextEnvelope.barrierInnerFace - envelope.barrierInnerFace) /
-                                                         kSpaSimulationUnitsPerMeter);
+                                                         kTrackSimulationUnitsPerMeter);
                 minCurbWidthMeters = std::min(minCurbWidthMeters,
                                               (envelope.curbOuter - envelope.asphaltOuter) /
-                                                  kSpaSimulationUnitsPerMeter);
+                                                  kTrackSimulationUnitsPerMeter);
                 minRunoffBeyondCurbMeters = std::min(minRunoffBeyondCurbMeters,
                                                      (envelope.runoffOuter - envelope.curbOuter) /
-                                                         kSpaSimulationUnitsPerMeter);
+                                                         kTrackSimulationUnitsPerMeter);
                 minBarrierBeyondRunoffMeters = std::min(minBarrierBeyondRunoffMeters,
                                                         (envelope.barrierInnerFace - envelope.runoffOuter) /
-                                                            kSpaSimulationUnitsPerMeter);
+                                                            kTrackSimulationUnitsPerMeter);
                 envelopeOrdered = envelopeOrdered && envelope.asphaltOuter < envelope.curbOuter &&
                                   envelope.curbOuter < envelope.runoffOuter &&
                                   envelope.runoffOuter < envelope.barrierInnerFace &&
@@ -3631,7 +3560,7 @@ public:
         const bool footprintExact = std::abs(contactHalfWidth(light) - light.spec.width * 0.5f) < 0.001f &&
                                     std::abs(contactHalfLength(light) - light.spec.length * 0.5f) < 0.001f;
 
-        track_.rebuild(TrackLayoutId::SpaCoast);
+        track_.rebuild(TrackLayoutId::Spa);
         const TrackPoint3D traversalPoint = track_.sample(3200.0f);
         const MetricCircuitEnvelope3D traversalEnvelope = metricCircuitEnvelope(traversalPoint);
         const auto laneDoesNotCollide = [&](float lane) {
@@ -3749,7 +3678,7 @@ public:
                                                std::abs(slowKart.elevation - physicsGround));
             const float renderedTireContact = slowKart.elevation * kRenderScale + authoredRoadSurfaceLift(track_.layout());
             const float renderedRoadSurface = physicsGround * kRenderScale +
-                                              kMetricRoadSurfaceOffsetMeters * kSpaSimulationUnitsPerMeter * kRenderScale;
+                                              kMetricRoadSurfaceOffsetMeters * kTrackSimulationUnitsPerMeter * kRenderScale;
             maxSlowRenderContactError = std::max(maxSlowRenderContactError,
                                                  std::abs(renderedTireContact - renderedRoadSurface));
         }
@@ -3763,8 +3692,8 @@ public:
             kart.tuning = selectedTrackTuning(kart.spec);
             kart.progress = progress;
             kart.lane = side * (roadSurfaceHalfWidth(point) +
-                                kMetricCurbWidthMeters * kSpaSimulationUnitsPerMeter +
-                                contactHalfWidth(kart) + 0.50f * kSpaSimulationUnitsPerMeter);
+                                kMetricCurbWidthMeters * kTrackSimulationUnitsPerMeter +
+                                contactHalfWidth(kart) + 0.50f * kTrackSimulationUnitsPerMeter);
             kart.pos = point.pos + point.normal * kart.lane;
             kart.heading = angleOf(point.tangent);
             kart.vel = point.tangent * 300.0f;
@@ -3799,9 +3728,9 @@ public:
 
         const TrackPoint3D groundContractPoint = track_.sample(1500.0f);
         const float groundTransition = roadSurfaceHalfWidth(groundContractPoint) +
-                                       kMetricRunoffWidthMeters * kSpaSimulationUnitsPerMeter;
+                                       kMetricRunoffWidthMeters * kTrackSimulationUnitsPerMeter;
         const float groundOuter = roadSurfaceHalfWidth(groundContractPoint) +
-                                  kMetricTerrainReachMeters * kSpaSimulationUnitsPerMeter;
+                                  kMetricTerrainReachMeters * kTrackSimulationUnitsPerMeter;
         const float transitionGroundStep = std::abs(
             metricGroundElevation(groundContractPoint, groundTransition - 0.01f) -
             metricGroundElevation(groundContractPoint, groundTransition + 0.01f));
@@ -3810,7 +3739,7 @@ public:
             metricGroundElevation(groundContractPoint, groundOuter + 0.01f));
         const bool terrainGroundContinuous = transitionGroundStep < 0.01f && outerGroundStep < 0.01f;
 
-        selectedSession_ = harbor::ui::GameModeOption::Race;
+        selectedSession_ = formula_forge::ui::GameModeOption::Race;
         selectedMap_ = 3;
         startRace();
         bool gridClear = true;
@@ -3924,10 +3853,15 @@ public:
     }
 
     bool runSpaControlAudit() {
-        track_.rebuild(TrackLayoutId::SpaCoast);
+        track_.rebuild(TrackLayoutId::Spa);
+        const TrackCatalogEntry* spaCatalog = catalogEntryForLayout(TrackLayoutId::Spa);
+        if (spaCatalog == nullptr) {
+            std::cout << "spa-control-audit missing_catalog=1 ok=0\n";
+            return false;
+        }
         const ArcadeVehicleConfig tuning = selectedTrackTuning(specs_[0]);
         const ArcadeSurface road;
-        const float simulationUnits = kSpaSimulationUnitsPerMeter;
+        const float simulationUnits = kTrackSimulationUnitsPerMeter;
 
         const auto movingKart = [&](float speedScale) {
             ArcadeVehicleState kart;
@@ -4055,7 +3989,8 @@ public:
         }
 
         const float renderedLapLength = track_.totalLength() * trackProgressRenderScale(track_.layout());
-        const float expectedRenderedLapLength = kSpaTargetLength * kSpaSimulationUnitsPerMeter * kRenderScale;
+        const float expectedRenderedLapLength =
+            spaCatalog->targetLengthMeters * kTrackSimulationUnitsPerMeter * kRenderScale;
         const bool renderedScaleValid = std::abs(renderedLapLength - expectedRenderedLapLength) < 0.5f;
         const bool steeringProgressive = gentleLateralMeters < 1.5f && fullLockHeading > 0.25f;
         const bool stableFormulaBraking = peakBrakeSlip < 0.08f && peakBrakeYaw < 0.90f &&
@@ -4110,7 +4045,7 @@ public:
 
     bool runTerrainAudit() const {
         constexpr float kGradientLimitDegrees = 40.0f;
-        const harbor::TrackGradientAudit result = harbor::AuditTrackGradients(trackRenderSamples(), kGradientLimitDegrees);
+        const formula_forge::TrackGradientAudit result = formula_forge::AuditTrackGradients(trackRenderSamples(), kGradientLimitDegrees);
         float maxCenterlineGradient = 0.0f;
         for (const TrackPoint3D& point : track_.samples()) {
             maxCenterlineGradient = std::max(maxCenterlineGradient, std::atan(std::abs(point.grade)) * RAD2DEG);
@@ -4132,7 +4067,7 @@ public:
                   << " join_triangles_above_40=" << result.joinTrianglesAboveLimit
                   << " ok=" << ok << "\n";
         std::cout << "terrain-audit-bins";
-        for (size_t i = 0; i < harbor::TrackGradientAudit::kPhaseBinCount; ++i) {
+        for (size_t i = 0; i < formula_forge::TrackGradientAudit::kPhaseBinCount; ++i) {
             if (result.phaseTrianglesAboveLimit[i] > 0) {
                 std::cout << " " << i << ":" << result.phaseMaxGradientDegrees[i] << "/"
                           << result.phaseTrianglesAboveLimit[i];
@@ -4192,8 +4127,8 @@ private:
         return inputs;
     }
 
-    std::vector<harbor::TrackRenderSample> trackRenderSamples() const {
-        std::vector<harbor::TrackRenderSample> samples;
+    std::vector<formula_forge::TrackRenderSample> trackRenderSamples() const {
+        std::vector<formula_forge::TrackRenderSample> samples;
         samples.reserve(track_.samples().size());
         for (const TrackPoint3D& point : track_.samples()) {
             const Vector3 center = lift(track_.roadPoint(point, 0.0f), kTrackSurfaceLift);
@@ -4219,13 +4154,13 @@ private:
     }
 
     void buildTrackRenderer() {
-        const std::vector<harbor::TrackRenderSample> samples = trackRenderSamples();
+        const std::vector<formula_forge::TrackRenderSample> samples = trackRenderSamples();
         trackRenderer_.build(samples, renderer_.worldShader());
     }
 
     const MapSpec3D& selectedMap() const { return kMaps[static_cast<size_t>(selectedMap_)]; }
 
-    bool isTimeTrial() const { return selectedSession_ == harbor::ui::GameModeOption::TimeTrial; }
+    bool isTimeTrial() const { return selectedSession_ == formula_forge::ui::GameModeOption::TimeTrial; }
     int activeKartCount() const { return isTimeTrial() ? 1 : kKartCount; }
 
     bool playerShiftRecommended() const {
@@ -4241,7 +4176,7 @@ private:
     ArcadeVehicleConfig selectedTrackTuning(const KartSpec3D& spec) const {
         ArcadeVehicleConfig tuning = tuningForSpec(spec);
         const float kphPerUnit = speedKphPerSimulationUnit(track_.layout());
-        const float metricKphPerUnit = 3.6f / kSpaSimulationUnitsPerMeter;
+        const float metricKphPerUnit = 3.6f / kTrackSimulationUnitsPerMeter;
         const float targetTopSpeedKph = std::clamp(318.0f + (spec.maxSpeed - 198.0f) * 0.55f, 305.0f, 330.0f);
         const float accelerationScale = std::pow(spec.accel / 258.0f, 0.22f);
         const float brakingScale = std::pow(spec.brake / 214.0f, 0.25f);
@@ -4317,18 +4252,18 @@ private:
             }
         };
         switch (selectionStage_) {
-            case harbor::ui::SelectionStage::Mode:
+            case formula_forge::ui::SelectionStage::Mode:
                 if (horizontal != 0 || vertical != 0) {
-                    selectedSession_ = selectedSession_ == harbor::ui::GameModeOption::Race
-                                           ? harbor::ui::GameModeOption::TimeTrial
-                                           : harbor::ui::GameModeOption::Race;
+                    selectedSession_ = selectedSession_ == formula_forge::ui::GameModeOption::Race
+                                           ? formula_forge::ui::GameModeOption::TimeTrial
+                                           : formula_forge::ui::GameModeOption::Race;
                     selectedLapOption_ = isTimeTrial() ? kLapOptionCount - 1 : 0;
                 }
                 break;
-            case harbor::ui::SelectionStage::Car:
+            case formula_forge::ui::SelectionStage::Car:
                 wrapChoice(selectedCar_, static_cast<int>(specs_.size()), horizontal);
                 break;
-            case harbor::ui::SelectionStage::Map:
+            case formula_forge::ui::SelectionStage::Map:
                 wrapChoice(selectedMap_, static_cast<int>(kMaps.size()), horizontal);
                 wrapChoice(selectedLapOption_, kLapOptionCount, vertical);
                 break;
@@ -4340,20 +4275,20 @@ private:
         syncGaragePreview();
 
         if (input.b || input.back) {
-            if (selectionStage_ == harbor::ui::SelectionStage::Map) {
-                selectionStage_ = harbor::ui::SelectionStage::Car;
-            } else if (selectionStage_ == harbor::ui::SelectionStage::Car) {
-                selectionStage_ = harbor::ui::SelectionStage::Mode;
+            if (selectionStage_ == formula_forge::ui::SelectionStage::Map) {
+                selectionStage_ = formula_forge::ui::SelectionStage::Car;
+            } else if (selectionStage_ == formula_forge::ui::SelectionStage::Car) {
+                selectionStage_ = formula_forge::ui::SelectionStage::Mode;
             }
             return;
         }
         if ((input.a || input.start) && hasController) {
-            if (selectionStage_ == harbor::ui::SelectionStage::Map) {
+            if (selectionStage_ == formula_forge::ui::SelectionStage::Map) {
                 startRace();
-            } else if (selectionStage_ == harbor::ui::SelectionStage::Mode) {
-                selectionStage_ = harbor::ui::SelectionStage::Car;
+            } else if (selectionStage_ == formula_forge::ui::SelectionStage::Mode) {
+                selectionStage_ = formula_forge::ui::SelectionStage::Car;
             } else {
-                selectionStage_ = harbor::ui::SelectionStage::Map;
+                selectionStage_ = formula_forge::ui::SelectionStage::Map;
             }
         }
     }
@@ -4370,9 +4305,9 @@ private:
 
     void goHome() {
         mode_ = Mode::Garage;
-        selectionStage_ = harbor::ui::SelectionStage::Mode;
-        pauseAction_ = harbor::ui::PauseAction::Resume;
-        resultsAction_ = harbor::ui::ResultsAction::Replay;
+        selectionStage_ = formula_forge::ui::SelectionStage::Mode;
+        pauseAction_ = formula_forge::ui::PauseAction::Resume;
+        resultsAction_ = formula_forge::ui::ResultsAction::Replay;
         resultCount_ = 0;
         resetRace();
         syncGaragePreview();
@@ -4386,20 +4321,20 @@ private:
         const int direction = (input.down || input.right ? 1 : 0) - (input.up || input.left ? 1 : 0);
         if (direction != 0) {
             const int count = 3;
-            pauseAction_ = static_cast<harbor::ui::PauseAction>(
+            pauseAction_ = static_cast<formula_forge::ui::PauseAction>(
                 (static_cast<int>(pauseAction_) + direction + count) % count);
         }
         if (!input.a) {
             return;
         }
         switch (pauseAction_) {
-            case harbor::ui::PauseAction::Resume:
+            case formula_forge::ui::PauseAction::Resume:
                 mode_ = Mode::Race;
                 break;
-            case harbor::ui::PauseAction::Restart:
+            case formula_forge::ui::PauseAction::Restart:
                 startRace();
                 break;
-            case harbor::ui::PauseAction::Home:
+            case formula_forge::ui::PauseAction::Home:
                 goHome();
                 break;
             default:
@@ -4410,17 +4345,17 @@ private:
 
     void updateResults(const Input3D& input) {
         if (input.left || input.up) {
-            resultsAction_ = harbor::ui::ResultsAction::Replay;
+            resultsAction_ = formula_forge::ui::ResultsAction::Replay;
         }
         if (input.right || input.down) {
-            resultsAction_ = harbor::ui::ResultsAction::Home;
+            resultsAction_ = formula_forge::ui::ResultsAction::Home;
         }
         if (input.b || input.back) {
             goHome();
             return;
         }
         if (input.a || input.start) {
-            if (resultsAction_ == harbor::ui::ResultsAction::Replay) {
+            if (resultsAction_ == formula_forge::ui::ResultsAction::Replay) {
                 startRace();
             } else {
                 goHome();
@@ -4456,7 +4391,7 @@ private:
             longestCar = std::max(longestCar, spec.length);
             widestCar = std::max(widestCar, spec.width);
         }
-        const float unitsPerMeter = isMetricCircuit(track_.layout()) ? kSpaSimulationUnitsPerMeter : 1.0f;
+        const float unitsPerMeter = isMetricCircuit(track_.layout()) ? kTrackSimulationUnitsPerMeter : 1.0f;
         // Track progress is measured in meters even though vehicle dimensions
         // and lateral positions use simulation units.
         const float firstRowInsetMeters = longestCar / unitsPerMeter * 0.5f + kGridFirstRowClearanceMeters;
@@ -4617,7 +4552,7 @@ private:
     void buildTimeTrialResult() {
         resultCount_ = 1;
         results_[0] = {0, 1, finishTime_, std::max(1, targetLaps())};
-        resultsAction_ = harbor::ui::ResultsAction::Replay;
+        resultsAction_ = formula_forge::ui::ResultsAction::Replay;
     }
 
     void buildRaceResults() {
@@ -4733,13 +4668,13 @@ private:
                                           cornerCommitment;
                 const float reachableSpeed = std::sqrt(cornerSpeed * cornerSpeed +
                                                        2.0f * brakingAcceleration * distance *
-                                                           kSpaSimulationUnitsPerMeter);
+                                                           kTrackSimulationUnitsPerMeter);
                 targetSpeed = std::min(targetSpeed, reachableSpeed);
             }
             targetSpeed = std::min(targetSpeed, referenceAiSpeed(kart, kart.progress));
             for (int sample = 1; sample <= 12; ++sample) {
                 const float distanceMeters = static_cast<float>(sample) * 26.0f;
-                const float distanceUnits = distanceMeters * kSpaSimulationUnitsPerMeter;
+                const float distanceUnits = distanceMeters * kTrackSimulationUnitsPerMeter;
                 const float cornerSpeed = referenceAiSpeed(kart, kart.progress + distanceMeters);
                 const float reachableSpeed = std::sqrt(cornerSpeed * cornerSpeed +
                                                        2.0f * brakingAcceleration * distanceUnits);
@@ -4780,7 +4715,7 @@ private:
         TrackPoint3D center = track_.sample(kart.progress);
         float speed = length(kart.vel);
         const float distanceSpeed = isMetricCircuit(track_.layout())
-                                        ? speed / kSpaSimulationUnitsPerMeter
+                                        ? speed / kTrackSimulationUnitsPerMeter
                                         : speed;
         const float pathSpeed = distanceSpeed / kRacePaceScale;
         const float steeringCorner = std::max(std::abs(smoothedSignedCurvature(kart.progress + 80.0f)),
@@ -4826,7 +4761,7 @@ private:
         laneTarget = std::clamp(laneTarget, -half, half);
         const float currentLineLimit = roadCenterLimit(kart, center) - 1.0f;
         const float laneExcess = std::max(0.0f, std::abs(kart.lane) - currentLineLimit);
-        const float recoveryUnits = isMetricCircuit(track_.layout()) ? kSpaSimulationUnitsPerMeter : 1.0f;
+        const float recoveryUnits = isMetricCircuit(track_.layout()) ? kTrackSimulationUnitsPerMeter : 1.0f;
         if (speed < 5.0f * recoveryUnits ||
             (laneExcess > 0.50f * recoveryUnits && speed < 12.0f * recoveryUnits)) {
             kart.aiStuckTimer += dt;
@@ -4852,7 +4787,7 @@ private:
             return;
         }
         const float recovery = std::clamp(laneExcess / 18.0f, 0.0f, 1.0f);
-        const float guidanceUnits = isMetricCircuit(track_.layout()) ? kSpaSimulationUnitsPerMeter : 1.0f;
+        const float guidanceUnits = isMetricCircuit(track_.layout()) ? kTrackSimulationUnitsPerMeter : 1.0f;
         const float desiredLateralSpeed = std::clamp((kart.aiLineTarget + kart.aiLaneIntent - kart.lane) * 1.80f,
                                                      -18.0f * guidanceUnits, 18.0f * guidanceUnits);
         const float currentLateralSpeed = dot(kart.vel, center.normal);
@@ -4894,7 +4829,7 @@ private:
                 const float laneOverlap = (kart.spec.width + other.spec.width) * 0.62f;
                 if (ahead > 7.0f && ahead < 62.0f && lateralGap < laneOverlap &&
                     std::abs(kart.aiLaneIntent) < 0.01f) {
-                    const float gapSpeed = (ahead - 7.0f) * 0.55f * kSpaSimulationUnitsPerMeter;
+                    const float gapSpeed = (ahead - 7.0f) * 0.55f * kTrackSimulationUnitsPerMeter;
                     followingSpeed = std::min(followingSpeed, length(other.vel) + std::max(0.0f, gapSpeed));
                 }
             }
@@ -4944,7 +4879,7 @@ private:
     Input3D auditInput(AuditDriver driver, const Kart3D& kart) const {
         const float speed = length(kart.vel);
         const float distanceSpeed = isMetricCircuit(track_.layout())
-                                        ? speed / kSpaSimulationUnitsPerMeter
+                                        ? speed / kTrackSimulationUnitsPerMeter
                                         : speed;
         const float pathSpeed = distanceSpeed / kRacePaceScale;
         const float futureDistance = isMetricCircuit(track_.layout())
@@ -4970,7 +4905,7 @@ private:
         }
         const float turnSign = apex.signedCurvature == 0.0f ? future.signedCurvature : apex.signedCurvature;
         const float recoveryInset = isMetricCircuit(track_.layout())
-                                        ? 0.75f * kSpaSimulationUnitsPerMeter
+                                        ? 0.75f * kTrackSimulationUnitsPerMeter
                                         : 12.0f;
         const float recoveryLine = std::max(1.0f, roadCenterLimit(kart, center) - recoveryInset);
         const float laneExcess = std::max(0.0f, std::abs(kart.lane) - recoveryLine);
@@ -5017,7 +4952,7 @@ private:
                               ? std::max(input.brake,
                                          std::clamp(laneExcess /
                                                         (isMetricCircuit(track_.layout())
-                                                             ? 2.0f * kSpaSimulationUnitsPerMeter
+                                                             ? 2.0f * kTrackSimulationUnitsPerMeter
                                                              : 38.0f),
                                                     0.24f, 0.62f))
                               : 0.0f;
@@ -5101,7 +5036,7 @@ private:
         (void)index;
         const float speed = length(kart.vel);
         const float distanceSpeed = isMetricCircuit(track_.layout())
-                                        ? speed / kSpaSimulationUnitsPerMeter
+                                        ? speed / kTrackSimulationUnitsPerMeter
                                         : speed;
         const float pathSpeed = distanceSpeed / kRacePaceScale;
         const float steeringCurvature = std::max({std::abs(smoothedSignedCurvature(kart.progress + 90.0f)),
@@ -5226,9 +5161,9 @@ private:
         const float phase = wrapDistance(kart.progress, track_.totalLength()) / track_.totalLength();
         const float referenceGrip = kart.tuning.lateralGripAcceleration /
                                     std::max(0.01f, kart.spec.grip) * specs_[0].grip;
-        const float baseAcceleration = referenceGrip / kSpaSimulationUnitsPerMeter;
-        const float maxSpeedMetersPerSecond = kart.tuning.maxForwardSpeed / kSpaSimulationUnitsPerMeter;
-        const float liveSpeedMetersPerSecond = length(kart.vel) / kSpaSimulationUnitsPerMeter;
+        const float baseAcceleration = referenceGrip / kTrackSimulationUnitsPerMeter;
+        const float maxSpeedMetersPerSecond = kart.tuning.maxForwardSpeed / kTrackSimulationUnitsPerMeter;
+        const float liveSpeedMetersPerSecond = length(kart.vel) / kTrackSimulationUnitsPerMeter;
         float gripScale = 1.0f;
         for (const FormulaCornerTarget& target : formulaCornerTargets(track_.layout())) {
             float phaseDistance = std::abs(phase - target.lapFraction);
@@ -5263,7 +5198,7 @@ private:
         const float laneAbs = std::abs(kart.lane);
         const float halfFootprint = contactHalfWidth(kart);
         const float asphaltOuter = roadSurfaceHalfWidth(center);
-        const float curbOuter = asphaltOuter + kMetricCurbWidthMeters * kSpaSimulationUnitsPerMeter;
+        const float curbOuter = asphaltOuter + kMetricCurbWidthMeters * kTrackSimulationUnitsPerMeter;
         const float tireCoverage = smoothstep(std::clamp(
             (laneAbs + halfFootprint - asphaltOuter) / std::max(1.0f, halfFootprint * 2.0f),
             0.0f, 1.0f));
@@ -5272,8 +5207,8 @@ private:
             0.0f, 1.0f));
 
         const float side = kart.lane < 0.0f ? -1.0f : 1.0f;
-        const float sampleLaneMeters = side * (laneAbs + halfFootprint) / kSpaSimulationUnitsPerMeter;
-        const float roadHalfMeters = asphaltOuter / kSpaSimulationUnitsPerMeter;
+        const float sampleLaneMeters = side * (laneAbs + halfFootprint) / kTrackSimulationUnitsPerMeter;
+        const float roadHalfMeters = asphaltOuter / kTrackSimulationUnitsPerMeter;
         const TrackRunoffZone* zone = metricRunoffZoneAt(track_.layout(), center.progress,
                                                          sampleLaneMeters, roadHalfMeters);
         if (looseCoverage > 0.001f) {
@@ -5421,7 +5356,7 @@ private:
         }
         if (std::abs(lane) <= driveableLimit) {
             const float releaseInset = isMetricCircuit(track_.layout())
-                                           ? 0.45f * kSpaSimulationUnitsPerMeter
+                                           ? 0.45f * kTrackSimulationUnitsPerMeter
                                            : 4.0f;
             if (std::abs(lane) < driveableLimit - releaseInset) {
                 kart.barrierContact = false;
@@ -5430,7 +5365,7 @@ private:
         }
         const float sign = lane > 0.0f ? 1.0f : -1.0f;
         const float excess = std::abs(lane) - driveableLimit;
-        const float separation = 0.06f * kSpaSimulationUnitsPerMeter;
+        const float separation = 0.06f * kTrackSimulationUnitsPerMeter;
         kart.pos -= center.normal * (sign * (excess + separation));
         const float normalVelocity = dot(kart.vel, center.normal);
         if (normalVelocity * sign > 0.0f) {
@@ -5504,7 +5439,7 @@ private:
                             const bool sameDirection = dot(forwardA, forwardB) > 0.55f;
                             const bool longitudinalContact = lengthSq(averageForward) > 0.01f && std::abs(dot(n, averageForward)) > 0.48f;
                             const float launchSpeed = 14.0f * (isMetricCircuit(track_.layout())
-                                                                  ? kSpaSimulationUnitsPerMeter
+                                                                  ? kTrackSimulationUnitsPerMeter
                                                                   : 1.0f);
                             const bool lowSpeedContact = std::max(length(ka.vel), length(kb.vel)) < launchSpeed;
                             const float impulseScale = sameDirection && longitudinalContact
@@ -5524,7 +5459,7 @@ private:
 
                         const float damping = std::max(length(ka.vel), length(kb.vel)) <
                                                       14.0f * (isMetricCircuit(track_.layout())
-                                                                   ? kSpaSimulationUnitsPerMeter
+                                                                   ? kTrackSimulationUnitsPerMeter
                                                                    : 1.0f)
                                                   ? 0.9995f
                                                   : 0.996f;
@@ -5704,14 +5639,14 @@ private:
             vibration * (std::sin(raceTime_ * 83.0f) * 0.0035f + std::sin(raceTime_ * 131.0f) * 0.0015f);
         const float verticalVibrationMeters =
             vibration * (std::sin(raceTime_ * 97.0f) * 0.0055f + std::sin(raceTime_ * 149.0f) * 0.0020f);
-        const Vec2 mountPos = renderPos - forward * (kTcamBackMeters * kSpaSimulationUnitsPerMeter) +
-                              right * (lateralVibrationMeters * kSpaSimulationUnitsPerMeter);
+        const Vec2 mountPos = renderPos - forward * (kTcamBackMeters * kTrackSimulationUnitsPerMeter) +
+                              right * (lateralVibrationMeters * kTrackSimulationUnitsPerMeter);
         Camera camera{};
         camera.position = toWorld(mountPos,
                                   renderElevation + (kTcamHeightMeters + verticalVibrationMeters) *
-                                                        kSpaSimulationUnitsPerMeter);
-        camera.target = toWorld(renderPos + forward * (kTcamLookAheadMeters * kSpaSimulationUnitsPerMeter),
-                                renderElevation + kTcamTargetHeightMeters * kSpaSimulationUnitsPerMeter);
+                                                        kTrackSimulationUnitsPerMeter);
+        camera.target = toWorld(renderPos + forward * (kTcamLookAheadMeters * kTrackSimulationUnitsPerMeter),
+                                renderElevation + kTcamTargetHeightMeters * kTrackSimulationUnitsPerMeter);
         camera.up = {0.0f, 1.0f, 0.0f};
         camera.fovy = kTcamFovDegrees;
         camera.projection = CAMERA_PERSPECTIVE;
@@ -6523,7 +6458,7 @@ private:
         (void)fps;
         if (mode_ == Mode::Garage) {
             const KartSpec3D& spec = specs_[static_cast<size_t>(selectedCar_)];
-            harbor::ui::SelectionHudViewModel view;
+            formula_forge::ui::SelectionHudViewModel view;
             view.stage = selectionStage_;
             view.selectedMode = selectedSession_;
             view.mapName = selectedMap().name;
@@ -6551,7 +6486,7 @@ private:
                 view.coursePolyline[static_cast<size_t>(i * 2 + 1)] = (point.y - previewMin.y) / previewSpan.y;
             }
             switch (selectionStage_) {
-                case harbor::ui::SelectionStage::Mode:
+                case formula_forge::ui::SelectionStage::Mode:
                     view.itemName = isTimeTrial() ? "TIME TRIAL" : "RACE";
                     view.itemSubtitle = isTimeTrial() ? "SOLO / HOT LAPS" : "FULL GRID / RACE DISTANCE";
                     view.backstory = isTimeTrial()
@@ -6560,13 +6495,13 @@ private:
                     view.itemIndex = isTimeTrial() ? 1 : 0;
                     view.itemCount = 2;
                     break;
-                case harbor::ui::SelectionStage::Car:
+                case formula_forge::ui::SelectionStage::Car:
                     view.itemName = spec.name;
                     view.itemSubtitle = "SPEC LIVERY";
                     view.itemIndex = selectedCar_;
                     view.itemCount = static_cast<int>(specs_.size());
                     break;
-                case harbor::ui::SelectionStage::Map:
+                case formula_forge::ui::SelectionStage::Map:
                     view.itemName = selectedMap().name;
                     view.itemSubtitle = selectedMap().subtitle;
                     view.backstory = selectedMap().backstory;
@@ -6581,10 +6516,10 @@ private:
             view.presentationTimeSeconds = presentationTime_;
             view.canContinue = true;
             view.controllerConnected = hasController;
-            if (selectionStage_ == harbor::ui::SelectionStage::Mode) {
+            if (selectionStage_ == formula_forge::ui::SelectionStage::Mode) {
                 view.navigationHint = "D-PAD / STEER   SESSION";
                 view.confirmHint = "A   SELECT";
-            } else if (selectionStage_ == harbor::ui::SelectionStage::Car) {
+            } else if (selectionStage_ == formula_forge::ui::SelectionStage::Car) {
                 view.navigationHint = "D-PAD / STEER   CAR";
                 view.confirmHint = "A   CONTINUE";
             } else {
@@ -6592,9 +6527,9 @@ private:
                 view.confirmHint = isTimeTrial() ? "A   START TIME TRIAL" : "A   START RACE";
             }
             view.backHint = "B   BACK";
-            harbor::ui::DrawSelectionHud(view);
+            formula_forge::ui::DrawSelectionHud(view);
         } else if (mode_ == Mode::Results) {
-            harbor::ui::ResultsHudViewModel view;
+            formula_forge::ui::ResultsHudViewModel view;
             view.eventName = sessionEventName();
             view.rowCount = resultCount_;
             view.totalLaps = targetLaps();
@@ -6607,7 +6542,7 @@ private:
             for (int i = 0; i < resultCount_; ++i) {
                 const RaceResult3D& result = results_[static_cast<size_t>(i)];
                 const Kart3D& kart = karts_[static_cast<size_t>(result.kartIndex)];
-                harbor::ui::ResultRowViewModel& row = view.rows[static_cast<size_t>(i)];
+                formula_forge::ui::ResultRowViewModel& row = view.rows[static_cast<size_t>(i)];
                 row.position = result.position;
                 row.driverName = kart.racer;
                 row.vehicleName = kart.spec.name;
@@ -6615,11 +6550,11 @@ private:
                 row.lapsCompleted = result.lapsCompleted;
                 row.isPlayer = result.kartIndex == 0;
             }
-            harbor::ui::DrawResultsHud(view);
+            formula_forge::ui::DrawResultsHud(view);
         } else {
             const Kart3D& player = karts_[0];
             const int laps = targetLaps();
-            harbor::ui::RaceHudViewModel view;
+            formula_forge::ui::RaceHudViewModel view;
             view.vehicleName = player.spec.name;
             view.driverName = player.racer;
             const float speedKphScale = speedKphPerSimulationUnit(track_.layout());
@@ -6681,16 +6616,16 @@ private:
             view.wrongWay = raceFlow_ && raceFlow_->racer(0).wrongWay;
             view.finished = raceFinished_;
             view.controllerConnected = hasController;
-            harbor::ui::DrawRaceHud(view);
-            harbor::ui::CountdownHudViewModel countdown;
+            formula_forge::ui::DrawRaceHud(view);
+            formula_forge::ui::CountdownHudViewModel countdown;
             countdown.visible = (raceFlow_ && raceFlow_->phase() == ArcadeRacePhase::Countdown) || countdownGoTimer_ > 0.0f;
             countdown.secondsRemaining = raceFlow_ && raceFlow_->phase() == ArcadeRacePhase::Countdown
                                              ? raceFlow_->countdownRemainingSeconds()
                                              : 0.0f;
-            harbor::ui::DrawCountdownHud(countdown);
+            formula_forge::ui::DrawCountdownHud(countdown);
         }
         if (mode_ == Mode::Pause) {
-            harbor::ui::PauseHudViewModel view;
+            formula_forge::ui::PauseHudViewModel view;
             view.eventName = sessionEventName();
             view.currentLap = std::max(1, karts_[0].lap + 1);
             view.totalLaps = targetLaps();
@@ -6701,7 +6636,7 @@ private:
             view.hasBestLap = hasBestLap_;
             view.selectedAction = pauseAction_;
             view.visible = true;
-            harbor::ui::DrawPauseHud(view);
+            formula_forge::ui::DrawPauseHud(view);
         }
     }
 
@@ -6713,17 +6648,17 @@ private:
     std::unique_ptr<ArcadeRaceFlow> raceFlow_;
     arcade_render::ArcadeRender renderer_;
     ArcadeAudio audio_;
-    harbor::TrackRenderer trackRenderer_;
+    formula_forge::TrackRenderer trackRenderer_;
     Texture2D particleTexture_{};
     Texture2D loadingScreenTexture_{};
     Texture2D garageBackgroundTexture_{};
     Camera camera_{};
     Camera previousCamera_{};
     Mode mode_ = Mode::Loading;
-    harbor::ui::SelectionStage selectionStage_ = harbor::ui::SelectionStage::Mode;
-    harbor::ui::GameModeOption selectedSession_ = harbor::ui::GameModeOption::Race;
-    harbor::ui::PauseAction pauseAction_ = harbor::ui::PauseAction::Resume;
-    harbor::ui::ResultsAction resultsAction_ = harbor::ui::ResultsAction::Replay;
+    formula_forge::ui::SelectionStage selectionStage_ = formula_forge::ui::SelectionStage::Mode;
+    formula_forge::ui::GameModeOption selectedSession_ = formula_forge::ui::GameModeOption::Race;
+    formula_forge::ui::PauseAction pauseAction_ = formula_forge::ui::PauseAction::Resume;
+    formula_forge::ui::ResultsAction resultsAction_ = formula_forge::ui::ResultsAction::Replay;
     int selectedCar_ = 0;
     int selectedRacer_ = 0;
     int selectedMap_ = 0;
@@ -6955,7 +6890,7 @@ int runFormulaForge(int argc, char** argv) {
                              aiPaceAuditSilverstone || aiPaceAuditInterlagos;
     TrackLayoutId aiPaceAuditLayout = TrackLayoutId::Monza;
     if (aiPaceAuditSpa) {
-        aiPaceAuditLayout = TrackLayoutId::SpaCoast;
+        aiPaceAuditLayout = TrackLayoutId::Spa;
     } else if (aiPaceAuditSuzuka) {
         aiPaceAuditLayout = TrackLayoutId::Suzuka;
     } else if (aiPaceAuditSilverstone) {
@@ -7009,8 +6944,8 @@ int runFormulaForge(int argc, char** argv) {
     InitWindow(1280, 720, "Formula Forge");
     SetExitKey(KEY_NULL);
     ChangeDirectory(launchDir.string().c_str());
-    harbor::ui::InitializeUiFont("assets/fonts/NotoSansDisplay-Bold.ttf", 72);
-    harbor::ui::InitializeSelectionFont("assets/fonts/Lato-HeavyItalic.ttf", 72);
+    formula_forge::ui::InitializeUiFont("assets/fonts/NotoSansDisplay-Bold.ttf", 72);
+    formula_forge::ui::InitializeSelectionFont("assets/fonts/Lato-HeavyItalic.ttf", 72);
     SetTargetFPS(120);
     if (!windowed) {
         const int monitor = GetCurrentMonitor();
@@ -7034,7 +6969,7 @@ int runFormulaForge(int argc, char** argv) {
             return;
         }
         game.shutdown();
-        harbor::ui::ShutdownUiFont();
+        formula_forge::ui::ShutdownUiFont();
         controller.shutdown();
         if (sdlInputReady) {
             SDL_QuitSubSystem(kSdlInputFlags);
