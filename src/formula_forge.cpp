@@ -397,6 +397,20 @@ float spaElevationForDistance(float distanceMeters) {
     return kSpaElevationProfile.back().elevationMeters;
 }
 
+float spaBankDegreesForDistance(float distanceMeters) {
+    distanceMeters = wrapDistance(distanceMeters, kSpaTargetLength);
+    for (size_t i = 0; i + 1 < kSpaBankProfile.size(); ++i) {
+        const TrackBankPoint& a = kSpaBankProfile[i];
+        const TrackBankPoint& b = kSpaBankProfile[i + 1];
+        if (distanceMeters >= a.distanceMeters && distanceMeters <= b.distanceMeters) {
+            const float t = (distanceMeters - a.distanceMeters) /
+                            std::max(0.001f, b.distanceMeters - a.distanceMeters);
+            return lerp(a.angleDegrees, b.angleDegrees, t);
+        }
+    }
+    return kSpaBankProfile.back().angleDegrees;
+}
+
 float metricTrackElevationMeters(TrackLayoutId layout, float distanceMeters) {
     if (layout == TrackLayoutId::SpaCoast) {
         return spaElevationForDistance(distanceMeters);
@@ -411,6 +425,14 @@ float metricTrackWidthMeters(TrackLayoutId layout, float distanceMeters, float p
     }
     const TrackCatalogEntry* entry = catalogEntryForLayout(layout);
     return entry != nullptr ? sampleTrackWidthMeters(*entry, distanceMeters) : 14.0f;
+}
+
+float metricTrackBankDegrees(TrackLayoutId layout, float distanceMeters) {
+    if (layout == TrackLayoutId::SpaCoast) {
+        return spaBankDegreesForDistance(distanceMeters);
+    }
+    const TrackCatalogEntry* entry = catalogEntryForLayout(layout);
+    return entry != nullptr ? sampleTrackBankDegrees(*entry, distanceMeters) : 0.0f;
 }
 
 struct TrackProjection3D {
@@ -561,6 +583,10 @@ private:
                           ? metricTrackWidthMeters(layout_, progress, phase) * kSpaSimulationUnitsPerMeter /
                                 (kRoadSurfaceRatio * 2.0f)
                           : trackWidthForPhase(phase);
+        if (isMetricCircuit(layout_)) {
+            const float bankRadians = metricTrackBankDegrees(layout_, progress) * DEG2RAD;
+            point.bank = std::tan(bankRadians) * point.width * 0.5f;
+        }
         point.road = material.road;
         point.shoulder = material.shoulder;
         point.natural = material.natural;
@@ -642,10 +668,9 @@ private:
             TrackPoint3D& p = samples_[static_cast<size_t>(i)];
             p.signedCurvature = signedTurn;
             p.curvature = std::abs(signedTurn);
-            // The checked-in metric track meshes are flat across each road
-            // section. Crossfall here would place the physics and tire contact
-            // planes above/below the rendered tarmac near either edge.
-            p.bank = isMetricCircuit(layout_) ? 0.0f : std::clamp(-signedTurn * 140.0f, -13.0f, 13.0f);
+            if (!isMetricCircuit(layout_)) {
+                p.bank = std::clamp(-signedTurn * 140.0f, -13.0f, 13.0f);
+            }
             const TrackPoint3D& elevationPrev = samples_[static_cast<size_t>((i - 2 + kSampleCount) % kSampleCount)];
             const TrackPoint3D& elevationNext = samples_[static_cast<size_t>((i + 2) % kSampleCount)];
             const float horizontalSpan = std::max(0.01f, length(elevationNext.pos - elevationPrev.pos));
@@ -1086,8 +1111,7 @@ std::array<KartSpec3D, 5> makeKartSpecs() {
 }
 
 std::array<std::string, 6> makeRacers() {
-    return {"STANDARD DRIVER", "RACER 02", "RACER 03",
-            "RACER 04", "RACER 05", "RACER 06"};
+    return {"DARK", "MAX", "CHARLES", "LEWIS", "OSCAR", "GEORGE"};
 }
 
 std::uint8_t racerAssetVariant(std::string_view racer) {
@@ -3547,7 +3571,20 @@ public:
         selectedMap_ = 3;
         startRace();
         bool gridClear = true;
+        bool renderStateInitialized = true;
+        bool playerStartsLast = playerPosition_ == kKartCount;
         float initialGridOverlap = 0.0f;
+        const float playerGridScore = raceScore(karts_[0]);
+        for (int i = 0; i < kKartCount; ++i) {
+            const Kart3D& kart = karts_[static_cast<size_t>(i)];
+            renderStateInitialized = renderStateInitialized &&
+                                     lengthSq(kart.previousRenderPos - kart.pos) < 0.000001f &&
+                                     std::abs(kart.previousRenderElevation - kart.elevation) < 0.000001f &&
+                                     std::abs(wrapAngle(kart.previousRenderHeading - kart.heading)) < 0.000001f;
+            if (i > 0) {
+                playerStartsLast = playerStartsLast && playerGridScore < raceScore(kart);
+            }
+        }
         for (int a = 0; a < kKartCount; ++a) {
             for (int b = a + 1; b < kKartCount; ++b) {
                 const KartContact3D contact = kartContact(karts_[static_cast<size_t>(a)],
@@ -3586,7 +3623,8 @@ public:
         const float launchDistanceMeters =
             signedDistanceToLoop(launchStartProgress, karts_[0].progress, track_.totalLength()) /
             kSpaSimulationUnitsPerMeter;
-        const bool cleanLaunch = gridClear && minimumGreenGhost >= 1.49f &&
+        const bool cleanLaunch = gridClear && renderStateInitialized && playerStartsLast &&
+                                 minimumGreenGhost >= 1.49f &&
                                  launchVehicleContactFrames == 0 && launchMaxOverlap < 0.05f &&
                                  launchDistanceMeters > 2.0f;
         const bool rearPushes = rearEnd.strikerSpeedAfterContact > 100.0f && rearEnd.targetSpeedAfterContact > 47.0f;
@@ -3623,6 +3661,8 @@ public:
                   << " low_speed_render_contact_error=" << maxSlowRenderContactError
                   << " low_speed_tires_grounded=" << lowSpeedTiresGrounded
                   << " grid_clear=" << gridClear << " initial_grid_overlap=" << initialGridOverlap
+                  << " grid_render_initialized=" << renderStateInitialized
+                  << " player_starts_last=" << playerStartsLast
                   << " green_ghost_s=" << minimumGreenGhost
                   << " launch_vehicle_contact_frames=" << launchVehicleContactFrames
                   << " launch_max_overlap=" << launchMaxOverlap
@@ -4167,7 +4207,6 @@ private:
         const float firstRowInset = longestCar * 0.5f + 1.0f * unitsPerMeter;
         const float rowSpacing = longestCar + 3.0f * unitsPerMeter;
         const float columnOffset = std::max(widestCar * 0.95f, 2.0f * unitsPerMeter);
-        static constexpr std::array<int, kKartCount> kGridRow = {0, 1, 2, 3, 4, 5};
         static constexpr std::array<float, kKartCount> kGridSide = {-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f};
         for (int i = 0; i < kKartCount; ++i) {
             Kart3D kart;
@@ -4176,15 +4215,18 @@ private:
             if (i > 0) {
                 applyAttackingAiSetup(kart.tuning);
             }
-            kart.racer = racers_[static_cast<size_t>(i == 0 ? selectedRacer_ : (i * 3) % static_cast<int>(racers_.size()))];
+            kart.racer = racers_[static_cast<size_t>(i == 0 ? selectedRacer_ : i)];
+            // The player always takes the final grid slot. AI indices retain
+            // their stable simulation identities while filling slots 1-5.
+            const int gridSlot = isTimeTrial() ? 0 : (i == 0 ? kKartCount - 1 : i - 1);
             const float stagger = isTimeTrial() && i == 0
                                       ? startProgress
                                       : startProgress - firstRowInset -
-                                            static_cast<float>(kGridRow[static_cast<size_t>(i)]) * rowSpacing;
+                                            static_cast<float>(gridSlot) * rowSpacing;
             const TrackPoint3D grid = track_.sample(stagger);
             const float lane = isTimeTrial() && i == 0
                                    ? 0.0f
-                                   : std::clamp(kGridSide[static_cast<size_t>(i)] * columnOffset,
+                                   : std::clamp(kGridSide[static_cast<size_t>(gridSlot)] * columnOffset,
                                                 -roadCenterLimit(kart, grid), roadCenterLimit(kart, grid));
             kart.pos = grid.pos + grid.normal * lane;
             kart.heading = angleOf(grid.tangent);
@@ -4195,6 +4237,10 @@ private:
             kart.nearest = track_.nearestIndex(kart.pos);
             kart.progress = track_.pointAtIndex(kart.nearest).progress;
             kart.previousProgress = kart.progress;
+            kart.previousRenderPos = kart.pos;
+            kart.previousRenderElevation = kart.elevation;
+            kart.previousRenderHeading = kart.heading;
+            kart.previousRenderProgress = kart.progress;
             kart.lap = -1;
             kart.lane = lane;
             kart.launchLane = lane;
@@ -4214,7 +4260,7 @@ private:
         countdownGoTimer_ = 0.0f;
         raceFinished_ = false;
         resultCount_ = 0;
-        playerPosition_ = 1;
+        playerPosition_ = isTimeTrial() ? 1 : activeKartCount();
         ArcadeRaceConfig raceConfig;
         raceConfig.lapCount = static_cast<uint32_t>(std::max(1, targetLaps()));
         raceConfig.infiniteLaps = targetLaps() == kInfiniteLaps;
@@ -5207,11 +5253,18 @@ private:
     void updateRaceOrder() {
         std::array<std::pair<float, int>, kKartCount> order;
         const int count = activeKartCount();
+        const bool preRace = raceFlow_ &&
+                             (raceFlow_->phase() == ArcadeRacePhase::Grid ||
+                              raceFlow_->phase() == ArcadeRacePhase::Countdown);
         for (int i = 0; i < count; ++i) {
             const Kart3D& kart = karts_[static_cast<size_t>(i)];
-            const float score = raceFlow_ ? static_cast<float>(raceFlow_->racer(static_cast<size_t>(i)).validatedRaceProgress *
-                                                               static_cast<double>(track_.totalLength()))
-                                          : raceScore(kart);
+            // Validated progress intentionally clamps pre-start samples to
+            // zero. Use physical grid progress until lights-out so the HUD
+            // correctly reports the player in the final slot.
+            const float score = raceFlow_ && !preRace
+                                    ? static_cast<float>(raceFlow_->racer(static_cast<size_t>(i)).validatedRaceProgress *
+                                                         static_cast<double>(track_.totalLength()))
+                                    : raceScore(kart);
             order[static_cast<size_t>(i)] = {score, i};
         }
         std::sort(order.begin(), order.begin() + count, [](auto a, auto b) { return a.first > b.first; });
