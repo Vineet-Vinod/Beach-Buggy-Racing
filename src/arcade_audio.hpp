@@ -4,33 +4,22 @@
 #include <memory>
 
 struct ArcadeAudioInput {
-    float speedNormalized = 0.0f;
-    float engineRpmNormalized = 0.333f;
-    bool shiftActive = false;
     bool shiftAlert = false;
-    float throttle = 0.0f;
-    float brake = 0.0f;
-    float slip = 0.0f;
-    bool grounded = true;
-    float landingImpulse = 0.0f;
-    float deltaTime = 1.0f / 120.0f;
 };
 
 struct ArcadeAudioAuditResult {
     bool ok = false;
     int checks = 0;
     int failures = 0;
-    float idleRms = 0.0f;
-    float fullSpeedRms = 0.0f;
-    float scrubRmsIncrease = 0.0f;
-    float landingPeak = 0.0f;
-    float shiftAlertRmsIncrease = 0.0f;
+    float silenceRms = 0.0f;
+    float beepRms = 0.0f;
+    float heldAlertRms = 0.0f;
     float peakMagnitude = 0.0f;
     uint64_t deterministicHash = 0;
 };
 
-// Owns a procedural stereo soundscape. All methods are safe to call when an
-// audio device is unavailable, and initialize()/shutdown() are idempotent.
+// Owns the one-shot shift-alert output. It is silent at all other times. All
+// methods are safe when no audio device is available.
 class ArcadeAudio {
   public:
     ArcadeAudio();

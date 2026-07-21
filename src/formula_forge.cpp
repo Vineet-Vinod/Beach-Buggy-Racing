@@ -3852,20 +3852,10 @@ public:
     }
 
 private:
-    void updateAudio(float dt, const Input3D& input, bool driving) {
+    void updateAudio(float, const Input3D&, bool driving) {
         ArcadeAudioInput audioInput;
-        audioInput.deltaTime = dt;
         if (driving && !karts_.empty()) {
-            const Kart3D& player = karts_[0];
-            audioInput.speedNormalized = std::clamp(player.telemetry.normalizedSpeed, 0.0f, 1.0f);
-            audioInput.engineRpmNormalized = player.engineRpmNormalized;
-            audioInput.shiftActive = player.shiftTimer > 0.0f;
             audioInput.shiftAlert = playerShiftRecommended();
-            audioInput.throttle = input.throttle;
-            audioInput.brake = std::max(input.brake, player.brakeLoad);
-            audioInput.slip = std::clamp(std::abs(player.slipAngle) / 0.70f, 0.0f, 1.0f);
-            audioInput.grounded = player.grounded;
-            audioInput.landingImpulse = player.landingImpulse;
         }
         audio_.update(audioInput);
     }
@@ -6407,10 +6397,9 @@ int runFormulaForge(int argc, char** argv) {
     const bool audioAudit = hasArg(argc, argv, "--audio-audit");
     if (audioAudit) {
         const ArcadeAudioAuditResult result = runArcadeAudioUnitAudit();
-        std::cout << "audio-audit checks=" << result.checks << " failures=" << result.failures << " idle_rms=" << result.idleRms
-                  << " full_rms=" << result.fullSpeedRms << " scrub_delta=" << result.scrubRmsIncrease
-                  << " landing_peak=" << result.landingPeak << " shift_alert_delta=" << result.shiftAlertRmsIncrease
-                  << " peak=" << result.peakMagnitude
+        std::cout << "audio-audit checks=" << result.checks << " failures=" << result.failures
+                  << " silence_rms=" << result.silenceRms << " beep_rms=" << result.beepRms
+                  << " held_alert_rms=" << result.heldAlertRms << " peak=" << result.peakMagnitude
                   << " deterministic_hash=" << result.deterministicHash << " ok=" << result.ok << "\n";
         return result.ok ? 0 : 1;
     }
