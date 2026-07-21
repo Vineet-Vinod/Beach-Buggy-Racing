@@ -16,6 +16,7 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 from generate_tracks import (ASPHALT_MAX_LUMINANCE, ASPHALT_MIN_LUMINANCE,
+                             EMBANKMENT_UNDERLAY_GAP_METERS,
                              GROUND_RADIAL_STEP_METERS,
                              OFFROAD_VISUAL_CLEARANCE_METERS,
                              RUNOFF_TRANSITION_METERS, SAMPLES, TERRAIN_REACH_METERS,
@@ -437,6 +438,8 @@ def verify(root: Path, slug: str):
             grounding["branch_reach_probe_step_asset_units"] != 0.25 or
             grounding["radial_step_asset_units"] != GROUND_RADIAL_STEP_METERS or
             grounding["offroad_visual_clearance_asset_units"] != OFFROAD_VISUAL_CLEARANCE_METERS or
+            ("embankment_underlay_gap_asset_units" in grounding and
+             grounding["embankment_underlay_gap_asset_units"] != EMBANKMENT_UNDERLAY_GAP_METERS) or
             grounding["runoff_transition_asset_units"] != RUNOFF_TRANSITION_METERS or
             grounding["terrain_reach_asset_units"] != TERRAIN_REACH_METERS or
             not grounding["outer_edge_follows_local_centerline"]):
@@ -484,6 +487,33 @@ def verify(root: Path, slug: str):
             not embankment.get("nearest_section_grounding") or
             embankment.get("radial_step_m") != GROUND_RADIAL_STEP_METERS):
         raise ValueError(f"{slug}: terrain shoulder tessellation contract changed")
+    if ("embankment_underlay_gap_asset_units" in grounding and
+            embankment.get("underlay_gap_m") != EMBANKMENT_UNDERLAY_GAP_METERS):
+        raise ValueError(f"{slug}: terrain underlay can z-fight with runoff surfaces")
+    if "embankment_underlay_gap_asset_units" in grounding:
+        minimum_runoff_separation = float("inf")
+        separation_samples = 0
+        for surface_name in ("gravel", "grass", "asphalt"):
+            object_name = f"{surface_name}_runoff_zones"
+            if object_name not in bpy.data.objects:
+                continue
+            runoff = bpy.data.objects[object_name]
+            stride = max(1, len(runoff.data.polygons) // 400)
+            for polygon_index in range(0, len(runoff.data.polygons), stride):
+                polygon = runoff.data.polygons[polygon_index]
+                center = polygon.center
+                hit, location, _, _ = embankment.ray_cast(
+                    center + Vector((0.0, 0.0, 1.0)), Vector((0.0, 0.0, -1.0)),
+                    distance=3.0)
+                if hit:
+                    minimum_runoff_separation = min(
+                        minimum_runoff_separation, center.z - location.z)
+                    separation_samples += 1
+        if (separation_samples == 0 or
+                minimum_runoff_separation < EMBANKMENT_UNDERLAY_GAP_METERS - 0.015):
+            raise ValueError(
+                f"{slug}: profiled runoff overlaps the grass underlay "
+                f"({minimum_runoff_separation:.4f}m separation)")
     max_embankment_ground_error = 0.0
 
     object_groups = {

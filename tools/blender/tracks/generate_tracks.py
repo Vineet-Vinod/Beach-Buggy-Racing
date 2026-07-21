@@ -26,6 +26,7 @@ RUNOFF_TRANSITION_METERS = 4.0
 TERRAIN_REACH_METERS = 36.0
 GROUND_RADIAL_STEP_METERS = 1.0
 OFFROAD_VISUAL_CLEARANCE_METERS = 0.10
+EMBANKMENT_UNDERLAY_GAP_METERS = 0.04
 
 TRACKS = {
     "spa": {
@@ -927,7 +928,11 @@ def make_embankment(samples, half_widths, bank_angles, material, parent, project
                 x = point[0] + normal[0] * lane
                 y = point[1] + normal[1] * lane
                 z, _, _ = projector.ground(x, y, index)
-                verts.append((x, y, z + surface_offset - OFFROAD_VISUAL_CLEARANCE_METERS))
+                # Keep the grass foundation beneath gravel/asphalt/grass
+                # runoff ribbons. Coplanar layers z-fight into giant wedges
+                # when viewed along a straight.
+                verts.append((x, y, z + surface_offset - OFFROAD_VISUAL_CLEARANCE_METERS -
+                              EMBANKMENT_UNDERLAY_GAP_METERS))
         for index in range(count):
             if index in skip_indices or (index+1) % count in skip_indices:
                 continue
@@ -941,6 +946,7 @@ def make_embankment(samples, half_widths, bank_angles, material, parent, project
     obj = mesh_object("track_embankment", verts, faces, [material], parent=parent)
     obj["nearest_section_grounding"] = True
     obj["radial_step_m"] = GROUND_RADIAL_STEP_METERS
+    obj["underlay_gap_m"] = EMBANKMENT_UNDERLAY_GAP_METERS
     return obj
 
 
@@ -1729,6 +1735,7 @@ def export_track(slug, spec, output_root):
             "branch_reach_probe_step_asset_units": 0.25,
             "radial_step_asset_units": GROUND_RADIAL_STEP_METERS,
             "offroad_visual_clearance_asset_units": OFFROAD_VISUAL_CLEARANCE_METERS,
+            "embankment_underlay_gap_asset_units": EMBANKMENT_UNDERLAY_GAP_METERS,
             "runoff_transition_asset_units": RUNOFF_TRANSITION_METERS,
             "terrain_reach_asset_units": TERRAIN_REACH_METERS,
             "vegetation_setback_asset_units": info["vegetation_setback"],
