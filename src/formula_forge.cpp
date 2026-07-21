@@ -48,6 +48,7 @@ constexpr float kMetricTerrainReachMeters = 36.0f;
 constexpr float kMetricBarrierOffsetMeters = 6.0f;
 constexpr float kMetricBarrierThicknessMeters = 0.34f;
 constexpr float kMetricRoadSurfaceOffsetMeters = 0.06f;
+constexpr float kVisualTireClearanceWorld = 0.010f;
 constexpr float kTerrainSurfaceY = -0.18f;
 constexpr float kTrackSurfaceLift = 0.018f;
 constexpr float kKartWheelGroundClearance = 0.42f;
@@ -6034,6 +6035,51 @@ private:
             state.pitchRadians = kart.bodyPitch + roadPitch;
             state.rollRadians = kart.bodyRoll +
                                 (kart.grounded ? bankRollDegrees(ground, renderLane) * DEG2RAD : 0.0f);
+            if (kart.grounded) {
+                // The authored car is rigid, while the terrain can curve across
+                // its wheelbase and track width. Support the render root from
+                // all four tire patches so no visible terrain can clip a tire.
+                constexpr float kAuthoredCarLengthMeters = 4.87f;
+                constexpr float kFrontAxleMeters = 1.60f;
+                constexpr float kRearAxleMeters = -1.57f;
+                constexpr float kHalfTrackMeters = 0.805f;
+                const float carScale = spec.length / kAuthoredCarLengthMeters;
+                const auto rotateContact = [&](Vector3 point) {
+                    const float pitchSin = std::sin(state.pitchRadians);
+                    const float pitchCos = std::cos(state.pitchRadians);
+                    const float rollSin = std::sin(state.rollRadians);
+                    const float rollCos = std::cos(state.rollRadians);
+                    const float yawSin = std::sin(state.headingRadians);
+                    const float yawCos = std::cos(state.headingRadians);
+                    const Vector3 pitched{point.x,
+                                          point.y * pitchCos - point.z * pitchSin,
+                                          point.y * pitchSin + point.z * pitchCos};
+                    const Vector3 rolled{pitched.x * rollCos - pitched.y * rollSin,
+                                         pitched.x * rollSin + pitched.y * rollCos,
+                                         pitched.z};
+                    return Vector3{rolled.x * yawCos + rolled.z * yawSin,
+                                   rolled.y,
+                                   -rolled.x * yawSin + rolled.z * yawCos};
+                };
+                const int hint = static_cast<int>(renderProgress / track_.totalLength() *
+                                                  static_cast<float>(track_.sampleCount()));
+                float supportLift = 0.0f;
+                for (float axle : {kRearAxleMeters, kFrontAxleMeters}) {
+                    for (float side : {-kHalfTrackMeters, kHalfTrackMeters}) {
+                        const Vector3 localContact{side * carScale, 0.0f, axle * carScale};
+                        const Vector3 contactOffset = rotateContact(localContact);
+                        const Vec2 contactPosition = renderPos +
+                            Vec2{contactOffset.x / kRenderScale, contactOffset.z / kRenderScale};
+                        const TrackProjection3D projection = track_.projectNear(contactPosition, hint, 12);
+                        const TrackPoint3D contactGround = track_.sample(projection.progress);
+                        const float renderedGroundY =
+                            bankedElevation(contactGround, projection.lane) * kRenderScale + roadSurfaceLift;
+                        const float renderedTireY = state.position.y + contactOffset.y;
+                        supportLift = std::max(supportLift, renderedGroundY - renderedTireY);
+                    }
+                }
+                state.position.y += supportLift + kVisualTireClearanceWorld;
+            }
             state.steeringRadians = kart.steerAngle;
             state.wheelSpinRadians = kart.wheelSpin;
             const float suspension = std::clamp(kart.suspensionCompression, 0.0f, 1.0f);

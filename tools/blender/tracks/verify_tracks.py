@@ -233,7 +233,8 @@ def verify(root: Path, slug: str):
     detail_scale = 1.0
     grounding = meta["grounding_contract"]
     tolerance = grounding["tolerance_asset_units"]
-    if (grounding["runoff_transition_asset_units"] != RUNOFF_TRANSITION_METERS or
+    if (grounding["profiled_runoff_surface_offset_asset_units"] != surface_offset or
+            grounding["runoff_transition_asset_units"] != RUNOFF_TRANSITION_METERS or
             grounding["terrain_reach_asset_units"] != TERRAIN_REACH_METERS or
             not grounding["outer_edge_follows_local_centerline"]):
         raise ValueError(f"{slug}: terrain height contract is stale")
@@ -245,6 +246,53 @@ def verify(root: Path, slug: str):
                                       spec["runtime_runoff_profile"])
     if canonical_runoff_zones(runtime_runoff) != canonical_runoff_zones(course_design["runoff_zones"]):
         raise ValueError(f"{slug}: Blender and runtime runoff profiles differ")
+    max_runoff_contact_error = 0.0
+    for surface_name in ("gravel", "grass", "asphalt"):
+        object_name = f"{surface_name}_runoff_zones"
+        if object_name not in bpy.data.objects:
+            continue
+        runoff = bpy.data.objects[object_name]
+        authored_vertex = 0
+        for side in (-1, 1):
+            for index, point in enumerate(expected):
+                next_index = (index + 1) % SAMPLES
+                distance = target_length * index / SAMPLES
+                next_distance = target_length * next_index / SAMPLES
+                zone = active_zone(course_design["runoff_zones"], distance, side, target_length)
+                next_zone = active_zone(course_design["runoff_zones"], next_distance, side, target_length)
+                if (zone is None or next_zone is None or zone.get("surface") != surface_name or
+                        next_zone.get("surface") != surface_name):
+                    continue
+                inner = expected_widths[index] * 0.5 + 0.95
+                outer = inner + float(zone.get("width_m", 6.0))
+                next_inner = expected_widths[next_index] * 0.5 + 0.95
+                next_outer = next_inner + float(next_zone.get("width_m", 6.0))
+                wanted_heights = (
+                    surface_offset + shoulder_ground_z(
+                        point[2], expected_widths[index] * 0.5, side * inner,
+                        detail_scale, expected_banks[index]),
+                    surface_offset + shoulder_ground_z(
+                        point[2], expected_widths[index] * 0.5, side * outer,
+                        detail_scale, expected_banks[index]),
+                    surface_offset + shoulder_ground_z(
+                        expected[next_index][2], expected_widths[next_index] * 0.5,
+                        side * next_outer, detail_scale, expected_banks[next_index]),
+                    surface_offset + shoulder_ground_z(
+                        expected[next_index][2], expected_widths[next_index] * 0.5,
+                        side * next_inner, detail_scale, expected_banks[next_index]),
+                )
+                for wanted_z in wanted_heights:
+                    if authored_vertex >= len(runoff.data.vertices):
+                        raise ValueError(f"{slug}: {object_name} is missing contact-plane vertices")
+                    actual_z = runoff.data.vertices[authored_vertex].co.z
+                    max_runoff_contact_error = max(max_runoff_contact_error,
+                                                   abs(actual_z - wanted_z))
+                    authored_vertex += 1
+        if authored_vertex != len(runoff.data.vertices):
+            raise ValueError(f"{slug}: {object_name} has unexpected contact-plane vertices")
+    if max_runoff_contact_error > tolerance:
+        raise ValueError(f"{slug}: visible runoff differs from the tire contact plane by "
+                         f"{max_runoff_contact_error:.6f}")
     for side_index, side in enumerate((-1, 1)):
         side_start = side_index * SAMPLES * 4
         for index, point in enumerate(expected):

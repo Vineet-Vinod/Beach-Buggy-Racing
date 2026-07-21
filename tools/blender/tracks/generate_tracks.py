@@ -615,19 +615,19 @@ def make_surface_runoff_zones(samples, half_widths, bank_angles, zones, material
                 base = len(vertices)
                 vertices.extend((
                     (point[0] + normal[0] * signed[0], point[1] + normal[1] * signed[0],
-                     surface_offset + 0.018 + shoulder_ground_z(
+                     surface_offset + shoulder_ground_z(
                          point[2], half_widths[index], signed[0], 1.0, bank_angles[index])),
                     (point[0] + normal[0] * signed[1], point[1] + normal[1] * signed[1],
-                     surface_offset + 0.018 + shoulder_ground_z(
+                     surface_offset + shoulder_ground_z(
                          point[2], half_widths[index], signed[1], 1.0, bank_angles[index])),
                     (samples[nxt_index][0] + next_normal[0] * next_signed[1],
                      samples[nxt_index][1] + next_normal[1] * next_signed[1],
-                     surface_offset + 0.018 + shoulder_ground_z(
+                     surface_offset + shoulder_ground_z(
                          samples[nxt_index][2], half_widths[nxt_index], next_signed[1], 1.0,
                          bank_angles[nxt_index])),
                     (samples[nxt_index][0] + next_normal[0] * next_signed[0],
                      samples[nxt_index][1] + next_normal[1] * next_signed[0],
-                     surface_offset + 0.018 + shoulder_ground_z(
+                     surface_offset + shoulder_ground_z(
                          samples[nxt_index][2], half_widths[nxt_index], next_signed[0], 1.0,
                          bank_angles[nxt_index])),
                 ))
@@ -1447,6 +1447,7 @@ def export_track(slug, spec, output_root):
         },
         "grounding_contract": {
             "terrain_function": "shoulder_ground_z",
+            "profiled_runoff_surface_offset_asset_units": info["surface_offset"],
             "runoff_transition_asset_units": RUNOFF_TRANSITION_METERS,
             "terrain_reach_asset_units": TERRAIN_REACH_METERS,
             "outer_edge_follows_local_centerline": True,

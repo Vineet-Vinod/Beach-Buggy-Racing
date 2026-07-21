@@ -387,6 +387,7 @@
   },
   "grounding_contract": {
     "terrain_function": "shoulder_ground_z",
+    "profiled_runoff_surface_offset_asset_units": 0.06,
     "runoff_transition_asset_units": 4.0,
     "terrain_reach_asset_units": 36.0,
     "outer_edge_follows_local_centerline": true,
