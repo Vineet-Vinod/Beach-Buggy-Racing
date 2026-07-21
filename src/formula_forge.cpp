@@ -1333,33 +1333,6 @@ bool rawJoystickButton(SDL_Joystick* joystick, int button) {
     return joystick && button >= 0 && button < SDL_GetNumJoystickButtons(joystick) && SDL_GetJoystickButton(joystick, button);
 }
 
-void applyKeyboardFallback(Input3D& input, bool keyboardEnabled) {
-    if (!keyboardEnabled) {
-        return;
-    }
-    const float keyboardSteer = (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D) ? 1.0f : 0.0f) -
-                                (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A) ? 1.0f : 0.0f);
-    if (std::abs(keyboardSteer) > std::abs(input.steer)) {
-        input.steer = keyboardSteer;
-    }
-    input.throttle = (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) ? 1.0f : input.throttle;
-    input.brake = (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) ? 1.0f : input.brake;
-    input.drift = input.drift || IsKeyDown(KEY_RIGHT_SHIFT) || IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_SPACE);
-    input.a = input.a || IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE);
-    input.b = input.b || IsKeyPressed(KEY_BACKSPACE);
-    input.start = input.start || IsKeyPressed(KEY_P) || IsKeyPressed(KEY_ESCAPE);
-    input.back = input.back || IsKeyPressed(KEY_R);
-    input.left = input.left || IsKeyPressed(KEY_A) || IsKeyPressed(KEY_LEFT);
-    input.right = input.right || IsKeyPressed(KEY_D) || IsKeyPressed(KEY_RIGHT);
-    input.up = input.up || IsKeyPressed(KEY_W) || IsKeyPressed(KEY_UP);
-    input.down = input.down || IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN);
-    input.pageLeft = input.pageLeft || IsKeyPressed(KEY_Q);
-    input.pageRight = input.pageRight || IsKeyPressed(KEY_E);
-    input.shiftDown = input.shiftDown || IsKeyPressed(KEY_Q);
-    input.shiftUp = input.shiftUp || IsKeyPressed(KEY_E);
-    input.quit = input.quit || IsKeyPressed(KEY_F10);
-}
-
 class ControllerReader {
 public:
     explicit ControllerReader(bool sdlFallbackReady) : sdlFallbackReady_(sdlFallbackReady) {}
@@ -1378,7 +1351,7 @@ public:
         return !pads_.empty() || !joysticks_.empty();
     }
 
-    Input3D read(bool devKeyboard) {
+    Input3D read() {
         updateSdlState();
         refresh();
         Input3D input;
@@ -1387,11 +1360,10 @@ public:
         } else if (IsGamepadAvailable(0)) {
             input = readRaylib();
         }
-        // Preserve physical trigger presses as menu edges before keyboard W/S
-        // is folded into throttle/brake for driving.
+        // Preserve physical trigger presses as menu edges before brake
+        // canonicalization folds the controller's B button into braking.
         input.triggerLeft = input.brake > 0.55f;
         input.triggerRight = input.throttle > 0.55f;
-        applyKeyboardFallback(input, devKeyboard);
         input.brake = canonicalBrake(input.brake, input.bHeld);
         input.automaticShift = false;
         return edgeFiltered(input);
@@ -1622,8 +1594,8 @@ private:
     bool raylibRightTriggerSigned_ = false;
 };
 
-Input3D readInput(ControllerReader& controller, bool devKeyboard) {
-    return controller.read(devKeyboard);
+Input3D readInput(ControllerReader& controller) {
+    return controller.read();
 }
 
 enum class ContactCause3D { None, Barrier, Vehicle };
@@ -6373,16 +6345,16 @@ private:
             view.canContinue = true;
             view.controllerConnected = hasController;
             if (selectionStage_ == harbor::ui::SelectionStage::Mode) {
-                view.navigationHint = "LEFT / RIGHT   SESSION";
-                view.confirmHint = "A / ENTER   SELECT";
+                view.navigationHint = "D-PAD / STEER   SESSION";
+                view.confirmHint = "A   SELECT";
             } else if (selectionStage_ == harbor::ui::SelectionStage::Car) {
-                view.navigationHint = "LEFT / RIGHT   CAR";
-                view.confirmHint = "A / ENTER   CONTINUE";
+                view.navigationHint = "D-PAD / STEER   CAR";
+                view.confirmHint = "A   CONTINUE";
             } else {
-                view.navigationHint = "LT / RT OR LEFT / RIGHT   TRACK     UP / DOWN   LAPS";
-                view.confirmHint = isTimeTrial() ? "A / ENTER   START TIME TRIAL" : "A / ENTER   START RACE";
+                view.navigationHint = "LT / RT OR D-PAD / STEER   TRACK     D-PAD UP / DOWN   LAPS";
+                view.confirmHint = isTimeTrial() ? "A   START TIME TRIAL" : "A   START RACE";
             }
-            view.backHint = "B / BACKSPACE  BACK";
+            view.backHint = "B   BACK";
             harbor::ui::DrawSelectionHud(view);
         } else if (mode_ == Mode::Results) {
             harbor::ui::ResultsHudViewModel view;
@@ -7001,7 +6973,7 @@ int runFormulaForge(int argc, char** argv) {
         accumulator += std::min(0.10, now - previous);
         previous = now;
 
-        const Input3D sampledInput = capturePlaytest ? game.scriptedInput() : readInput(controller, true);
+        const Input3D sampledInput = capturePlaytest ? game.scriptedInput() : readInput(controller);
         if (sampledInput.quit) {
             break;
         }
@@ -7034,7 +7006,7 @@ int runFormulaForge(int argc, char** argv) {
         input.triggerRight = pendingEdges.triggerRight;
         input.shiftDown = pendingEdges.shiftDown;
         input.shiftUp = pendingEdges.shiftUp;
-        const bool hasController = true;
+        const bool hasController = capturePlaytest || controller.available();
         while (accumulator >= kFixedDt) {
             game.update(kFixedDt, input, hasController);
             pendingEdges = {};

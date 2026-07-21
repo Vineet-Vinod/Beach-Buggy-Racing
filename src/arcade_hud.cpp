@@ -184,7 +184,8 @@ void drawConnectionBanner(const Metrics& m) {
     const Rectangle banner{0.0f, m.height - height, m.width, height};
     DrawRectangleRec(banner, Fade(kCoral, 0.96f));
     DrawRectangleRec({0.0f, banner.y, banner.width, 3.0f * m.scale}, kSun);
-    drawCenteredText("CONTROLLER DISCONNECTED", {m.width * 0.5f, banner.y + banner.height * 0.5f}, 19.0f * m.scale, kPaper);
+    drawCenteredText("CONTROLLER / WHEEL DISCONNECTED", {m.width * 0.5f, banner.y + banner.height * 0.5f}, 19.0f * m.scale,
+                     kPaper);
 }
 
 void drawCourseSchematic(const SelectionHudViewModel& viewModel, Rectangle bounds, float scale) {
@@ -682,7 +683,7 @@ void DrawSelectionHud(const SelectionHudViewModel& viewModel) {
         const float optionsWidth = count * optionWidth + std::max(0, count - 1) * optionGap;
         float x = panel.x + (panel.width - optionsWidth) * 0.5f;
         const float optionY = panel.y + panel.height - 91.0f * m.scale;
-        drawCenteredText(viewModel.lapsAdjustable ? "UP / DOWN   LAPS" : "OPEN SESSION   LAPS",
+        drawCenteredText(viewModel.lapsAdjustable ? "D-PAD UP / DOWN   LAPS" : "OPEN SESSION   LAPS",
                          {panel.x + panel.width * 0.5f, optionY - 18.0f * m.scale},
                          11.0f * m.scale, Fade(kPaper, 0.58f));
         for (int option = 0; option < count; ++option) {
@@ -802,7 +803,7 @@ void DrawPauseHud(const PauseHudViewModel& viewModel) {
         y += 48.0f * m.scale;
     }
 
-    drawCenteredText("BACK / B / BACKSPACE  RESUME", {panel.x + panel.width * 0.5f, panel.y + panel.height - 19.0f * m.scale},
+    drawCenteredText("BACK / B   RESUME", {panel.x + panel.width * 0.5f, panel.y + panel.height - 19.0f * m.scale},
                      12.0f * m.scale, kPaperMuted);
 }
 

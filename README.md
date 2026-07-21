@@ -41,29 +41,27 @@ make run
 
 ```sh
 ./build/game/formula_forge --windowed
-./build/game/formula_forge --dev-keyboard --windowed
 ./build/game/formula_forge --diagnose-controller --windowed
 ```
 
 ## Controls
 
-Gamepad, steering wheel, and keyboard input can be used together. The
+Formula Forge supports gamepads and steering wheels. The
 DragonRise Wired Wheel (`0079:189c`) is detected automatically, with a linear,
 low-deadzone steering profile and analog accelerator/brake pedals.
 
-- Left stick / D-pad or A/D / arrows: steer; change the highlighted menu choice
-- RT: accelerate
+- Left stick / D-pad or wheel rim: steer; change the highlighted menu choice
+- RT or accelerator pedal: accelerate
 - LT or B / Circle: brake for corner entry; hold at low speed to reverse
-- RB / E: shift up; LB / Q: shift down
-- W / up and S / down: keyboard accelerate and brake
-- Left/right or A/D: choose the session and car; cycle tracks on the map screen
-- LT/RT, LB/RB, or Q/E: previous/next track on the combined map/laps screen
-- Up/down or W/S: choose 2, 5, 10, or infinite laps for a race
-- A / Cross or Enter: confirm, select, or start
-- B / Circle or Backspace: return to the previous selection stage
-- Start or Escape: pause the race
-- Back / Select: resume from pause; R resets to the last valid checkpoint while racing
-- Start + Back / Select or F10: quit
+- RB or right paddle: shift up; LB or left paddle: shift down
+- D-pad left/right or wheel rim: choose the session and car
+- LT/RT, LB/RB, D-pad left/right, or wheel rim: cycle tracks on the map screen
+- D-pad up/down: choose 2, 5, 10, or infinite laps for a race
+- A / Cross: confirm, select, or start
+- B / Circle: return to the previous selection stage
+- Start: pause the race
+- Back / Select: resume from pause or reset to the last valid checkpoint while racing
+- Start + Back / Select: quit
 
 Wheel controls use the rim for steering, accelerator and brake pedals for RT
 and LT, the wheel's A/B buttons for confirm/back, the D-pad for menus, and the
@@ -190,7 +188,7 @@ make spa-perf-audit-3d
 make collision-audit-3d
 make perf-audit-3d
 make agent-play-audit-3d
-./build/game/formula_forge_legacy --smoke-render --dev-keyboard
+./build/game/formula_forge_legacy --smoke-render
 SDL_VIDEODRIVER=offscreen ./build/game/formula_forge --asset-audit
 ```
 

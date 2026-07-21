@@ -92,7 +92,7 @@ struct SelectionHudViewModel {
     float presentationTimeSeconds = 0.0f;
     bool canContinue = true;
     bool controllerConnected = true;
-    std::string navigationHint = "LEFT / RIGHT  CHOOSE";
+    std::string navigationHint = "D-PAD / STEER  CHOOSE";
     std::string confirmHint = "A  SELECT";
     std::string backHint = "B  BACK";
 };

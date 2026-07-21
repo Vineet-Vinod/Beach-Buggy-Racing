@@ -511,7 +511,7 @@ float joystickAxis(SDL_Joystick* joystick, int axis) {
 
 float strongerAxis(float a, float b) { return std::abs(b) > std::abs(a) ? b : a; }
 
-InputState readGamepad(SDL_Gamepad* pad, bool devKeyboard) {
+InputState readGamepad(SDL_Gamepad* pad) {
     InputState input;
     if (pad) {
         SDL_Joystick* joystick = SDL_GetGamepadJoystick(pad);
@@ -543,25 +543,6 @@ InputState readGamepad(SDL_Gamepad* pad, bool devKeyboard) {
         input.right = input.right || joystickButton(joystick, 12) || joystickAxis(joystick, 6) > 0.55f;
         input.up = input.up || joystickButton(joystick, 13) || joystickAxis(joystick, 7) < -0.55f;
         input.down = input.down || joystickButton(joystick, 14) || joystickAxis(joystick, 7) > 0.55f;
-    }
-    if (devKeyboard) {
-        int keyCount = 0;
-        const bool* keys = SDL_GetKeyboardState(&keyCount);
-        const auto key = [&](SDL_Scancode code) { return static_cast<int>(code) < keyCount && keys[code]; };
-        const float left = key(SDL_SCANCODE_LEFT) || key(SDL_SCANCODE_A) ? 1.0f : 0.0f;
-        const float right = key(SDL_SCANCODE_RIGHT) || key(SDL_SCANCODE_D) ? 1.0f : 0.0f;
-        input.steer = std::clamp(input.steer + right - left, -1.0f, 1.0f);
-        input.throttle = std::max(input.throttle, key(SDL_SCANCODE_W) || key(SDL_SCANCODE_UP) ? 1.0f : 0.0f);
-        input.brake = std::max(input.brake, key(SDL_SCANCODE_S) || key(SDL_SCANCODE_DOWN) ? 1.0f : 0.0f);
-        input.drift = input.drift || key(SDL_SCANCODE_LSHIFT) || key(SDL_SCANCODE_RSHIFT);
-        input.a = input.a || key(SDL_SCANCODE_RETURN) || key(SDL_SCANCODE_SPACE);
-        input.b = input.b || key(SDL_SCANCODE_ESCAPE);
-        input.start = input.start || key(SDL_SCANCODE_P);
-        input.back = input.back || key(SDL_SCANCODE_R);
-        input.left = input.left || key(SDL_SCANCODE_LEFT);
-        input.right = input.right || key(SDL_SCANCODE_RIGHT);
-        input.up = input.up || key(SDL_SCANCODE_UP);
-        input.down = input.down || key(SDL_SCANCODE_DOWN);
     }
     input.steer = std::copysign(std::pow(std::abs(input.steer), 1.12f), input.steer);
     return input;
@@ -2191,7 +2172,6 @@ int runFormulaForgeLegacy(int argc, char** argv) {
         return ok ? 0 : 1;
     }
 
-    const bool devKeyboard = hasArg(argc, argv, "--dev-keyboard");
     const bool smokeRender = hasArg(argc, argv, "--smoke-render");
     const bool diagnoseController = hasArg(argc, argv, "--diagnose-controller");
     const bool windowed = hasArg(argc, argv, "--windowed") || smokeRender || diagnoseController;
@@ -2242,9 +2222,6 @@ int runFormulaForgeLegacy(int argc, char** argv) {
             if (event.type == SDL_EVENT_QUIT) {
                 running = false;
             }
-            if (devKeyboard && event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
-                running = false;
-            }
             if (event.type == SDL_EVENT_GAMEPAD_REMOVED && pad && event.gdevice.which == SDL_GetGamepadID(pad)) {
                 SDL_CloseGamepad(pad);
                 pad = nullptr;
@@ -2260,8 +2237,8 @@ int runFormulaForgeLegacy(int argc, char** argv) {
             pad = openFirstGamepad();
         }
 
-        const bool hasController = pad != nullptr || devKeyboard;
-        const InputState input = readGamepad(pad, devKeyboard);
+        const bool hasController = pad != nullptr;
+        const InputState input = readGamepad(pad);
         if (diagnoseController && std::chrono::duration<double>(frameStart - diagnosticStamp).count() >= 0.25) {
             printControllerSnapshot(pad);
             diagnosticStamp = frameStart;
